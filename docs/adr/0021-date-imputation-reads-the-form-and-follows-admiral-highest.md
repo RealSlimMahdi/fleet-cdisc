@@ -1,5 +1,7 @@
 # Date imputation reads the form of the value and follows admiral highest_imputation
 
+**Status: partly superseded by ADR-0045.** A `*DTM` target now takes `highest=` (except `"Y"`), and a partial date with `time=` is imputed. The rest stands.
+
 The alpha audit of 4 November 2026 (findings c1-67, c1-69, c1-74, c1-119) found that `.date(highest=)` was one level stricter than admiral `highest_imputation`: `highest="M"` gave null for `2021`, `highest="D"` gave null for `2021-03`, and `"h"` nulled even a complete date. The imputation and the `*DTF` flag read the length of the text, so `2021---15` gave null and `202103` carried a flag on a null date. On a `*DTM` target, `highest=` and `time=` of `.adam.date()` had no effect and gave no message.
 
 ## The decision

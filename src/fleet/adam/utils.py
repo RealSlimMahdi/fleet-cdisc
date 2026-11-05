@@ -586,58 +586,139 @@ def impute_dtc_to_date(
     )
 
 
+#: Year, month, day, hour, minute and second of a ``--DTC`` value; a hyphen is a missing part.
+_DTM_FORM = (
+    r"^(\d{4}|-)(?:-(\d{2}|-)(?:-(\d{2}|-)"
+    r"(?:T(\d{2}|-)(?::(\d{2}|-)(?::(\d{2}(?:\.\d+)?|-))?)?)?)?)?"
+    r"(?:Z|[+-]\d{2}(?::?\d{2})?)?$"
+)
+
+#: admiral ``highest_imputation`` on a *DTM target: the first missing part it may impute.
+_HIGHEST_DTM = {"M": 1, "D": 2, "h": 3, "m": 4, "s": 5, "n": 6}
+
+
+def _dtm_form(source: str | pl.Expr) -> tuple[pl.Expr, pl.Expr, pl.Expr, pl.Expr]:
+    """The first missing part (0 year to 5 second, 6 none) and the hour, minute, second text."""
+    groups = _col(source).str.extract_groups(_DTM_FORM)
+    parts = [groups.struct.field(str(i)) for i in range(1, 7)]
+    level = pl.lit(6)
+    for i in reversed(range(6)):
+        level = pl.when(parts[i].is_null() | (parts[i] == "-")).then(pl.lit(i)).otherwise(level)
+    return level, parts[3], parts[4], parts[5]
+
+
+def _dtm_ceiling(highest: str | None, target: str) -> int:
+    """The lowest first-missing part *highest* accepts; no *highest* accepts a missing month."""
+    if highest is None:
+        return _HIGHEST_DTM["M"]
+    if highest == "Y":
+        raise DerivationError(
+            f"date('{target}'): highest='Y' is not supported. Fleet does not impute a missing "
+            "year; admiral needs min_dates or max_dates for it, and a *DTM target refuses "
+            "min_date= and max_date=. Use 'n', 's', 'm', 'h', 'D' or 'M'."
+        )
+    if highest not in _HIGHEST_DTM:
+        raise DerivationError(
+            f"date('{target}'): highest={highest!r} is not valid. "
+            "Choose 'n', 's', 'm', 'h', 'D' or 'M'."
+        )
+    return _HIGHEST_DTM[highest]
+
+
 def impute_dtc_to_datetime(
     source: str | pl.Expr,
     target: str,
     *,
-    day_imputation: str = "first",
-    month_imputation: str = "first",
+    date_imputation: str = "first",
     time_imputation: str = "first",
-) -> pl.Expr:
-    """Parse a ``--DTC`` string with a complete date to ``pl.Datetime``, imputing the time.
+    highest: str | None = None,
+) -> tuple[pl.Expr, pl.Expr, pl.Expr]:
+    """Impute a ``--DTC`` value to ``pl.Datetime``, with its DTF and TMF flags.
 
-    Every collected part of the time is kept, and only the missing parts
-    are imputed, by position (admiral ``derive_vars_dtm``):
+    The one *DTM path of ``.sdtm.date()`` and ``.adam.date()``.  It follows
+    admiral ``derive_vars_dtm`` with ``preserve = FALSE``:
 
-    - no hour: the whole time from *time_imputation* (``first`` 00:00:00,
-      ``mid`` 12:00:00, ``last`` 23:59:59, a column or a literal);
-    - hour only: minutes and seconds 00 (``first``, ``mid``) or 59 (``last``);
-    - hour and minute: seconds 00 or 59.
+    - The first missing part decides.  A part below it is not used, so
+      ``2021-03--T08:30`` gives 2021-03-01T00:00:00 with DTF ``D`` and
+      TMF ``H``, and ``2021-03-15T08:-:45`` gives 08:00:00 with TMF ``M``.
+    - A missing date part takes *date_imputation*, as ``impute_dtc_to_date``.
+    - No hour: the whole time from *time_imputation* (``first`` 00:00:00,
+      ``mid`` 12:00:00, ``last`` 23:59:59, a column or a literal).  Hour
+      only: minutes and seconds 00, or 59 for ``last``.  Hour and minute:
+      seconds 00 or 59.
+    - *highest* names the highest part that may be imputed: ``"M"``,
+      ``"D"``, ``"h"``, ``"m"``, ``"s"`` or ``"n"`` (none).  A value that
+      needs more is null.  ``None`` is ``"M"``, as on a *DT target.
 
     A fraction of a second is kept.  A ``Z`` or an offset is dropped, so
-    the value is the wall clock.  A partial date gives null here; the
-    ``.date()`` verb imputes the date first.
+    the value is the wall clock.  A missing year gives null.  A flag is
+    null where the value is null.
 
     Args:
         source: Name of the ``--DTC`` column (``pl.String``), or a text expression.
         target: Name of the output ``pl.Datetime`` column.
-        day_imputation: Kept for the call signature; dates are not imputed here.
-        month_imputation: Kept for the call signature; dates are not imputed here.
+        date_imputation: Strategy for the missing date parts, or ``"none"``.
         time_imputation: Strategy for the missing time parts, or ``"none"``.
+        highest: The admiral ``highest_imputation`` level, or ``None``.
 
     Returns:
-        pl.Expr: Expression producing a ``pl.Datetime("us")`` column.
+        tuple[pl.Expr, pl.Expr, pl.Expr]: The ``pl.Datetime("us")`` value
+            named *target*, the DTF flag and the TMF flag.
+
+    Raises:
+        DerivationError: When *highest* is ``"Y"`` or not a level.
+
+    References:
+        admiral 1.4.1 ``derive_vars_dtm`` and ``impute_dtc_dtm``; ADaMIG
+        1.3 section 3.3.3 (DTF and TMF); ADR-0045.
+
+    Examples:
+        Impute AESTDTC to ASTDTM, with no imputation above the hour::
+
+            value, dtf, tmf = impute_dtc_to_datetime("AESTDTC", "ASTDTM", highest="h")
+            adae = ae.with_columns(value, dtf.alias("ASTDTF"), tmf.alias("ASTTMF"))
     """
+    ceiling = _dtm_ceiling(highest, target)
     col = _col(source)
-    parts = time_groups(col)
-    hour, minute, second = (parts.struct.field(f) for f in ("hour", "minute", "second"))
-    if time_imputation == "none":
-        clock = pl.when(second.is_not_null()).then(
-            pl.concat_str(hour, minute, second, separator=":")
+    level, hour, minute, second = _dtm_form(col)
+    date = (
+        pl.when(level >= 3)
+        .then(date_part(col))
+        .otherwise(
+            impute_dtc_to_date(
+                col, "__date__", day_imputation=date_imputation, month_imputation=date_imputation
+            )
         )
+    )
+    if time_imputation == "none":
+        clock = pl.when(level == 6).then(pl.concat_str(hour, minute, second, separator=":"))
     else:
-        fill = "59" if time_imputation == "last" else "00"
+        fill = pl.lit("59" if time_imputation == "last" else "00")
         clock = (
-            pl.when(hour.is_null())
+            pl.when(level <= 3)
             .then(_whole_time(time_imputation))
-            .when(minute.is_null())
-            .then(pl.concat_str(hour, pl.lit(fill), pl.lit(fill), separator=":"))
-            .when(second.is_null())
-            .then(pl.concat_str(hour, minute, pl.lit(fill), separator=":"))
+            .when(level == 4)
+            .then(pl.concat_str(hour, fill, fill, separator=":"))
+            .when(level == 5)
+            .then(pl.concat_str(hour, minute, fill, separator=":"))
             .otherwise(pl.concat_str(hour, minute, second, separator=":"))
         )
-    text = pl.concat_str(date_part(col).dt.to_string("%Y-%m-%d"), pl.lit("T"), clock)
-    return text.str.to_datetime("%Y-%m-%dT%H:%M:%S%.f", time_unit="us", strict=False).alias(target)
+    text = pl.concat_str(date.dt.to_string("%Y-%m-%d"), pl.lit("T"), clock)
+    value = pl.when(level >= ceiling).then(
+        text.str.to_datetime("%Y-%m-%dT%H:%M:%S%.f", time_unit="us", strict=False)
+    )
+    dtf = pl.when(value.is_not_null()).then(
+        pl.when(level == 1).then(pl.lit("M")).when(level == 2).then(pl.lit("D"))
+    )
+    tmf = pl.when(value.is_not_null()).then(
+        pl.when(level <= 3)
+        .then(pl.lit("H"))
+        .when(level == 4)
+        .then(pl.lit("M"))
+        .when(level == 5)
+        .then(pl.lit("S"))
+    )
+    return value.alias(target), dtf, tmf
 
 
 def _whole_time(strategy: str) -> pl.Expr:
@@ -876,35 +957,28 @@ def impute_and_flag(
         return exprs
 
     # output_type == "dtm"
-    refuse_dtm_bounds(target, min_date, max_date, highest=highest)
-    dtm_expr = impute_dtc_to_datetime(
+    refuse_dtm_bounds(target, min_date, max_date)
+    dtm_expr, dtf, tmf = impute_dtc_to_datetime(
         source,
         target,
-        day_imputation=impute,
-        month_imputation=impute,
+        date_imputation=impute,
         time_imputation=impute_time or impute,
+        highest=highest,
     )
     exprs.append(warn_unread(source, target, dtm_expr, pl.Datetime("us")).alias(target))
     if dtf_name is not None:
-        exprs.append(pl.when(dtm_expr.is_not_null()).then(dtf_expr(source)).alias(dtf_name))
+        exprs.append(dtf.alias(dtf_name))
     if tmf_name is not None:
-        exprs.append(pl.when(dtm_expr.is_not_null()).then(tmf_expr(source)).alias(tmf_name))
+        exprs.append(tmf.alias(tmf_name))
     return exprs
 
 
-def refuse_dtm_bounds(
-    target: str, min_date: str | None, max_date: str | None, *, highest: str | None = None
-) -> None:
-    """Refuse ``min_date``, ``max_date`` and ``highest`` on a date-time target (no tested rule)."""
+def refuse_dtm_bounds(target: str, min_date: str | None, max_date: str | None) -> None:
+    """Refuse ``min_date`` and ``max_date`` on a date-time target (no tested rule)."""
     if min_date is not None or max_date is not None:
         raise DerivationError(
             f"date('{target}'): min_date= and max_date= apply to a date (*DT) target only. "
             "Derive the *DT variable with the bound, then build the date-time from it."
-        )
-    if highest is not None:
-        raise DerivationError(
-            f"date('{target}'): highest= applies to a date (*DT) target only. Derive the *DT "
-            "variable with the ceiling, then build the date-time from it."
         )
 
 
@@ -938,95 +1012,68 @@ def warn_unread(source: str | pl.Expr, target: str, value: pl.Expr, dtype: pl.Da
     )
 
 
-def dtm_with_time(
-    lf: pl.LazyFrame,
+def dtm_source_text(
+    schema: pl.Schema,
     *,
     source: str,
     target: str,
     time: str,
-    impute_time: str | None,
-    flag: bool | str,
     input_format: str | None = None,
-) -> pl.DataFrame:
-    """Combine a date column with a time column or ``HH:MM[:SS]`` literal into a *DTM target.
+) -> pl.Expr:
+    """Join a date column and a time column or ``hh:mm[:ss]`` literal into ``--DTC`` text.
 
-    A null time takes the *impute_time* strategy (default ``"first"``).  A
-    partial date gives null, and its flags are null.  The DTF flag comes
-    from the date; the TMF flag is null, because the time was collected.
-    Both ``.sdtm.date()`` and ``.adam.date()`` use this path for ``time=``.
+    The *DTM path then reads the text as any ``--DTC`` value, so ``time=``
+    comes first, then the imputation, then ``highest=`` (ADR-0045).  The
+    text follows SDTMIG 3.4 section 4.4.2: ``2024-03-15`` and ``08:15``
+    give ``2024-03-15T08:15``; a partial date takes a hyphen for each
+    missing part (``2024-03--T08:15``); a blank time leaves the date alone.
+    A time in another layout (``0815``) is left out, with one warning.
 
     Args:
-        lf: The frame.
+        schema: The schema of the frame.
         source: The date column: text, ``pl.Date``, or raw text read with *input_format*.
-        target: The *DTM column to write.
-        time: A time column, or an ``HH:MM[:SS]`` literal.
-        impute_time: The strategy for a null time.
-        flag: DTF/TMF flag control, as for ``.date()``.
+        target: The *DTM column, quoted in the messages.
+        time: A time column, or an ``hh:mm[:ss]`` literal.
         input_format: A ``strptime`` layout of the raw date text, or ``None``.
 
     Returns:
-        pl.DataFrame: The collected frame with *target* and its flags.
+        pl.Expr: A ``pl.String`` expression of ``--DTC`` text.
 
     Raises:
         DerivationError: When *time* names no column, or *source* is a
             number or already holds a time.
 
     Examples:
-        Join AESTDTC and AESTTIM::
+        Join AESTDTC and AESTTIM, then impute::
 
-            adae = dtm_with_time(ae.lazy(), source="AESTDTC", target="ASTDTM",
-                                 time="AESTTIM", impute_time=None, flag=True)
+            text = dtm_source_text(ae.collect_schema(), source="AESTDTC",
+                                   target="ASTDTM", time="AESTTIM")
+            astdtm, astdtf, asttmf = impute_dtc_to_datetime(text, "ASTDTM")
     """
-    from fleet.sdtm.utils import dtc_date_expr
+    from fleet.sdtm.utils import TIME_LITERAL, bad_time, dtc_text, dtc_with_time
 
-    schema = lf.collect_schema()
     call = f"date('{target}')"
-    refuse_number(source, schema.get(source), verb=call)
     if isinstance(schema.get(source), pl.Datetime):
         raise DerivationError(
             f"{call}: {source} is a date-time and already holds a time. Drop time=, or "
             "pass the date column."
         )
-
-    time_is_literal = bool(re.match(r"^\d{2}:\d{2}(:\d{2})?$", time))
+    time_is_literal = bool(TIME_LITERAL.match(time))
     if not time_is_literal and time not in schema.names():
         raise DerivationError(
             f"time='{time}' column not found in the DataFrame. Available columns: {schema.names()}"
         )
-
-    fallback_time = _resolve_time(impute_time or "first")
-    if time_is_literal:
-        time_expr = pl.lit(time if len(time) == 8 else time + ":00")
-    else:
-        raw_time = pl.col(time).cast(pl.String)
-        padded_time = (
-            pl.when(raw_time.str.len_chars() == 5)
-            .then(raw_time + pl.lit(":00"))
-            .otherwise(raw_time)
-        )
-        if fallback_time is None:
-            time_expr = padded_time
-        elif fallback_time.startswith("T"):
-            time_expr = (
-                pl.when(raw_time.is_null()).then(pl.lit(fallback_time[1:])).otherwise(padded_time)
-            )
-        else:
-            time_expr = (
-                pl.when(raw_time.is_null())
-                .then(pl.col(fallback_time).cast(pl.String))
-                .otherwise(padded_time)
-            )
-
-    date_text = dtc_date_expr(source, "__dtm_date_tmp__", input_format=input_format)
-    combined = (pl.col("__dtm_date_tmp__") + pl.lit("T") + time_expr).str.to_datetime(
-        "%Y-%m-%dT%H:%M:%S", strict=False
+    date_text = dtc_text(
+        source_text(source, schema.get(source), verb=call), input_format=input_format
     )
-    result = lf.with_columns(date_text).collect().with_columns(combined.alias(target))
-
-    dtf_name, tmf_name = _resolve_flag_names(target, flag, "dtm")
-    if dtf_name is not None:
-        dtf = pl.when(pl.col(target).is_not_null()).then(dtf_expr("__dtm_date_tmp__"))
-        result = result.with_columns(dtf.alias(dtf_name))
-    if tmf_name is not None:
-        result = result.with_columns(pl.lit(None, dtype=pl.String).alias(tmf_name))
-    return result.drop("__dtm_date_tmp__")
+    raw_time = pl.lit(time) if time_is_literal else pl.col(time)
+    return warn_on_collect(
+        dtc_with_time(date_text, pl.col(source), raw_time),
+        bad_time(raw_time),
+        lambda n, values: (
+            f"{call}: {n} time value(s) of {time} are not hh:mm[:ss], so {target} takes an "
+            f"imputed time. Values: {values}"
+        ),
+        dtype=pl.String,
+        shown=raw_time.cast(pl.String),
+    ).alias(source)

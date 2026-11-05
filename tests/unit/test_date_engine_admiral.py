@@ -68,10 +68,11 @@ def test_highest_refuses_levels_a_date_target_cannot_honour(partial_ae, highest)
         partial_ae.adam.date("ASTDT", source="AESTDTC", highest=highest)
 
 
+# c1-119: a *DTM target takes highest=, except "Y", which needs bounds a *DTM target refuses.
 @pytest.mark.parametrize("namespace", ["adam", "sdtm"])
-def test_highest_on_a_datetime_target_raises(partial_ae, namespace) -> None:
-    with pytest.raises(DerivationError, match="highest= applies to a date"):
-        getattr(partial_ae, namespace).date("ASTDTM", source="AESTDTC", highest="D")
+def test_highest_y_on_a_datetime_target_raises(partial_ae, namespace) -> None:
+    with pytest.raises(DerivationError, match="highest='Y' is not supported"):
+        getattr(partial_ae, namespace).date("ASTDTM", source="AESTDTC", highest="Y")
 
 
 def test_value_date_text_on_a_datetime_target_gives_midnight() -> None:
@@ -108,8 +109,28 @@ def test_missing_middle_forms_impute_and_unread_values_have_no_flag() -> None:
     assert out["ASTDTF"].to_list() == ["M", "D", None, None]
 
 
-# c1-119: .adam.date() honours time= on a *DTM target, as .sdtm.date() does.
-def test_adam_datetime_target_honours_time_as_sdtm_does() -> None:
+# c1-119: one *DTM path: time= first, then the imputation, then highest=, in both namespaces.
+@pytest.mark.parametrize(
+    ("highest", "astdtm", "astdtf", "asttmf"),
+    [
+        (
+            None,
+            [datetime(2024, 3, 15, 8, 15), datetime(2024, 3, 1), datetime(2024, 1, 1)],
+            [None, "D", "M"],
+            [None, "H", "H"],
+        ),
+        (
+            "D",
+            [datetime(2024, 3, 15, 8, 15), datetime(2024, 3, 1), None],
+            [None, "D", None],
+            [None, "H", None],
+        ),
+        ("h", [datetime(2024, 3, 15, 8, 15), None, None], [None] * 3, [None] * 3),
+    ],
+)
+def test_datetime_target_with_time_is_one_path_in_both_namespaces(
+    highest, astdtm, astdtf, asttmf
+) -> None:
     ae = pl.from_repr("""
 ┌────────────┬──────────┐
 │ AESTDTC    ┆ AESTTIM  │
@@ -118,13 +139,32 @@ def test_adam_datetime_target_honours_time_as_sdtm_does() -> None:
 ╞════════════╪══════════╡
 │ 2024-03-15 ┆ 08:15:00 │
 │ 2024-03    ┆ 08:15:00 │
+│ 2024       ┆ 08:15:00 │
 └────────────┴──────────┘
 """)
-    adam = ae.adam.date("ASTDTM", source="AESTDTC", time="AESTTIM").to_frame()
-    sdtm = ae.sdtm.date("ASTDTM", source="AESTDTC", time="AESTTIM").to_frame()
-    assert adam["ASTDTM"].to_list() == [datetime(2024, 3, 15, 8, 15), None]
+    call = {"source": "AESTDTC", "time": "AESTTIM", "highest": highest}
+    adam = ae.adam.date("ASTDTM", **call).to_frame()
+    sdtm = ae.sdtm.date("ASTDTM", **call).to_frame()
+    assert adam["ASTDTM"].to_list() == astdtm
+    assert adam["ASTDTF"].to_list() == astdtf
+    assert adam["ASTTMF"].to_list() == asttmf
     assert adam.equals(sdtm)
-    assert adam["ASTDTF"].to_list() == [None, None]
+
+
+def test_datetime_target_warns_on_a_time_of_another_layout() -> None:
+    ae = pl.from_repr("""
+┌────────────┬─────────┐
+│ AESTDTC    ┆ AESTTIM │
+│ ---        ┆ ---     │
+│ str        ┆ str     │
+╞════════════╪═════════╡
+│ 2024-03-15 ┆ 0815    │
+└────────────┴─────────┘
+""")
+    with pytest.warns(UserWarning, match="not hh:mm"):
+        out = ae.adam.date("ASTDTM", source="AESTDTC", time="AESTTIM").to_frame()
+    assert out["ASTDTM"].to_list() == [datetime(2024, 3, 15)]
+    assert out["ASTTMF"].to_list() == ["H"]
 
 
 # c1-117: a Date or Datetime source converts; a number raises with the fix.

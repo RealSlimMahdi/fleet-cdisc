@@ -1169,104 +1169,27 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
             )
             return self._chain(*exprs, verb="date")
 
-        # source= path
+        # source= path: one engine for both namespaces; time= first, then imputation
         assert source is not None
-        from fleet.adam.utils import (
-            _resolve_flag_names,
-            _resolve_time,
-            dtf_expr,
-            dtm_with_time,
-            impute_dtc_to_date,
-            impute_dtc_to_datetime,
-            refuse_dtm_bounds,
-            source_text,
-            tmf_expr,
-            warn_unread,
-        )
-        from fleet.core.dtc import date_part
+        from fleet.adam.utils import dtm_source_text, source_text
 
-        if output_type == "dtm":
-            refuse_dtm_bounds(target, min_date, max_date, highest=highest)
-            if time is not None:
-                return self._materialise_then(
-                    dtm_with_time(
-                        self._lazy,
-                        source=source,
-                        target=target,
-                        time=time,
-                        impute_time=impute_time,
-                        flag=flag,
-                    )
-                )
-        src = source_text(source, self._lazy.collect_schema().get(source), verb=f"date('{target}')")
-
-        if output_type == "dt":
-            exprs = impute_and_flag(
-                src,
-                target,
-                output_type="dt",
-                impute=impute,
-                highest=highest,
-                min_date=min_date,
-                max_date=max_date,
-                flag=flag,
-            )
-            return self._chain(*exprs, verb="date")
-
-        # output_type == "dtm": a partial date takes the imputed date and the imputed time
-        dtf_name, tmf_name = _resolve_flag_names(target, flag, output_type)
-        effective_time_impute = impute_time or impute
-
-        date_expr = impute_dtc_to_date(
-            src,
-            "__dtm_date_tmp__",
-            day_imputation=impute,
-            month_imputation=impute,
-        )
-        df = self._lazy.with_columns(date_expr).collect()
-
-        dtm_expr = impute_dtc_to_datetime(
+        schema = self._lazy.collect_schema()
+        if time is not None:
+            src = dtm_source_text(schema, source=source, target=target, time=time)
+        else:
+            src = source_text(source, schema.get(source), verb=f"date('{target}')")
+        exprs = impute_and_flag(
             src,
             target,
-            day_imputation=impute,
-            month_imputation=impute,
-            time_imputation=effective_time_impute,
+            output_type=output_type,
+            impute=impute,
+            impute_time=impute_time,
+            highest=highest,
+            min_date=min_date,
+            max_date=max_date,
+            flag=flag,
         )
-
-        time_suffix = _resolve_time(effective_time_impute)
-        if effective_time_impute == "none":
-            partial_dtm = pl.lit(None, dtype=pl.Datetime("us"))
-        elif isinstance(time_suffix, str) and time_suffix.startswith("T"):
-            partial_dtm = (
-                pl.col("__dtm_date_tmp__").dt.to_string("%Y-%m-%d") + pl.lit(time_suffix)
-            ).str.to_datetime("%Y-%m-%dT%H:%M:%S", strict=False)
-        else:
-            partial_dtm = (
-                pl.col("__dtm_date_tmp__").dt.to_string("%Y-%m-%d")
-                + pl.lit("T")
-                + pl.col(time_suffix).cast(pl.Time).cast(pl.String)
-            ).str.to_datetime("%Y-%m-%dT%H:%M:%S", strict=False)
-
-        dtm_full = (
-            pl.when(src.is_null() | (src.str.strip_chars() == ""))
-            .then(pl.lit(None, dtype=pl.Datetime("us")))
-            .when(date_part(src).is_not_null())
-            .then(dtm_expr)
-            .otherwise(partial_dtm)
-        )
-
-        exprs_list: list[pl.Expr] = [
-            warn_unread(src, target, dtm_full, pl.Datetime("us")).alias(target)
-        ]
-        if dtf_name is not None:
-            exprs_list.append(pl.when(dtm_full.is_not_null()).then(dtf_expr(src)).alias(dtf_name))
-        if tmf_name is not None:
-            exprs_list.append(pl.when(dtm_full.is_not_null()).then(tmf_expr(src)).alias(tmf_name))
-
-        result = df.with_columns(exprs_list)
-        if "__dtm_date_tmp__" in result.columns:
-            result = result.drop("__dtm_date_tmp__")
-        return self._materialise_then(result)
+        return self._chain(*exprs, verb="date")
 
 
 class MultiRowMixin:

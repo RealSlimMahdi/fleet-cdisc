@@ -136,10 +136,13 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
         gives ``-----T08:30`` (SDTMIG 3.4 section 4.4.2).  Imputation
         parameters are ignored.
 
-        For DT/DTM targets: delegates to the shared imputation engine.  A
+        For DT/DTM targets: delegates to the imputation engine that
+        ``.adam.date()`` uses, so both give the same result.  A
         ``pl.Date`` or ``pl.Datetime`` source is read as its ISO 8601 text;
-        a number raises, because Fleet does not guess its origin.
-        With *time*, a partial date gives null.
+        a number raises, because Fleet does not guess its origin.  With
+        *time*, the date and the time first become one ``--DTC`` value
+        (``2021-03--T08:30`` for a partial date), which then takes the
+        imputation and *highest* (ADR-0045).
 
         Args:
             target: Name of the output column.
@@ -151,8 +154,9 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
             time: Time column or literal to combine with date (DTM/DTC).
             impute: Imputation strategy (DT/DTM only).
             impute_time: Time-part imputation override (DTM only).
-            highest: Imputation ceiling, as admiral ``highest_imputation``
-                (DT only): ``"n"``, ``"D"`` or ``"M"``.  A DTM target raises.
+            highest: Imputation ceiling, as admiral ``highest_imputation``:
+                ``"n"``, ``"D"`` or ``"M"``, and on a DTM target also
+                ``"h"``, ``"m"`` and ``"s"``.  ``"Y"`` raises.
             flag: DTF/TMF flag control.
             min_date: Lower bound for an imputed date.  Applies only when
                 the bound is inside the possible range of the partial value;
@@ -165,6 +169,10 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
         Returns:
             SDTMNamespace: The namespace with *target* appended; call
                 ``.to_frame()`` to materialise.
+
+        References:
+            SDTMIG 3.4 section 4.4; admiral 1.4.1 ``derive_vars_dt`` and
+            ``derive_vars_dtm``; ADR-0021; ADR-0045.
 
         Examples:
             Parse raw date to ISO 8601 DTC::
@@ -186,9 +194,8 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
         """
         from fleet.adam.utils import (
             _resolve_output_type,
-            dtm_with_time,
+            dtm_source_text,
             impute_and_flag,
-            refuse_dtm_bounds,
             source_text,
         )
 
@@ -219,26 +226,15 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
                 f"time= parameter is only valid for DTM targets, "
                 f"but target '{target}' resolves to output='{output_type}'."
             )
-        if output_type == "dtm":
-            refuse_dtm_bounds(target, min_date, max_date, highest=highest)
-
-        # DTM + time=: combine date source with explicit time column/literal
-        if time is not None and output_type == "dtm":
-            return self._materialise_then(
-                dtm_with_time(
-                    self._lazy,
-                    source=source,
-                    target=target,
-                    time=time,
-                    impute_time=impute_time,
-                    flag=flag,
-                    input_format=format,
-                )
-            )
-
         schema = self._lazy.collect_schema()
+        if time is not None:
+            src = dtm_source_text(
+                schema, source=source, target=target, time=time, input_format=format
+            )
+        else:
+            src = source_text(source, schema.get(source), verb=f"date('{target}')")
         exprs = impute_and_flag(
-            source_text(source, schema.get(source), verb=f"date('{target}')"),
+            src,
             target,
             output_type=output_type,
             impute=impute,
