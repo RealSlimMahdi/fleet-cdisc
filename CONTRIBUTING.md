@@ -57,7 +57,7 @@ result = (
 )
 ```
 
-- **Namespaces:** `sdtm`, `adam`, `adam.adsl`, `adam.occds`, `adam.onco`, `adam.ophtha`, `adam.peds`, `adam.vaccine`, `adam.metabolic`, `adam.neuro`, `adam.pk`.
+- **Namespaces:** `sdtm`, `adam`, `adam.adsl`, `adam.occds`, `adam.onco`, `adam.ophtha`, `adam.peds`, `adam.vaccine`, `adam.metabolic`, `adam.neuro`, `adam.pk`, `adam.tte`.
 - **Verbs** are keyword-only after `target` to enforce explicit declarations.
 - **Return type** is always `Self` — enabling chaining and IDE autocomplete on the concrete subclass.
 - **Chaining infrastructure:** use `self._chain(*exprs)` to append expressions and `self._materialise_then(df)` when materialisation is required (e.g. filters, joins).

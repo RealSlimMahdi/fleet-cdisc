@@ -316,6 +316,46 @@ def _verb_origin(klass: type) -> str:
     return package
 
 
+def list_verbs(cls: type, exclude: frozenset[str] = frozenset({"verbs"})) -> pl.DataFrame:
+    """List the public Fleet-defined methods of a namespace class.
+
+    The MRO walk behind every ``.verbs()``: ``df.sdtm``, ``df.adam``
+    and ``df.tlg`` with its sub-namespaces.
+
+    Args:
+        cls: The namespace class.
+        exclude: Method names to leave out.
+
+    Returns:
+        pl.DataFrame: Columns ``verb``, ``summary`` and ``origin``,
+            sorted by verb name.
+
+    Examples:
+        ``list_verbs(type(adae.tlg.ae))``
+    """
+    from fleet.core.algorithm_resolver import docstring_summary
+
+    rows: list[dict[str, str]] = []
+    seen: set[str] = set(exclude)
+    for klass in cls.__mro__:
+        if not klass.__module__.startswith("fleet."):
+            continue
+        origin = _verb_origin(klass)
+        for name, attr in vars(klass).items():
+            if name.startswith("_") or name in seen:
+                continue
+            seen.add(name)
+            if isinstance(attr, (property, staticmethod, classmethod)):
+                continue
+            if not callable(attr):
+                continue
+            rows.append(
+                {"verb": name, "summary": docstring_summary(attr.__doc__), "origin": origin}
+            )
+    rows.sort(key=lambda r: r["verb"])
+    return pl.DataFrame(rows, schema={"verb": pl.String, "summary": pl.String, "origin": pl.String})
+
+
 class SharedVerbsMixin:
     """Base mixin providing verbs shared across SDTM and ADaM namespaces.
 
@@ -1274,29 +1314,7 @@ class SharedVerbsMixin:
                     pl.col("origin") == "adam.metabolic"
                 )
         """
-        from fleet.core.algorithm_resolver import docstring_summary
-
-        rows: list[dict[str, str]] = []
-        seen: set[str] = set(self._VERBS_EXCLUDE)
-        for klass in type(self).__mro__:
-            if not klass.__module__.startswith("fleet."):
-                continue
-            origin = _verb_origin(klass)
-            for name, attr in vars(klass).items():
-                if name.startswith("_") or name in seen:
-                    continue
-                seen.add(name)
-                if isinstance(attr, (property, staticmethod, classmethod)):
-                    continue
-                if not callable(attr):
-                    continue
-                rows.append(
-                    {"verb": name, "summary": docstring_summary(attr.__doc__), "origin": origin}
-                )
-        rows.sort(key=lambda r: r["verb"])
-        return pl.DataFrame(
-            rows, schema={"verb": pl.String, "summary": pl.String, "origin": pl.String}
-        )
+        return list_verbs(type(self), self._VERBS_EXCLUDE)
 
     # ------------------------------------------------------------------ #
     # Algorithmic (Group B)                                                #
