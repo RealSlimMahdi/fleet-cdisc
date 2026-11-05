@@ -311,7 +311,8 @@ class DefineScaffolder:
         domains: list[str],
     ) -> list[dict[str, Any]]:
         """Fetch dataset + variable metadata from the SDTM IG."""
-        ig = self._client._get(f"/mdr/sdtmig/{ig_version}/datasets")
+        # The Library paths take the dashed version; a study config may hold 3.4.
+        ig = self._client._get(f"/mdr/sdtmig/{ig_version.replace('.', '-')}/datasets")
         ds_links = ig.get("_links", {}).get("datasets", [])
         domains_upper = {d.upper() for d in domains}
 
@@ -348,7 +349,7 @@ class DefineScaffolder:
         individual datasets.  ADSL maps directly; all other requested
         datasets (ADVS, ADAE, ADEX, …) are scaffolded from the BDS template.
         """
-        ig_path = f"/mdr/adam/adamig-{ig_version}"
+        ig_path = f"/mdr/adam/adamig-{ig_version.replace('.', '-')}"
         ig = self._client._get(ig_path)
         structures = ig.get("dataStructures", [])
 

@@ -600,7 +600,7 @@ def _run_add_ct(args: argparse.Namespace) -> None:
 
 
 def _run_add_rule(args: argparse.Namespace) -> None:
-    from fleet.validation.rule_scaffolder import scaffold_rule
+    from fleet.validation.rule_scaffolder import scaffold_rule, schema_directive
 
     # Resolve config (optional here — only needed when --output is absent
     # or to pick up the organization name).
@@ -646,7 +646,7 @@ def _run_add_rule(args: argparse.Namespace) -> None:
             rule_id=args.rule_id,
             organization=organization,
         )
-    except FileExistsError as exc:
+    except (FileExistsError, ValueError) as exc:
         _fail(str(exc))
         return
 
@@ -658,6 +658,9 @@ def _run_add_rule(args: argparse.Namespace) -> None:
     print(f"  1. Edit the Check block in {out_file.name}")
     print(f"  2. Validate:  uv run fleet check-rule {out_file}")
     print('  3. Run in pipeline: .validate(..., custom_rules="<dir>")')
+    print()
+    print("Optional: for schema completion in your editor, add this first line to the file:")
+    print(f"  {schema_directive(out_file)}")
 
 
 def _run_check_rule(args: argparse.Namespace) -> None:
@@ -1333,15 +1336,27 @@ def _run_check(args: argparse.Namespace) -> None:
         if rules_dir is None:
             rows.append(("WARN", "custom rules", "no validation.custom_rules directory configured"))
         elif rules_dir.is_dir():
+            import yaml
+
             from fleet.validation.rule_scaffolder import check_rule
 
             rule_files = sorted([*rules_dir.glob("*.yaml"), *rules_dir.glob("*.yml")])
             bad = 0
+            ids: dict[str, list[str]] = {}
             for rf in rule_files:
                 errors = check_rule(rf)
                 if errors:
                     bad += 1
                     rows.append(("FAIL", "custom rule", f"{rf.name}: {errors[0]}"))
+                    continue
+                rule = yaml.safe_load(rf.read_text(encoding="utf-8"))
+                ids.setdefault(str(rule["Core"]["Id"]), []).append(rf.name)
+            # The engine keeps one rule of an ID: the other file never runs.
+            for rule_id, names in ids.items():
+                if len(names) > 1:
+                    bad += 1
+                    detail = f"duplicate Core.Id {rule_id} in {', '.join(names)}"
+                    rows.append(("FAIL", "custom rule", detail))
             if not bad:
                 rows.append(("PASS", "custom rules", f"{len(rule_files)} rule file(s) valid"))
 
