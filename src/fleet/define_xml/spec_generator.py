@@ -17,8 +17,8 @@ Usage::
 
 from __future__ import annotations
 
-import json
 import re
+import shutil
 import warnings
 import xml.dom.minidom
 import xml.etree.ElementTree as ET
@@ -26,10 +26,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-import jsonschema
 import yaml
 from lxml import etree as lxml_etree
 
+from fleet._version import __version__
 from fleet.core import spec_registry
 from fleet.core._verb_mixin import _import_derivations_module
 from fleet.core.algorithm_resolver import docstring_summary, resolve_callable_docstring
@@ -37,13 +37,12 @@ from fleet.core.define_spec import (
     default_is_reference_data,
     default_repeating,
     load_define_spec,
-    load_spec_yaml,
+    read_define_yaml,
+    validate_define_data,
 )
 from fleet.core.exceptions import SpecError
 from fleet.core.oids import item_oid, metadata_version_oid, study_oid
 from fleet.define_xml.semantic_checks import REST_EMPHASIS
-
-_SCHEMA_PATH = Path(__file__).parent / "schemas" / "define_spec_schema.json"
 
 #: An NCI concept code used as a codelist OID (C66731): a CDISC CT list.
 _NCI_CODE = re.compile(r"^C\d+$")
@@ -96,6 +95,41 @@ _REGISTRY_STANDARDS: dict[str, str] = {
     "ADAMIG": "adam",
     "SENDIG": "sdtm",
 }
+
+#: def:Class names of the Define-XML 2.1 ItemGroupClass list (C103329) that
+#: belong to one model; REFERENCE DATA STRUCTURE is left to both.
+_ADAM_CLASSES = frozenset(
+    {
+        "ADAM OTHER",
+        "BASIC DATA STRUCTURE",
+        "DEVICE LEVEL ANALYSIS DATASET",
+        "MEDICAL DEVICE BASIC DATA STRUCTURE",
+        "MEDICAL DEVICE OCCURRENCE DATA STRUCTURE",
+        "OCCURRENCE DATA STRUCTURE",
+        "SUBJECT LEVEL ANALYSIS DATASET",
+    }
+)
+_TABULATION_CLASSES = frozenset(
+    {
+        "EVENTS",
+        "FINDINGS",
+        "FINDINGS ABOUT",
+        "INTERVENTIONS",
+        "RELATIONSHIP",
+        "SPECIAL PURPOSE",
+        "STUDY REFERENCE",
+        "TRIAL DESIGN",
+    }
+)
+
+#: def:leaf extensions a submission accepts: SAS transport and Dataset-JSON.
+_SUBMISSION_EXTS = (".xpt", ".json")
+
+#: Characters XML 1.0 does not allow (tab, line feed and carriage return are allowed).
+_CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
+
+#: The define2-1.xsl stylesheet shipped with Fleet (MIT licence, Lex Jansen).
+_PACKAGED_XSL = Path(__file__).parent / "schemas" / "define2-1.xsl"
 
 
 def _is_plain_copy(block: dict) -> bool:
@@ -298,7 +332,7 @@ class DefineSpecGenerator:
         strict: bool = False,
     ) -> None:
         self._path = Path(define_yaml_path)
-        self._data: dict[str, Any] = load_spec_yaml(self._path.read_text(encoding="utf-8"))
+        self._data: dict[str, Any] = read_define_yaml(self._path, validate_schema=False)
         self._check_spec_version()
         self._enrich_methods = enrich_methods
         self._import_study_code = import_study_code
@@ -344,7 +378,11 @@ class DefineSpecGenerator:
                 ``define_sdtm_preview.html``).
             xsl_path: Path to the ``define2-1.xsl`` stylesheet.  Defaults to
                 ``define2-1.xsl`` in the same directory as *output_path*,
-                which is the standard layout used by Fleet.
+                which is the standard layout used by Fleet.  When that
+                file is absent, Fleet copies its own copy there (also
+                with no preview), so the ``xml-stylesheet`` line of the
+                XML names a file that exists.  A file that is already
+                there is never replaced.
 
         Examples:
             Write the pilot SDTM Define-XML::
@@ -359,6 +397,10 @@ class DefineSpecGenerator:
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(xml_str, encoding="utf-8")
         print(f"Define-XML generated: {out}")
+        local_xsl = out.parent / "define2-1.xsl"
+        if not local_xsl.exists():
+            shutil.copyfile(_PACKAGED_XSL, local_xsl)
+            print(f"Stylesheet copied: {local_xsl}")
 
         if html_preview:
             self._write_html_preview(out, xsl_path)
@@ -377,11 +419,7 @@ class DefineSpecGenerator:
         resolved_xsl = Path(xsl_path) if xsl_path else xml_path.parent / "define2-1.xsl"
 
         if not resolved_xsl.exists():
-            print(
-                f"HTML preview skipped: XSL stylesheet not found at '{resolved_xsl}'. "
-                "Place define2-1.xsl in the same directory as the XML output, "
-                "or pass xsl_path= explicitly."
-            )
+            print(f"HTML preview skipped: XSL stylesheet not found at '{resolved_xsl}'.")
             return
 
         parser = lxml_etree.XMLParser(resolve_entities=False, no_network=True)
@@ -412,6 +450,7 @@ class DefineSpecGenerator:
         — see :func:`fleet.define_xml.semantic_checks.semantic_errors`).
         A document that fails either never ships silently.
         """
+        self._refuse_control_characters(root)
         xml_str = self._to_pretty_xml(root)
         if not self._validate_xml:
             return xml_str
@@ -503,7 +542,7 @@ class DefineSpecGenerator:
             for var in ds.get("variables", []):
                 keys[f"{ds_name}.{var['name']}"] = var
             for entry in ds.get("value_level") or []:
-                vl_key = "_".join(self._normalise_where(ds_name, entry)[2])
+                vl_key = self._normalise_where(ds_name, entry)[2]
                 for var in entry.get("variables", []):
                     keys[f"{ds_name}.{var['name']}.{vl_key}"] = var
         return keys
@@ -541,35 +580,7 @@ class DefineSpecGenerator:
         check_spec_version(self._data.get("fleet_spec_version"), source=str(self._path))
 
     def _validate(self) -> None:
-        from fleet.core.exceptions import SpecSchemaError
-
-        schema = json.loads(_SCHEMA_PATH.read_text(encoding="utf-8"))
-        validator = jsonschema.Draft202012Validator(schema)
-        errors = list(validator.iter_errors(self._data))
-        if not errors:
-            return
-        empty = [
-            e.json_path[2:]
-            for e in errors
-            if e.json_path in ("$.study.description", "$.study.originator")
-            and e.validator == "minLength"
-        ]
-        lines = [f"  - {e.json_path}: {e.message}" for e in errors if e.json_path[2:] not in empty][
-            :5
-        ]
-        if empty:
-            lines.insert(
-                0,
-                f"  - {' and '.join(empty)} {'is' if len(empty) == 1 else 'are'} empty. "
-                "Write the text in this file, or create the study with "
-                "`fleet new --description ... --company ...`.",
-            )
-        msgs = "\n".join(lines)
-        from fleet.tools.migrate_spec import migrate_hint
-
-        raise SpecSchemaError(
-            f"{self._path}: define YAML failed schema validation:\n{msgs}{migrate_hint(self._data)}"
-        )
+        validate_define_data(self._path, self._data)
 
     def _validate_codelist_refs(self) -> None:
         """Fail loudly on ``codelist:`` references to undeclared codelists.
@@ -693,6 +704,48 @@ class DefineSpecGenerator:
                 stacklevel=2,
             )
 
+    def _warn_submission_hrefs(self) -> None:
+        """Warn once when a def:leaf names a file that is not XPT or Dataset-JSON.
+
+        Fleet writes ``def:Context="Submission"``.  Parquet is the working
+        format; a submission takes SAS transport (or Dataset-JSON).  The
+        href is kept, because it names the file that ``fleet run`` writes.
+        """
+        hrefs = [h for h in self.leaf_hrefs().values() if not h.lower().endswith(_SUBMISSION_EXTS)]
+        if hrefs:
+            shown = ", ".join(hrefs[:5]) + (" ..." if len(hrefs) > 5 else "")
+            warnings.warn(
+                f"{self._path}: the Submission define names {shown}; FDA accepts XPT "
+                "(output_format: xpt) or Dataset-JSON (output_format: dataset-json).",
+                UserWarning,
+                stacklevel=4,
+            )
+
+    def _check_classes(self) -> None:
+        """Refuse a def:Class of the other model; warn on a dataset with no class.
+
+        Raises:
+            SpecError: When an ADaM define names a tabulation class, or the reverse.
+        """
+        adam = self._data["study"]["standard"] == "ADAMIG"
+        foreign = _TABULATION_CLASSES if adam else _ADAM_CLASSES
+        datasets = self._data.get("datasets") or []
+        wrong = [f"{ds['name']} ({ds['class']})" for ds in datasets if ds.get("class") in foreign]
+        if wrong:
+            raise SpecError(
+                f"{self._path}: class of the other model for a "
+                f"{self._data['study']['standard']} define: {', '.join(wrong)}. Use a "
+                f"{'ADaM' if adam else 'SDTM'} class of the Define-XML 2.1 class list."
+            )
+        missing = [ds["name"] for ds in datasets if not ds.get("class")]
+        if missing:
+            warnings.warn(
+                f"{self._path}: {', '.join(missing)} have no class:, so the define has no "
+                "def:Class for them. Define-XML 2.1 gives each dataset its class.",
+                UserWarning,
+                stacklevel=4,
+            )
+
     def _validate_variable_refs(self) -> None:
         """Fail loudly on keys and value-level names that are not dataset variables.
 
@@ -711,9 +764,9 @@ class DefineSpecGenerator:
                 if key not in names:
                     problems.append(f"{ds_name}.{key} (keys)")
             for entry in ds.get("value_level") or []:
-                wc_var = self._normalise_where(ds_name, entry)[1]
-                if wc_var not in names:
-                    problems.append(f"{ds_name}.{wc_var} (value_level where)")
+                for wc_var, _, _ in self._normalise_where(ds_name, entry)[1]:
+                    if wc_var not in names:
+                        problems.append(f"{ds_name}.{wc_var} (value_level where)")
                 for var in entry.get("variables", []):
                     if var["name"] not in names:
                         problems.append(f"{ds_name}.{var['name']} (value_level variable)")
@@ -787,6 +840,7 @@ class DefineSpecGenerator:
         self._refuse_parent_qualifiers()
         self._validate_codelist_refs()
         self._validate_variable_refs()
+        self._check_classes()
         self._warn_predecessor_candidates()
         # Import the spec's derivations_module so short-name `callable:`
         # derivations are registered before their MethodDefs are resolved
@@ -797,7 +851,8 @@ class DefineSpecGenerator:
         study = self._data["study"]
         std_oid = _STANDARD_OIDS.get(study["standard"], f"STD.{study['standard']}")
         ts = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S")
-        file_oid = f"CDISC.{study['id']}.1.Define-XML_2.1.0"
+        # One FileOID per file: the SDTM and ADaM defines of a study differ (ODM 1.3.2).
+        file_oid = f"CDISC.{study['id']}.{study['standard']}.1.Define-XML_2.1.0"
         attribs: dict[str, str] = {
             "xmlns": _NS_ODM,
             "xmlns:xlink": _NS_XLINK,
@@ -808,9 +863,10 @@ class DefineSpecGenerator:
             "CreationDateTime": ts,
             "Originator": study["originator"],
             "SourceSystem": study.get("source_system", "Fleet"),
-            "SourceSystemVersion": study.get("source_system_version", "0.1.0"),
+            "SourceSystemVersion": study.get("source_system_version", __version__),
             "def:Context": "Submission",
         }
+        self._warn_submission_hrefs()
         odm = ET.Element("ODM", attrib=attribs)
         odm.append(self._build_study(study, std_oid))
         self._report_gaps()
@@ -1002,15 +1058,20 @@ class DefineSpecGenerator:
         # A SUPP-- dataset describes its parent domain (SUPPAE: Domain AE).
         domain = name[4:] if name.startswith("SUPP") and len(name) > 4 else name
 
+        standard = self._data["study"]["standard"]
         attribs: dict[str, str] = {
             "OID": ig_oid,
             "Name": name,
             "Repeating": "Yes" if repeating else "No",
             "IsReferenceData": "Yes" if reference else "No",
             "SASDatasetName": name,
-            "Domain": domain,
+        }
+        # An ADaM dataset is not a domain: Define-XML 2.1 ADaM examples have no Domain.
+        if standard != "ADAMIG":
+            attribs["Domain"] = ds.get("domain") or domain
+        attribs |= {
             "def:Structure": ds["structure"],
-            "Purpose": "Tabulation" if self._data["study"]["standard"] == "SDTMIG" else "Analysis",
+            "Purpose": "Analysis" if standard == "ADAMIG" else "Tabulation",
             "def:StandardOID": std_oid,
             "def:ArchiveLocationID": leaf_id,
         }
@@ -1054,7 +1115,9 @@ class DefineSpecGenerator:
         # Define-XML 2.1 orders ItemGroupDef children Description → ItemRef*
         # → def:Class → def:leaf; emitting Class earlier invalidates the file.
         if ds.get("class"):
-            ET.SubElement(elem, "def:Class", {"Name": ds["class"]})
+            cls = ET.SubElement(elem, "def:Class", {"Name": ds["class"]})
+            if ds.get("subclass"):
+                ET.SubElement(cls, "def:SubClass", {"Name": ds["subclass"]})
 
         # Leaf reference — href follows the actual export format
         href = self._leaf_href(ds)
@@ -1377,21 +1440,46 @@ class DefineSpecGenerator:
     # ------------------------------------------------------------------ #
 
     @staticmethod
-    def _normalise_where(ds_name: str, entry: dict[str, Any]) -> tuple[str, str, list[str]]:
-        """Resolve a value-level entry's condition to (wc_oid, variable, values).
+    def _normalise_where(
+        ds_name: str, entry: dict[str, Any]
+    ) -> tuple[str, list[tuple[str, str, list[str]]], str]:
+        """Resolve a value-level entry's condition to (wc_oid, conditions, key).
 
         ``param: SYSBP`` is sugar for ``where: {variable: PARAMCD,
-        value: SYSBP}`` — the idiomatic BDS case.
+        value: SYSBP}``, the idiomatic BDS case.  ``where:`` is one
+        condition or a list of conditions that all apply (one
+        WhereClauseDef with one RangeCheck each).  Each condition is
+        ``(variable, comparator, values)``; the comparator defaults to
+        ``EQ`` for one value and ``IN`` for more.  *key* names the slice
+        in item OIDs and page map keys.
         """
         if entry.get("param") is not None:
-            wc_var, values = "PARAMCD", [str(entry["param"])]
+            raw_conditions: list[dict[str, Any]] = [
+                {"variable": "PARAMCD", "value": entry["param"]}
+            ]
         else:
             where = entry["where"]
-            wc_var = where["variable"]
-            raw = where["value"]
+            raw_conditions = where if isinstance(where, list) else [where]
+        conditions: list[tuple[str, str, list[str]]] = []
+        oid_parts: list[str] = []
+        key_parts: list[str] = []
+        for cond in raw_conditions:
+            raw = cond["value"]
             values = [str(v) for v in raw] if isinstance(raw, list) else [str(raw)]
-        key = "_".join(values)
-        return f"WC.{ds_name}.{wc_var}.{key}", wc_var, values
+            default = "EQ" if len(values) == 1 else "IN"
+            comparator = cond.get("comparator") or default
+            if comparator not in ("IN", "NOTIN") and len(values) > 1:
+                raise SpecError(
+                    f"{ds_name} value_level where {cond['variable']}: comparator "
+                    f"{comparator} takes one value, not {values}. Use IN or NOTIN for a list."
+                )
+            conditions.append((cond["variable"], comparator, values))
+            part = "_".join(values)
+            if comparator != default:
+                part = f"{comparator}_{part}"
+            oid_parts.append(f"{cond['variable']}.{part}")
+            key_parts.append(part)
+        return f"WC.{ds_name}.{'.'.join(oid_parts)}", conditions, "_".join(key_parts)
 
     def _build_value_level(
         self, datasets: list[dict[str, Any]]
@@ -1416,27 +1504,40 @@ class DefineSpecGenerator:
         value_lists: dict[str, ET.Element] = {}  # VL OID → element
         vl_counters: dict[str, int] = {}
         where_defs: dict[str, ET.Element] = {}  # WC OID → element
+        conditions_of: dict[str, list[tuple[str, str, list[str]]]] = {}  # WC OID → conditions
+        item_wc: dict[str, str] = {}  # value-level item OID → its WC OID
         item_defs: list[ET.Element] = []
 
         for ds in datasets:
             ds_name = ds["name"]
             for entry in ds.get("value_level", []) or []:
-                wc_oid, wc_var, values = self._normalise_where(ds_name, entry)
+                wc_oid, conditions, key = self._normalise_where(ds_name, entry)
 
+                if conditions_of.setdefault(wc_oid, conditions) != conditions:
+                    raise SpecError(
+                        f"{self._path}: two value_level conditions of {ds_name} give the "
+                        f"same WhereClauseDef OID {wc_oid}: {conditions_of[wc_oid]} and "
+                        f"{conditions}. Write the values so that the OIDs differ."
+                    )
                 if wc_oid not in where_defs:
                     wc_elem = ET.Element("def:WhereClauseDef", {"OID": wc_oid})
-                    rc = ET.SubElement(
-                        wc_elem,
-                        "RangeCheck",
-                        {
-                            "Comparator": "EQ" if len(values) == 1 else "IN",
-                            "SoftHard": "Soft",
-                            "def:ItemOID": self._item_oid(ds_name, wc_var),
-                        },
-                    )
-                    for value in values:
-                        ET.SubElement(rc, "CheckValue").text = value
+                    for wc_var, comparator, values in conditions:
+                        rc = ET.SubElement(
+                            wc_elem,
+                            "RangeCheck",
+                            {
+                                "Comparator": comparator,
+                                "SoftHard": "Soft",
+                                "def:ItemOID": self._item_oid(ds_name, wc_var),
+                            },
+                        )
+                        for value in values:
+                            ET.SubElement(rc, "CheckValue").text = value
                     where_defs[wc_oid] = wc_elem
+                condition_text = " and ".join(
+                    f"{wc_var} {'=' if comp in ('EQ', 'IN') else comp} {', '.join(values)}"
+                    for wc_var, comp, values in conditions
+                )
 
                 for var in entry.get("variables", []):
                     var_name = var["name"]
@@ -1447,9 +1548,14 @@ class DefineSpecGenerator:
                         value_lists[vl_oid] = ET.Element("def:ValueListDef", {"OID": vl_oid})
                         vl_counters[vl_oid] = 0
 
-                    key = "_".join(values)
                     item_oid = f"IT.{ds_name}.{var_name}.{key}"
-                    label = f"{ds_name}.{var_name} ({wc_var} = {', '.join(values)})"
+                    if item_wc.setdefault(item_oid, wc_oid) != wc_oid:
+                        raise SpecError(
+                            f"{self._path}: value-level ItemDef OID {item_oid} is given by two "
+                            f"conditions ({item_wc[item_oid]} and {wc_oid}). Write the values "
+                            "so that the OIDs differ."
+                        )
+                    label = f"{ds_name}.{var_name} ({condition_text})"
 
                     vl_counters[vl_oid] += 1
                     ref_attrs: dict[str, str] = {
@@ -1530,12 +1636,33 @@ class DefineSpecGenerator:
 
     _item_oid = staticmethod(item_oid)
 
+    def _refuse_control_characters(self, elem: ET.Element, owner: str = "ODM") -> None:
+        """Refuse a text or attribute with a control character, which XML 1.0 forbids.
+
+        Raises:
+            SpecError: Naming the element and the OID of the element that holds it.
+        """
+        owner = elem.get("OID") or elem.get("ID") or owner
+        values = [("text", elem.text or "")] + [(f"@{k}", v) for k, v in elem.attrib.items()]
+        for where, value in values:
+            bad = _CONTROL_CHARS.search(value)
+            if bad:
+                tag = elem.tag.split("}")[-1]
+                raise SpecError(
+                    f"{self._path}: {owner} {tag} {where} holds the control character "
+                    f"{bad.group()!r}, which XML does not allow: {value[:60]!r}. Remove it "
+                    "from define.yaml."
+                )
+        for child in elem:
+            self._refuse_control_characters(child, owner)
+
     @staticmethod
     def _to_pretty_xml(root: ET.Element) -> str:
         raw = ET.tostring(root, encoding="unicode", method="xml")
         dom = xml.dom.minidom.parseString(raw)
         pretty = dom.toprettyxml(indent="  ", encoding="utf-8").decode("utf-8")
-        lines = [ln for ln in pretty.split("\n") if ln.strip()]
+        # Keep blank lines inside a text: they separate paragraphs of a comment.
+        lines = pretty.rstrip("\n").split("\n")
         if lines and lines[0].startswith("<?xml"):
             lines.insert(1, '<?xml-stylesheet type="text/xsl" href="define2-1.xsl"?>')
         return "\n".join(lines)

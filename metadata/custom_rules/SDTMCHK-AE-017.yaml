@@ -31,7 +31,8 @@ Outcome:
   - AEOUT
 Description: 'Flags: AEDTHDTC is a partial date (fewer than 10 characters). Based on sdtmchecks::check_ae_ds_partial_death_dates.
   Difference from the R function: Only AEDTHDTC is checked. R also checks the DS death date (DSSTDTC of
-  DEATH records).'
+  DEATH records).
+  Needs AEDTHDTC (sponsor variable, not in SDTMIG 3.4 AE); on standard data see CORE-000253, CORE-000254, CORE-000841.'
 Sensitivity: Record
 Executability: Fully Executable
 Authorities:
@@ -49,3 +50,6 @@ Authorities:
       - Cited Guidance: check_ae_ds_partial_death_dates
         Document: pharmaverse sdtmchecks
         Section: AE Domain
+  Category:
+    Purpose: Data quality check from sdtmchecks
+    Keywords: [AE]

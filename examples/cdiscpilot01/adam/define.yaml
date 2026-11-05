@@ -14,7 +14,6 @@ study:
   protocol_name: CDISCPILOT01
   originator: Fleet Team
   source_system: Fleet
-  source_system_version: "0.1.0"
   standard: ADAMIG
   standard_version: "1.1"
   ct_version: "2023-12-15"
@@ -275,7 +274,7 @@ datasets:
     structure: One record per subject per parameter per analysis timepoint
     repeating: true
     class: BASIC DATA STRUCTURE
-    keys: [STUDYID, USUBJID, PARAMCD, VISITNUM]
+    keys: [STUDYID, USUBJID, PARAMCD, ADT]
     inputs:
       - name: VS
         type: dataset
@@ -590,6 +589,7 @@ datasets:
     structure: One record per subject per adverse event
     repeating: true
     class: OCCURRENCE DATA STRUCTURE
+    subclass: ADVERSE EVENT
     keys: [STUDYID, USUBJID, ASEQ]
     inputs:
       - name: AE

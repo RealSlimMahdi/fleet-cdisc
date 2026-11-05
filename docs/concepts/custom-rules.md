@@ -185,6 +185,10 @@ Authorities:
             Rule Identifier:
               Id: FLEET-AE-001
               Version: "1"
+            Version: "1"
+    Category:                # Required for a sponsor (custom) organization
+      Purpose: Sponsor SOP compliance
+      Keywords: [AE]
 
 Sensitivity: Record
 Executability: Fully Executable

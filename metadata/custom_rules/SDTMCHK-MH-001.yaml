@@ -55,3 +55,6 @@ Authorities:
       - Cited Guidance: check_mh_missing_month
         Document: pharmaverse sdtmchecks
         Section: MH Domain
+  Category:
+    Purpose: Data quality check from sdtmchecks
+    Keywords: [MH]

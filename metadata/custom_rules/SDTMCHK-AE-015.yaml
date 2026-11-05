@@ -40,7 +40,8 @@ Outcome:
   - DSTERM
   - $ae_dth
 Description: 'Flags: DS records a death due to an adverse event, but no AE record of the subject has AEDTHDTC.
-  Based on sdtmchecks::check_ae_aedthdtc_ds_death. Same conditions as the R function.'
+  Based on sdtmchecks::check_ae_aedthdtc_ds_death. Same conditions as the R function.
+  Needs AEDTHDTC (sponsor variable, not in SDTMIG 3.4 AE); on standard data see CORE-000253, CORE-000254, CORE-000841.'
 Sensitivity: Record
 Executability: Partially Executable
 Authorities:
@@ -58,3 +59,6 @@ Authorities:
       - Cited Guidance: check_ae_aedthdtc_ds_death
         Document: pharmaverse sdtmchecks
         Section: AE Domain
+  Category:
+    Purpose: Data quality check from sdtmchecks
+    Keywords: [DS]

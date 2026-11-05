@@ -60,3 +60,6 @@ Authorities:
       - Cited Guidance: check_rs_rsdtc_across_visit
         Document: pharmaverse sdtmchecks
         Section: RS Domain
+  Category:
+    Purpose: Data quality check from sdtmchecks
+    Keywords: [RS]

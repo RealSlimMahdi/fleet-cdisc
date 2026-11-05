@@ -387,8 +387,10 @@ the method text rule above); variables with `origin: Collected`,
 `Assigned`, `Protocol`, or `Predecessor` never reference a method. Generated
 documents are validated on the way out — against the vendored CDISC XSDs
 *and* a semantic lint (`fleet.define_xml.semantic_errors`) that rejects
-reviewer-facing defects such as a `MethodOID` on a non-Derived variable or
-API markup inside `TranslatedText`; `validate_xml=False` bypasses both.
+reviewer-facing defects such as API markup inside `TranslatedText`;
+`validate_xml=False` bypasses both. The lint accepts a `MethodOID` on a
+variable that is not Derived in a received define, because the CDISC
+Define-XML 2.1 examples use it.
 
 ### Define-XML gaps: warning or refusal
 
@@ -437,7 +439,18 @@ The spec keys below apply to every generation:
   qualifier`, which marks a Non-Standard Variable for `SUPP<domain>` (see
   *Supplemental qualifiers* below).
 - **`value_level:`** — value-level metadata entries emitted as Define-XML
-  `<ValueListDef>` / where-clause elements.
+  `<ValueListDef>` / where-clause elements. `where:` is one condition or a
+  list of conditions that all apply, each with an optional `comparator:`
+  (`EQ`, `NE`, `LT`, `LE`, `GT`, `GE`, `IN`, `NOTIN`; default `EQ` for one
+  value, `IN` for more). Two conditions that would get the same OID stop
+  the generation.
+- **`class:`, `subclass:`, `domain:`** — the dataset `def:Class`, its
+  `def:SubClass` (ADAE: `ADVERSE EVENT`), and the SDTM `Domain` of a split
+  dataset (QSPH: `QS`). An ADaM dataset has no `Domain`. A dataset with no
+  class warns; a class of the other model stops the generation.
+- **Leaf hrefs** — a Submission define that names a file other than `.xpt`
+  or `.json` warns once. `generate()` copies Fleet's `define2-1.xsl` next to
+  the XML when no file of that name is there; it never replaces a file.
 - **`ct: {validate: true, file: ...}`** — opt the spec into CT validation
   (see below).
 
@@ -788,7 +801,8 @@ the standard `define2-1.xsl` stylesheet renders them as clickable links.
 How the Origin **description** renders, per origin type:
 
 - **`Predecessor`** requires `predecessor: DATASET.VARIABLE` (schema-enforced);
-  the define renders `Predecessor: DM.COUNTRY`. In an ADaM spec, a variable
+  the define renders `Predecessor: DM.COUNTRY`. A condition may follow:
+  `predecessor: "DS.DSDECOD where DS.DSCAT='DISPOSITION EVENT'"`. In an ADaM spec, a variable
   carried with `algorithm: assign` and `source:` but still marked `Collected`
   triggers a generation-time warning suggesting the Predecessor form. When
   freezing an inline pipeline, `to_spec_yaml(dataset="ADSL", predecessor="DM")`

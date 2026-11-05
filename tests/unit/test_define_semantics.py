@@ -29,6 +29,7 @@ import fleet
 from fleet.core import spec_registry
 from fleet.core.lineage import latest_lineage_of
 from fleet.define_xml import DefineSpecGenerator, semantic_errors
+from fleet.define_xml.semantic_checks import REST_EMPHASIS
 from fleet.define_xml.xsd import missing_files
 
 ODM = "{http://www.cdisc.org/ns/odm/v1.3}"
@@ -59,7 +60,7 @@ class TestRegistryRendering:
                 assert "{" not in text and "}" not in text, (
                     f"{standard}:{algo.name} left an unfilled placeholder: {text!r}"
                 )
-                assert "`" not in text and not re.search(r"\*\S[^*]*\*", text), (
+                assert "`" not in text and not REST_EMPHASIS.search(text), (
                     f"{standard}:{algo.name} rendered API markup: {text!r}"
                 )
 
@@ -129,15 +130,15 @@ def _method_def(oid: str) -> str:
 
 
 class TestSemanticLint:
-    def test_method_on_non_derived_is_flagged(self):
+    def test_method_on_non_derived_is_not_flagged(self):
+        """c1-779: the CDISC Define-XML 2.1 examples put a MethodOID on non-Derived items."""
         xml = _doc(
             '<ItemGroupDef OID="IG.DM" Name="DM" Repeating="No">'
             '<ItemRef ItemOID="IT.DM.SEX" MethodOID="MT.DM.SEX"/></ItemGroupDef>'
             + _item_def("IT.DM.SEX", "Collected")
             + _method_def("MT.DM.SEX")
         )
-        problems = semantic_errors(xml)
-        assert len(problems) == 1 and "Collected" in problems[0]
+        assert semantic_errors(xml) == []
 
     def test_method_on_derived_is_clean(self):
         xml = _doc(
@@ -490,6 +491,8 @@ def test_committed_define_outputs_are_reproducible(standard):
         from lxml import etree
 
         stamped = re.sub(r'CreationDateTime="[^"]*"', 'CreationDateTime=""', xml)
+        # c1-572: the version of the Fleet that runs changes with every commit.
+        stamped = re.sub(r'SourceSystemVersion="[^"]*"', 'SourceSystemVersion=""', stamped)
         return etree.canonicalize(xml_data=stamped, strip_text=True)
 
     assert stamp_free(regenerated) == stamp_free(committed), (

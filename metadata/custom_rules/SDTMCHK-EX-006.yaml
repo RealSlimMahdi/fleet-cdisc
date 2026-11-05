@@ -50,3 +50,6 @@ Authorities:
               - Cited Guidance: check_ex_exoccur_mis_exdose_nonmis
                 Document: pharmaverse sdtmchecks
                 Section: EX Domain
+    Category:
+      Purpose: Data quality check from sdtmchecks
+      Keywords: [EX]

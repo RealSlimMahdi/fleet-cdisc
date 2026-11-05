@@ -61,3 +61,6 @@ Authorities:
       - Cited Guidance: check_ss_ssdtc_dead_ds
         Document: pharmaverse sdtmchecks
         Section: SS Domain
+  Category:
+    Purpose: Data quality check from sdtmchecks
+    Keywords: [SS]

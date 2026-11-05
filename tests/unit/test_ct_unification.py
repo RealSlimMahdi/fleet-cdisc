@@ -368,7 +368,7 @@ class TestAliasNormalisation:
         assert not v.has_codelist("C66731")
         v.register_alias("SEX", "C66731")
         assert v.has_codelist("C66731")
-        assert v.get_decode_map("C66731") == v.get_decode_map("SEX")
+        assert v.get_valid_values("C66731") == v.get_valid_values("SEX") == ["F", "M"]
 
     def test_unknown_name_returned_unchanged(self, tmp_path):
         v = CTValidator()

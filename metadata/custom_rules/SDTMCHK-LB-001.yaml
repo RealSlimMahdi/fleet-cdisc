@@ -53,3 +53,6 @@ Authorities:
               - Cited Guidance: check_lb_lbstresn_missing
                 Document: pharmaverse sdtmchecks
                 Section: LB Domain
+    Category:
+      Purpose: Data quality check from sdtmchecks
+      Keywords: [LB]

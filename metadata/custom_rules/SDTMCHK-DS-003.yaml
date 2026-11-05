@@ -51,3 +51,6 @@ Authorities:
       - Cited Guidance: check_ds_duplicate_randomization
         Document: pharmaverse sdtmchecks
         Section: DS Domain
+  Category:
+    Purpose: Data quality check from sdtmchecks
+    Keywords: [DS]

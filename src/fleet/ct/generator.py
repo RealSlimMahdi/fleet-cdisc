@@ -63,12 +63,13 @@ if TYPE_CHECKING:
 def _safe_identifier(name: str) -> str:
     """Convert an arbitrary string into a valid Python identifier.
 
-    Replaces non-alphanumeric characters with underscores, strips leading
-    digits, and appends a trailing underscore if the result is a reserved
-    keyword.
+    Replaces non-alphanumeric characters with underscores, puts ``T_``
+    before a leading digit (``2 TIMES PER WEEK`` gives ``T_2_TIMES_PER_WEEK``),
+    and appends a trailing underscore if the result is a reserved keyword.
     """
     ident = re.sub(r"[^0-9A-Za-z_]", "_", name)
-    ident = re.sub(r"^[0-9]+", "", ident)
+    if ident[:1].isdigit():
+        ident = f"T_{ident}"
     if not ident:
         ident = "_EMPTY"
     if keyword.iskeyword(ident) or keyword.issoftkeyword(ident):
@@ -77,6 +78,27 @@ def _safe_identifier(name: str) -> str:
 
 
 _NCI_ID = re.compile(r"^C\d+$")
+
+
+def _term_attributes(terms: list[dict[str, Any]]) -> list[str]:
+    """One class attribute name per term, in the order of *terms*.
+
+    A name with no letter or digit (``%``) is ``T_<term NCI code>``.  Two
+    terms that give one name (``/`` and ``%`` both give ``_``) each get
+    ``_<term NCI code>`` at the end, so no term overwrites another.
+    """
+    names = [_safe_identifier(t["submissionValue"]) for t in terms]
+    names = [
+        f"T_{t.get('conceptId', 'TERM')}" if not re.search(r"[0-9A-Za-z]", n) else n
+        for n, t in zip(names, terms, strict=True)
+    ]
+    seen: dict[str, int] = {}
+    for n in names:
+        seen[n] = seen.get(n, 0) + 1
+    result: list[str] = []
+    for i, (n, t) in enumerate(zip(names, terms, strict=True)):
+        result.append(n if seen[n] == 1 else f"{n}_{t.get('conceptId') or i}")
+    return result
 
 
 def extract_concept_ids(define_path: str | Path) -> set[str]:
@@ -482,7 +504,8 @@ class CodelistGenerator:
             doc_parts.append("")
             doc_parts.append(f"See: {cdisc_url}")
 
-        class_doc = "\n    ".join(doc_parts)
+        # Escape the text so a quote or a backslash in a definition cannot end the docstring.
+        class_doc = "\n    ".join(doc_parts).replace("\\", "\\\\").replace('"', '\\"')
         lines = [
             f"class {class_name}:",
             f'    """{class_doc}"""',
@@ -502,15 +525,14 @@ class CodelistGenerator:
             return lines
 
         submission_values = sorted({t.get("submissionValue", "") for t in terms} - {""})
-        # Two terms can share one attribute name (2 and 3 TIMES PER WEEK).
         lines.append(f"    _terms = {tuple(submission_values)!r}")
         lines.append("")
 
-        for term in sorted(terms, key=lambda t: t.get("submissionValue", "")):
-            sv: str = term.get("submissionValue", "")
-            if not sv:
-                continue
-            attr = _safe_identifier(sv)
+        ordered = sorted(
+            (t for t in terms if t.get("submissionValue")), key=lambda t: t["submissionValue"]
+        )
+        for term, attr in zip(ordered, _term_attributes(ordered), strict=True):
+            sv: str = term["submissionValue"]
             lines.append(f"    {attr} = {sv!r}")
 
             if self.include_docs:

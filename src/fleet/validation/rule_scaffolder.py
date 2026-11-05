@@ -425,7 +425,10 @@ def check_rule(rule_path: Path) -> list[str]:
             validator = Draft202012Validator(schema)
             for error in sorted(validator.iter_errors(rule), key=lambda e: list(e.path)):
                 path = ".".join(str(p) for p in error.absolute_path) or "(root)"
-                errors.append(f"Schema: {path}: {error.message}")
+                # An anyOf error repeats the whole block; a missing key names the fix.
+                required = [s.message for s in error.context or () if s.validator == "required"]
+                for message in dict.fromkeys(required) or [error.message]:
+                    errors.append(f"Schema: {path}: {message}")
         except ImportError:
             errors.append(
                 "jsonschema not installed — install with: uv add jsonschema "

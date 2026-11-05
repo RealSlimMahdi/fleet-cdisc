@@ -469,8 +469,6 @@ class DefineScaffolder:
         An empty *company* or *description* stays empty: the schema then
         names the field, so no placeholder reaches a Define-XML.
         """
-        from fleet._version import __version__
-
         output_path = output_path.resolve()
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -498,7 +496,6 @@ class DefineScaffolder:
                 "protocol_name": study_id,
                 "originator": company or "",
                 "source_system": "Fleet",
-                "source_system_version": __version__,
                 "standard": standard,
                 "standard_version": standard_version,
                 "ct_version": ct_version,

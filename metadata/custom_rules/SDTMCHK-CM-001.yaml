@@ -51,3 +51,6 @@ Authorities:
               - Cited Guidance: check_cm_cmdecod
                 Document: pharmaverse sdtmchecks
                 Section: CM Domain
+    Category:
+      Purpose: Data quality check from sdtmchecks
+      Keywords: [CM]

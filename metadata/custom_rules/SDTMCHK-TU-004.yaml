@@ -60,3 +60,6 @@ Authorities:
       - Cited Guidance: check_tu_tudtc_across_visit
         Document: pharmaverse sdtmchecks
         Section: TU Domain
+  Category:
+    Purpose: Data quality check from sdtmchecks
+    Keywords: [TU]

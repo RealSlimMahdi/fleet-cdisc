@@ -33,6 +33,7 @@ Outcome:
 Description: >-
   When AEDTHDTC (death date) is populated, AESDTH must equal 'Y'.
   Based on sdtmchecks::check_ae_aedthdtc_aesdth. Same conditions as the R function.
+  Needs AEDTHDTC (sponsor variable, not in SDTMIG 3.4 AE); on standard data see CORE-000253, CORE-000254, CORE-000841.
 
 Sensitivity: Record
 Executability: Fully Executable
@@ -52,4 +53,6 @@ Authorities:
               - Cited Guidance: check_ae_aedthdtc_aesdth
                 Document: pharmaverse sdtmchecks
                 Section: AE Domain
-    Category: { SDTM Checks }
+    Category:
+      Purpose: Data quality check from sdtmchecks
+      Keywords: [AE]
