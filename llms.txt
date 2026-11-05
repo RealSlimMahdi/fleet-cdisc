@@ -280,9 +280,8 @@ dm = (
 print(f"\n── 2a. SDTM DM : {dm.shape[0]} subjects × {dm.shape[1]} variables")
 
 # ── 2a-bis. SUPPDM: Non-Standard Variables (SUPPQUAL for IG ≤3.4) ──────
-# nsv() declares qualifier columns with inline metadata. For IG 3.5+ the
-# columns stay in DM unchanged. For IG ≤3.4, export_supp() unpivots them
-# to the vertical SUPPQUAL structure.
+# nsv() declares qualifier columns with inline metadata. For IG ≤3.4,
+# export_supp() unpivots them to the vertical SUPPQUAL structure.
 dm_ns = (
     dm_raw.sdtm.assign("STUDYID", value="CDISCPILOT01")
     .assign("DOMAIN", value="DM")
@@ -293,16 +292,14 @@ dm_ns = (
 suppdm = dm_ns.export_supp()
 print(f"        → SUPPDM: {suppdm.shape[0]} qualifier rows × {suppdm.shape[1]} variables")
 
-# Post-hoc pattern: export_supp with explicit qualifiers dict on existing frame
-suppdm_alt = (
-    dm.sdtm.export_supp(
-        qualifiers={"ARM": {"label": "Description of Planned Arm", "origin": "PROTOCOL"}},
-    )
-    if "ARM" in dm.columns
-    else None
+# Post-hoc pattern: a qualifiers dict on a built frame. SAFETY is a sponsor
+# population flag ("Y" for a subject with a first dose), not a DM variable.
+suppdm_alt = dm.with_columns(
+    SAFETY=pl.when(pl.col("RFSTDTC").is_not_null()).then(pl.lit("Y"))
+).sdtm.export_supp(
+    qualifiers={"SAFETY": {"label": "Safety Population Flag", "origin": "Derived"}},
 )
-if suppdm_alt is not None:
-    print(f"        → SUPPDM (post-hoc): {suppdm_alt.shape[0]} rows")
+print(f"        → SUPPDM (post-hoc): {suppdm_alt.shape[0]} rows")
 
 # Export DM as CDISC Dataset-JSON v1.1
 from fleet.io import save_dataset_json  # noqa: E402
@@ -1785,7 +1782,7 @@ Registered on every `pl.DataFrame` **and** `pl.LazyFrame` (so `pl.scan_parquet(.
 - `date(target: str, *, source: str | None = None, value: str | None = None, output: str | None = None, time: str | None = None, impute: str = 'first', impute_time: str | None = None, highest: str | None = None, flag: bool | str = True, min_date: str | None = None, max_date: str | None = None, format: str | None = None) -> SDTMNamespace` — Parse, convert, impute, and flag a date or datetime column.
 - `duration(target: str, *, start: str | pl.Expr, end: str | pl.Expr, unit: "Literal['seconds', 'minutes', 'hours', 'days', 'weeks', 'months', 'years']" = 'days', add_one: bool | None = None, out: "Literal['numeric', 'iso8601']" = 'numeric') -> Self` — Compute the duration between two date/datetime columns.
 - `derivation(target: str | Derivation | None = None, *, expression: str | pl.Expr | Callable[[], pl.Expr] | None = None) -> Self` — Derive *target* using an expression, lambda, or ``Derivation`` object.
-- `condition_add(target: str, *, condition: str | pl.Expr, then_value: Any) -> SDTMNamespace` — Set *target* to *then_value* where *condition* is true, else null.
+- `condition_add(target: str, *, condition: str | pl.Expr, then_value: Any) -> SDTMNamespace` — Set *target* to *then_value* where *condition* is true.
 - `ae_aerel(target: str = 'AEREL', *, source: str = 'ae_relationship', aerel_map: dict[str, str] | None = None) -> SDTMNamespace` — Map free-text AE causality strings to ``AEREL`` values.
 - `merge(dataset: pl.DataFrame | pl.LazyFrame | None = None, *, on: str | list[str] | None = None, how: str = 'left', keep: list[str] | None = None, where: str | pl.Expr | None = None, validate: "Literal['m:1', '1:m', '1:1'] | None" = None) -> Self` — Join *dataset* into the pipeline using key column(s) *on*.
 - `keep(*columns: str | list[str]) -> Self` — Restrict the frame to *columns*, in the given order.
