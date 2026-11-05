@@ -141,8 +141,7 @@
         },
         "source_system_version": {
           "type": "string",
-          "description": "Version of the generating software.",
-          "default": "0.1.0"
+          "description": "Version of the generating software. Default: the version of Fleet that writes the Define-XML."
         },
         "standard": {
           "type": "string",
@@ -307,6 +306,22 @@
         "class": {
           "type": "string",
           "description": "CDISC dataset class (e.g. SPECIAL PURPOSE, FINDINGS, EVENTS)."
+        },
+        "subclass": {
+          "type": "string",
+          "description": "Define-XML 2.1 def:SubClass of the class (e.g. ADVERSE EVENT for an ADaM OCCDS adverse event dataset).",
+          "enum": [
+            "ADVERSE EVENT",
+            "MEDICAL DEVICE TIME-TO-EVENT",
+            "NON-COMPARTMENTAL ANALYSIS",
+            "POPULATION PHARMACOKINETIC ANALYSIS",
+            "TIME-TO-EVENT"
+          ]
+        },
+        "domain": {
+          "type": "string",
+          "description": "SDTM domain of a split dataset (QSPH: QS). Default: the dataset name, or the parent domain for SUPP--. An ADaM dataset has no Domain.",
+          "pattern": "^[A-Z][A-Z0-9]{1,3}$"
         },
         "keys": {
           "type": "array",
@@ -525,8 +540,8 @@
         },
         "predecessor": {
           "type": "string",
-          "description": "DATASET.VARIABLE the value is carried from (e.g. 'DM.COUNTRY') \u2014 becomes the Origin description so the define renders 'Predecessor: DM.COUNTRY'. Required when origin is 'Predecessor'.",
-          "pattern": "^[A-Z_][A-Z0-9_]{0,7}\\.[A-Z_][A-Z0-9_]{0,7}$"
+          "description": "DATASET.VARIABLE the value is carried from (e.g. 'DM.COUNTRY'), with an optional condition (e.g. \"DS.DSDECOD where DS.DSCAT='DISPOSITION EVENT'\"). It becomes the Origin description. Required when origin is 'Predecessor'.",
+          "pattern": "^[A-Z_][A-Z0-9_]{0,7}\\.[A-Z_][A-Z0-9_]{0,7}( where .+)?$"
         },
         "codelist": {
           "type": "string",
@@ -649,7 +664,8 @@
           "properties": {
             "href": {
               "type": "string",
-              "description": "Relative path to the annotated CRF PDF file (e.g. 'blankcrf.pdf')."
+              "description": "Relative path to the annotated CRF PDF file (e.g. 'blankcrf.pdf'), or an https link.",
+              "pattern": "^(https://[^\\x00-\\x20]+$|(?![^/?#]*:)(?![\\x00-\\x20])[^\\x00-\\x1f]+$)"
             },
             "title": {
               "type": "string",
@@ -680,7 +696,8 @@
               },
               "href": {
                 "type": "string",
-                "description": "Relative path to the document file."
+                "description": "Relative path to the document file, or an https link.",
+                "pattern": "^(https://[^\\x00-\\x20]+$|(?![^/?#]*:)(?![\\x00-\\x20])[^\\x00-\\x1f]+$)"
               },
               "title": {
                 "type": "string",
@@ -750,7 +767,19 @@
           "description": "Shorthand: this entry applies where PARAMCD equals the given value."
         },
         "where": {
-          "$ref": "#/$defs/where_clause"
+          "description": "One condition, or a list of conditions that all apply (one WhereClauseDef, one RangeCheck per condition).",
+          "oneOf": [
+            {
+              "$ref": "#/$defs/where_clause"
+            },
+            {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/where_clause"
+              }
+            }
+          ]
         },
         "variables": {
           "type": "array",
@@ -789,6 +818,20 @@
               },
               "minItems": 1
             }
+          ]
+        },
+        "comparator": {
+          "type": "string",
+          "description": "Define-XML RangeCheck Comparator. Default: EQ for one value, IN for two or more.",
+          "enum": [
+            "EQ",
+            "NE",
+            "LT",
+            "LE",
+            "GT",
+            "GE",
+            "IN",
+            "NOTIN"
           ]
         }
       }

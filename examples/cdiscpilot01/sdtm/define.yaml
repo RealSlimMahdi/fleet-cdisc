@@ -14,7 +14,6 @@ study:
   protocol_name: CDISCPILOT01
   originator: Fleet Team
   source_system: Fleet
-  source_system_version: "0.1.0"
   standard: SDTMIG
   standard_version: "3.4"
   ct_version: "2023-12-15"

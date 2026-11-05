@@ -110,7 +110,8 @@ def validate_define_xml(xml: str | bytes | Path) -> list[str]:
     separate layer; see :meth:`fleet.sdtm.SDTMNamespace.validate`.
 
     Args:
-        xml: Define-XML document as a string, bytes, or a path to a file.
+        xml: Define-XML document as a string, bytes, or a path to a file
+            (a ``Path``, or a string that does not start with ``<``).
 
     Returns:
         list[str]: Validation errors, each naming line and message.
@@ -144,8 +145,9 @@ def validate_define_xml(xml: str | bytes | Path) -> list[str]:
     if isinstance(xml, Path):
         doc = etree.parse(str(xml))
     else:
-        data = xml.encode("utf-8") if isinstance(xml, str) else xml
-        doc = etree.fromstring(data).getroottree()
+        from fleet.define_xml.semantic_checks import read_define_xml_bytes
+
+        doc = etree.fromstring(read_define_xml_bytes(xml)).getroottree()
 
     with xsd_dir() as d:
         schema = etree.XMLSchema(etree.parse(str(d / ROOT_XSD)))

@@ -50,19 +50,16 @@ Typical usage::
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import polars as pl
 
-from fleet.core.define_spec import load_spec_yaml
+from fleet.core.define_spec import read_define_yaml
 
 if TYPE_CHECKING:
     from fleet.validation.models import ValidationResult
-
-_SCHEMA_PATH = Path(__file__).parent / "schemas" / "define_spec_schema.json"
 
 # Maps simplified define type → acceptable Polars dtype families.
 # A column passes the type check if its dtype is an instance of any of the
@@ -96,9 +93,9 @@ _TYPE_LABEL: dict[str, str] = {
 }
 
 # CDISC core values that are treated as "required" when strict=True.
-_REQ_CORES: frozenset[str] = frozenset({"Req", "Required"})
+_REQ_CORES: frozenset[str] = frozenset({"Req"})
 # CDISC core values that are treated as "expected" (warning-level).
-_EXP_CORES: frozenset[str] = frozenset({"Exp", "Expected"})
+_EXP_CORES: frozenset[str] = frozenset({"Exp"})
 
 
 @dataclass
@@ -106,6 +103,13 @@ class TypeMismatch:
     variable: str
     define_type: str
     actual_dtype: str
+
+
+def _code_text(value: Any) -> str:
+    """The text of a coded value; a whole float (54.0, read from XPT) is '54'."""
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value)
 
 
 @dataclass
@@ -198,9 +202,9 @@ def _classify(
     """Route *msg* to errors / warnings / info based on *core* and *strict*.
 
     Severity logic:
-    - ``core`` in {Req, Required} → error (or warning if ``strict=False``).
-    - ``core`` in {Exp, Expected} → warning.
-    - ``core`` in {Perm, Permissible, Conditionally Required, ""} → info.
+    - ``core`` Req → error (or warning if ``strict=False``).
+    - ``core`` Exp → warning.
+    - ``core`` Perm or Cond → info.
     - Fallback for defines without ``core``: ``mandatory=True`` → error/warning.
     """
     if core:
@@ -243,6 +247,11 @@ class DatasetChecker:
         When *True* (default), verify values of variables declaring a
         ``codelist:`` against the spec's inline ``codelists:`` items.
         Out-of-codelist values are errors.
+    check_values:
+        When *True* (default), verify the define ``length`` of text values,
+        no null in a ``mandatory`` variable, and no two records with the
+        same ``keys`` (a null key value counts as one value, as in
+        ``PROC SORT NODUPKEY``).
     validate_schema:
         When *True* (default), validate the YAML against the JSON schema on
         load.  Set to *False* to skip during tight inner loops.
@@ -256,18 +265,18 @@ class DatasetChecker:
         check_columns: bool = True,
         check_types: bool = True,
         check_ct: bool = True,
+        check_values: bool = True,
         validate_schema: bool = True,
     ) -> None:
         self._enabled = enabled
         self._check_columns = check_columns
         self._check_types = check_types
         self._check_ct = check_ct
+        self._check_values = check_values
 
-        path = Path(define_yaml_path)
-        self._data: dict[str, Any] = load_spec_yaml(path.read_text(encoding="utf-8"))
-
-        if validate_schema and enabled:
-            self._validate_schema()
+        self._data: dict[str, Any] = read_define_yaml(
+            define_yaml_path, validate_schema=validate_schema and enabled
+        )
 
         # Build a lookup: dataset_name (upper) → dataset dict
         self._datasets: dict[str, dict[str, Any]] = {
@@ -284,7 +293,7 @@ class DatasetChecker:
 
     def check(
         self,
-        df: pl.DataFrame,
+        df: pl.DataFrame | pl.LazyFrame,
         dataset: str,
         *,
         strict: bool = True,
@@ -294,7 +303,7 @@ class DatasetChecker:
         Parameters
         ----------
         df:
-            The materialised ``pl.DataFrame`` to check.
+            The ``pl.DataFrame`` to check.  A ``pl.LazyFrame`` is collected.
         dataset:
             Dataset name to look up in the define (e.g. ``"DM"``).
             Case-insensitive.
@@ -314,6 +323,8 @@ class DatasetChecker:
 
         if not self._enabled:
             return result
+        if isinstance(df, pl.LazyFrame):
+            df = df.collect()
 
         ds_def = self._datasets.get(dataset.upper())
         if ds_def is None:
@@ -341,6 +352,9 @@ class DatasetChecker:
 
         if self._check_ct:
             self._run_ct_checks(result, df, vars_by_name, actual_cols)
+
+        if self._check_values:
+            self._run_value_checks(result, df, ds_def, vars_by_name, actual_cols, strict=strict)
 
         return result
 
@@ -405,6 +419,10 @@ class DatasetChecker:
             compat_types = (pl.String,) if is_dtc else _POLARS_COMPAT.get(define_type, ())
 
             ok = isinstance(actual_dtype, compat_types)
+            if not ok and define_type == "integer" and actual_dtype in (pl.Float32, pl.Float64):
+                # SAS transport has only Char and Num: an XPT code reads as a float.
+                values = df[col_name].drop_nulls()
+                ok = bool((values == values.round(0)).all())
             if not ok:
                 mm = TypeMismatch(
                     variable=col_name,
@@ -469,7 +487,8 @@ class DatasetChecker:
             }
             ct_mapping: dict[str, Any] = (var_def.get("derivation") or {}).get("ct_map") or {}
 
-            values = [str(v) for v in df[col_name].drop_nulls().unique().to_list() if str(v) != ""]
+            values = [_code_text(v) for v in df[col_name].drop_nulls().unique().to_list()]
+            values = [v for v in values if v != ""]
             invalid = sorted(v for v in values if v not in coded)
             if not invalid:
                 continue
@@ -488,6 +507,60 @@ class DatasetChecker:
             )
             result.ct_violations.append(msg)
             result.errors.append(msg)
+
+    @staticmethod
+    def _run_value_checks(
+        result: CheckResult,
+        df: pl.DataFrame,
+        ds_def: dict[str, Any],
+        vars_by_name: dict[str, dict[str, Any]],
+        actual_cols: set[str],
+        *,
+        strict: bool = True,
+    ) -> None:
+        """Check the define Length, the Mandatory variables and the key of *df*."""
+        found: list[str] = []
+        for col_name, var_def in vars_by_name.items():
+            if col_name not in actual_cols:
+                continue
+            column = df[col_name]
+            length = var_def.get("length")
+            if length is not None and column.dtype == pl.String:
+                too_long = column.str.len_bytes() > int(length)
+                if too_long.any():
+                    longest = int(column.str.len_bytes().max() or 0)
+                    found.append(
+                        f"Column '{col_name}': {int(too_long.sum())} value(s) longer than the "
+                        f"define Length {length} (longest {longest} bytes)."
+                    )
+            if var_def.get("mandatory"):
+                empty = column.is_null()
+                if column.dtype == pl.String:
+                    empty = empty | (column.str.strip_chars() == "")
+                if empty.any():
+                    found.append(
+                        f"Column '{col_name}': {int(empty.sum())} null value(s), but the "
+                        "define marks it Mandatory."
+                    )
+        keys = list(ds_def.get("keys") or [])
+        absent = [k for k in keys if k not in actual_cols]
+        if keys and absent:
+            found.append(
+                f"Key variable(s) {absent} are missing, so duplicate keys are not checked."
+            )
+        elif keys:
+            dupes = df.select(keys).is_duplicated()
+            if dupes.any():
+                example = df.filter(dupes).select(keys).row(0)
+                found.append(
+                    f"{int(dupes.sum())} record(s) share their key {keys} with another "
+                    f"record (first: {dict(zip(keys, example, strict=True))})."
+                )
+        for msg in found:
+            if strict:
+                result.errors.append(msg)
+            else:
+                result.warnings.append(msg + " [strict=False: downgraded from error]")
 
     # ------------------------------------------------------------------ #
     # CDISC Core validation                                                #
@@ -599,19 +672,3 @@ class DatasetChecker:
             label=ds_def.get("label") if ds_def is not None else None,
             column_labels=self.labels(dataset),
         )
-
-    # ------------------------------------------------------------------ #
-    # Schema validation                                                    #
-    # ------------------------------------------------------------------ #
-
-    def _validate_schema(self) -> None:
-        import jsonschema
-
-        from fleet.core.exceptions import SpecSchemaError
-
-        schema = json.loads(_SCHEMA_PATH.read_text(encoding="utf-8"))
-        validator = jsonschema.Draft202012Validator(schema)
-        errors = list(validator.iter_errors(self._data))
-        if errors:
-            msgs = "\n".join(f"  - {e.json_path}: {e.message}" for e in errors[:5])
-            raise SpecSchemaError(f"define YAML failed schema validation:\n{msgs}")

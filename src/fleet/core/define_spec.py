@@ -164,6 +164,8 @@ class DatasetEntry(BaseModel):
     keys: Any = None
     value_level: Any = None
     class_: Any = Field(default=None, alias="class")
+    subclass: str | None = None
+    domain: str | None = None
     #: Row-removing steps in pipeline order, each anchored ``after:`` a variable (ADR-0034).
     row_steps: list[dict[str, Any]] = Field(default_factory=list)
 
@@ -334,6 +336,124 @@ def load_spec_yaml(text: str) -> Any:
             assert block == {"algorithm": "merge", "on": "USUBJID"}
     """
     return yaml.load(text, Loader=SpecYamlLoader)  # noqa: S506 — SafeLoader subclass
+
+
+#: The JSON schema of a define.yaml (hand-owned parts plus the generated derivations).
+DEFINE_SCHEMA_PATH = (
+    Path(__file__).parents[1] / "define_xml" / "schemas" / "define_spec_schema.json"
+)
+
+
+def _schema_lines(path: Path, data: dict[str, Any]) -> list[str]:
+    """One message line per schema error of *data*, at most five, with a migrate hint."""
+    import json
+
+    import jsonschema
+
+    from fleet.tools.migrate_spec import ALGORITHM_RENAMES
+
+    schema = json.loads(DEFINE_SCHEMA_PATH.read_text(encoding="utf-8"))
+    errors = list(jsonschema.Draft202012Validator(schema).iter_errors(data))
+    empty = [
+        e.json_path[2:]
+        for e in errors
+        if e.json_path in ("$.study.description", "$.study.originator")
+        and e.validator == "minLength"
+    ]
+    lines: list[str] = []
+    for e in errors:
+        if e.json_path[2:] in empty:
+            continue
+        old = e.instance.get("algorithm") if isinstance(e.instance, dict) else None
+        if isinstance(old, str) and old in ALGORITHM_RENAMES:
+            lines.append(
+                f"  - {e.json_path}: algorithm {old!r} is the old name of "
+                f"{ALGORITHM_RENAMES[old]!r}. Run: fleet migrate --spec {path}"
+            )
+        else:
+            lines.append(f"  - {e.json_path}: {e.message}")
+    lines = list(dict.fromkeys(lines))[:5]
+    if empty:
+        lines.insert(
+            0,
+            f"  - {' and '.join(empty)} {'is' if len(empty) == 1 else 'are'} empty. "
+            "Write the text in this file, or create the study with "
+            "`fleet new --description ... --company ...`.",
+        )
+    return lines
+
+
+def read_define_yaml(path: str | Path, *, validate_schema: bool = True) -> dict[str, Any]:
+    """Read a define.yaml (the format with ``study:`` and ``datasets:``) as a mapping.
+
+    Args:
+        path: The define.yaml file.
+        validate_schema: When True (default), check the file against the
+            define-spec JSON schema.
+
+    Returns:
+        dict[str, Any]: The parsed define.
+
+    Raises:
+        SpecSchemaError: When the YAML does not parse, the document is not
+            a mapping with ``datasets:``, or the schema refuses it (the
+            schema also needs ``study:``).  An old algorithm name gets a ``fleet migrate --spec`` hint.
+
+    Examples:
+        Read the pilot SDTM define::
+
+            from fleet.core.define_spec import read_define_yaml
+
+            data = read_define_yaml("examples/cdiscpilot01/sdtm/define.yaml")
+            names = [ds["name"] for ds in data["datasets"]]
+    """
+    from fleet.core.exceptions import SpecSchemaError
+
+    p = Path(path)
+    try:
+        data = load_spec_yaml(p.read_text(encoding="utf-8"))
+    except yaml.YAMLError as err:
+        raise SpecSchemaError(f"{p}: invalid YAML: {err}") from err
+    if not isinstance(data, dict) or "datasets" not in data:
+        kind = (
+            "an empty file"
+            if data is None
+            else "a mapping with no datasets:"
+            if isinstance(data, dict)
+            else f"a {type(data).__name__}"
+        )
+        raise SpecSchemaError(
+            f"{p}: a define.yaml is a mapping with study: and datasets:; this file is {kind}."
+        )
+    if validate_schema:
+        validate_define_data(p, data)
+    return data
+
+
+def validate_define_data(path: str | Path, data: dict[str, Any]) -> None:
+    """Check a parsed define.yaml against the define-spec JSON schema.
+
+    Args:
+        path: The file the data came from, for the message.
+        data: The parsed define.
+
+    Raises:
+        SpecSchemaError: Naming at most five schema errors.
+
+    Examples:
+        Check a define read with no schema check::
+
+            from fleet.core.define_spec import read_define_yaml, validate_define_data
+
+            data = read_define_yaml("define.yaml", validate_schema=False)
+            validate_define_data("define.yaml", data)
+    """
+    from fleet.core.exceptions import SpecSchemaError
+
+    lines = _schema_lines(Path(path), data)
+    if lines:
+        msgs = "\n".join(lines)
+        raise SpecSchemaError(f"{path}: define YAML failed schema validation:\n{msgs}")
 
 
 def load_define_spec(path: str | Path) -> DefineSpec:
