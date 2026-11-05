@@ -163,7 +163,7 @@ ard_builder = (
     .by("TRTA")
     .header_rows(
         [
-            OverallStat(label="Subjects with any measurement"),
+            OverallStat(label="Subjects with any measurement", statistics=[Statistic.N_SUBJECTS]),
         ]
     )
     .rows(["PARAMCD", "AVISIT"])
