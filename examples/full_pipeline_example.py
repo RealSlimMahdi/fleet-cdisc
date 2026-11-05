@@ -129,7 +129,7 @@ def main():
 
     from fleet.io import save_dataset_json
 
-    out = Path("outputs/cdiscpilot01")
+    out = Path("outputs/full_pipeline")
     for name, df in [("DM", dm), ("VS", vs), ("AE", ae), ("ADSL", adsl), ("ADVS", advs)]:
         p = save_dataset_json(df, out / f"{name.lower()}.json", domain=name)
         print(f"  {name:<6} → {p}")
