@@ -122,6 +122,7 @@ Run one step of the study bootstrap: cfg, then define, then ct, then rules. Use 
 | `--out` / `--output` / `-o` | _(none)_ | Output directory for every dataset. Default: the configured data/sdtm and data/adam directories. Fleet only writes here: inputs are read from the run, a declared path:, the raw directory (type: raw) or the data directory of the input's standard (type: dataset). |
 | `--format` | _(none)_ | Output format of every dataset. Default: the output_format of the dataset, else of define.yaml, else parquet (the rule of the Define-XML leaf). Choices: `parquet`, `xpt`, `dataset-json`. |
 | `--strict` / `--no-strict` | _(on)_ | Raise on unknown spec algorithms (default). --no-strict warns and skips. |
+| `--overwrite` | _(none)_ | Let a spec derivation replace a column that the input already has. Default off, so a QC run keeps the guard. |
 | `--check` | _(none)_ | Stop before the write when a variable's values do not match its define type (for CI). Without it the mismatch is a warning on stderr. |
 
 ---
@@ -136,7 +137,7 @@ Run one step of the study bootstrap: cfg, then define, then ct, then rules. Use 
 | ------ | ------- | ----------- |
 | `--config` / `-c` | _(none)_ | Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style). |
 | `--standard` | _(none)_ | Force the standard. Default: the configured data directory that holds the dataset, else AD* datasets → adam, others → sdtm. Choices: `sdtm`, `adam`. |
-| `--version` | _(none)_ | IG version. Default: the sdtm/adam ig_version declared in the discovered study_config.yaml (3.4 / 1.3 outside a study). |
+| `--version` | _(none)_ | IG version. It applies to every dataset of the run, SDTM and ADaM. Default: the sdtm/adam ig_version declared in the discovered study_config.yaml (3.4 / 1.3 outside a study). |
 | `--define` | _(none)_ | Define-XML file that CORE checks with the datasets (CORE -dxp). Opt-in: Fleet never passes a define by default. |
 | `--custom-rules` | _(none)_ | Directory of custom validation rule YAML files, relative to the working directory. Default: validation.custom_rules from the discovered study_config.yaml. |
 | `--timeout` | _(none)_ | Seconds before an engine run is stopped. Default: validation.timeout from the discovered study_config.yaml, else 300. |
@@ -282,9 +283,8 @@ Create a new study in the folder ./STUDY_ID: the study_config.yaml and the folde
 | `--subtitle` | `""` | Output subtitle. |
 | `--footnote` | _(none)_ | Footnote (repeatable). |
 | `--rows-per-page` | _(none)_ | Maximum body rows per page (model-layer pagination). |
-| `--page-by` | _(none)_ | ARD variable to page-break on (e.g. PARAMCD). |
+| `--page-by` | _(none)_ | ARD row variable to page-break on (e.g. PARAMCD). Tables only. |
 | `--watch` | _(none)_ | Re-run whenever a spec file changes (requires the 'watch' extra). |
-| `--config` / `-c` | _(none)_ | Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style). |
 
 ### `fleet tlg explore`
 
@@ -304,7 +304,6 @@ Create a new study in the folder ./STUDY_ID: the study_config.yaml and the folde
 | `--subtitle` | `""` | Output subtitle. |
 | `--footnote` | _(none)_ | Footnote (repeatable). |
 | `--watch` | _(none)_ | Rebuild whenever a spec file changes (requires the 'watch' extra). |
-| `--config` / `-c` | _(none)_ | Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style). |
 
 ### `fleet tlg export`
 
@@ -324,8 +323,7 @@ Create a new study in the folder ./STUDY_ID: the study_config.yaml and the folde
 | `--footnote` | _(none)_ | Footnote (repeatable). |
 | `--rows-per-page` | _(none)_ | Maximum body rows per page (model-layer pagination). |
 | `--page-by` | _(none)_ | ARD variable to page-break on (e.g. PARAMCD). |
-| `--wrap` | _(none)_ | Path to an HTML wrapper template with a {table} placeholder (html and pdf only; refused for rtf and pptx). |
-| `--config` / `-c` | _(none)_ | Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style). |
+| `--wrap` | _(none)_ | Path to an HTML wrapper template with a {table} placeholder (html and pdf only; refused for rtf and pptx). A PDF loads no external resource: a logo or style sheet the wrapper links is left out, with a warning. |
 
 ---
 
@@ -368,7 +366,6 @@ Generate Define-XML 2.1 from a define.yaml specification. This imports the spec'
 | `--package` | _(none)_ | CT package version. Default: ct.package from the discovered study_config.yaml, else the package of the existing codelists.py, else sdtmct-2023-12-15. Refused when it differs from the package an existing codelists.py was generated from. |
 | `--output` / `-o` | _(none)_ | Path to the existing codelists.py. Default: <metadata_sdtm>/codelists.py from the discovered study_config.yaml (./codelists.py outside a study). |
 | `--no-docs` | _(none)_ | Omit definitions and preferred terms from generated code. |
-| `--config` / `-c` | _(none)_ | Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style). |
 
 ---
 
