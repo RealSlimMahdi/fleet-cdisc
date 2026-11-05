@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import polars as pl
 import pytest
+import yaml
 
-import fleet  # noqa: F401 — registers the .sdtm namespace
+import fleet
 from fleet.sdtm.design import StudyDesign
 from fleet.sdtm.tdd import TrialVisits, _ctgov_to_parameters
 from fleet.sdtm.tdd_audit import audit
@@ -313,6 +316,7 @@ class TestUsdmImport:
                 "versions": [
                     {
                         "studyIdentifiers": [{"studyIdentifier": "CDISCPILOT01"}],
+                        "eligibilityCriterionItems": [{"id": "ECI1", "text": "Age 50-80"}],
                         "studyDesigns": [
                             {
                                 "arms": [
@@ -339,10 +343,11 @@ class TestUsdmImport:
                                     {"armId": "a2", "epochId": "ep2", "elementIds": ["el3"]},
                                 ],
                                 "encounters": [{"name": "Visit 1"}, {"name": "Visit 2"}],
+                                # USDM 4.0: the text is on the version's criterion item.
                                 "eligibilityCriteria": [
                                     {
                                         "identifier": "INCL01",
-                                        "text": "Age 50-80",
+                                        "criterionItemId": "ECI1",
                                         "category": {"decode": "Inclusion Criteria"},
                                     }
                                 ],
@@ -360,6 +365,7 @@ class TestUsdmImport:
         assert design.elements[0].epoch == "SCREENING"
         assert [v.visit for v in design.visits] == ["Visit 1", "Visit 2"]
         assert design.criteria[0].iecat == "INCLUSION"
+        assert design.criteria[0].ietest == "Age 50-80"
         # The imported design derives valid domains end to end.
         assert set(design.domains()) >= {"TE", "TA"}
 
@@ -423,3 +429,44 @@ def test_audit_flags_ts_profile_even_without_parameters_section():
     rule_ids = findings["rule_id"].to_list()
     assert "SD2213" in rule_ids  # TITLE missing
     assert "SD2232" in rule_ids  # SSTDTC missing (rejection criterion 1734)
+
+
+# ── TD, TM and the IG column order (c1-858) ──────────────────────────────────
+
+_STRUCTURES = yaml.safe_load(
+    (Path(fleet.__file__).parent / "sdtm" / "_tdd_structures.yaml").read_text(encoding="utf-8")
+)
+
+
+def _full_design(design: StudyDesign) -> StudyDesign:
+    return StudyDesign(
+        **design.model_dump(exclude={"criteria", "assessments", "milestones"}),
+        criteria=[{"ietestcd": "INCL01", "ietest": "Age 50 to 80 years", "iecat": "INCLUSION"}],
+        assessments=[{"tdorder": 1, "tdancvar": "ANCH1DT", "tdtgtpai": "P8W", "tdnumrpt": 6}],
+        milestones=[{"midstype": "DIAGNOSIS", "tmdef": "Initial diagnosis of AD", "tmrpt": "N"}],
+    )
+
+
+def test_to_td_writes_the_assessment_schedule(design: StudyDesign) -> None:
+    td = _full_design(design).to_td()
+
+    assert td.select("STUDYID", "DOMAIN", "TDORDER", "TDANCVAR", "TDTGTPAI", "TDNUMRPT").rows() == [
+        ("CDISCPILOT01", "TD", 1, "ANCH1DT", "P8W", 6)
+    ]
+
+
+def test_to_tm_writes_the_milestone(design: StudyDesign) -> None:
+    tm = _full_design(design).to_tm()
+
+    assert tm.select("STUDYID", "DOMAIN", "MIDSTYPE", "TMDEF", "TMRPT").rows() == [
+        ("CDISCPILOT01", "TM", "DIAGNOSIS", "Initial diagnosis of AD", "N")
+    ]
+
+
+@pytest.mark.parametrize("domain", ["TE", "TA", "TV", "TS", "TI", "TD", "TM"])
+def test_each_domain_keeps_the_ig_column_order(design: StudyDesign, domain: str) -> None:
+    frame = _full_design(design).domains()[domain]
+    ig_order = [variable["name"] for variable in _STRUCTURES[domain]["variables"]]
+
+    assert set(frame.columns) <= set(ig_order), set(frame.columns) - set(ig_order)
+    assert frame.columns == [name for name in ig_order if name in frame.columns]
