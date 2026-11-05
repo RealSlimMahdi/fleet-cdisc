@@ -6,7 +6,7 @@ All notable changes to Fleet are documented here.
 
 ### Alpha audit: high findings
 
-The high findings of the alpha audit (`HIGH-REMAINING.md`), fixed with the decisions of 4 November 2026. ADR-0021 to ADR-0042 record the changed defaults.
+The high findings of the alpha audit (`HIGH-REMAINING.md`), fixed with the decisions of 4 November 2026. ADR-0021 to ADR-0046 record the changed defaults.
 
 #### Added
 
@@ -47,6 +47,8 @@ The high findings of the alpha audit (`HIGH-REMAINING.md`), fixed with the decis
 - c1-287: `fleet define-xml` warns when a leaf href names a file that the data folder does not hold. `DefineSpecGenerator.leaf_hrefs()` returns the href of each dataset.
 - c1-268: `fleet validate --define PATH` (and `ValidationService.validate_datasets(define_xml=)`) gives a Define-XML to CORE (`-dxp`) through the run setup; the header names it. Opt-in only (ADR 0042).
 - c1-268: new define.yaml variable key `sdtm_role:` (SDTM role), written as the Define-XML ItemRef `Role`. `fleet init define` fills it from the CDISC Library (ADR 0042).
+- c1-432: `fleet tlg export --adsl-groupby` names the ADSL arm column for the big N (sets `adsl_group_col`), as `fleet tlg run` does.
+- c1-432: `adsl.tlg.dm.check(groupby=...)` and `adsl.tlg.ds.check(groupby=...)`; `TLGSpec.check()` takes `group_col=`. Without it the check reads the arm that the table takes.
 
 #### Changed
 
@@ -125,6 +127,18 @@ The high findings of the alpha audit (`HIGH-REMAINING.md`), fixed with the decis
 - docs/index.md, docs/api/ta.md and the TA module docstrings say the TA verbs are inspired by the admiral TA packages, not ports. (c1-343)
 - docs/concepts/validation-core.md: a section says that CORE checks only a few CT values, with the 7-value example; `spec_codelists` no longer calls CORE the authority. (c1-344)
 - `examples/adnca_example.py` prints a verb map with no check marks and no `actual_time()`; the PK module docstring and the README ADPC line match the code. (c1-342)
+- c1-355: `df.adam.tte.param()` without `param=` (and without PARAM in `set_values_to`) takes PARAM from the study CT: the decode of PARAMCD in the codelist of `ADTTE.PARAMCD` in the ADaM `define.yaml`. If no decode is found, it raises and names PARAMCD, the places searched and the fix (`param=`). Before, the rows had no PARAM (ADR-0043).
+- c1-355: a censor frame without an `EVNTDESC` column still gives a null EVNTDESC (admiral), and `param()` now warns and names the CNSR keys and the fix (ADR-0043).
+- c1-105 c1-562: `fleet define-xml` and `fleet check` accept an SDTMIG 3.4 (or earlier) define.yaml with `role: qualifier` or `algorithm: nsv` variables in the parent dataset, the form that `fleet run` uses to write `SUPP<domain>`. The Define-XML leaves the qualifier out of the parent ItemGroupDef and adds a generated `SUPP<domain>` ItemGroupDef (STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM, QLABEL, QVAL, QORIG, QEVAL; IDVAR `<domain>SEQ`, null for DM) with value-level metadata on QVAL, one where clause `QNAM EQ <name>` per qualifier. The c1-562 refusal stays for a qualifier that cannot move: no STUDYID or USUBJID, no `<domain>SEQ` outside DM, a declared `SUPP<domain>` as well, a QNAM over 8 or a QLABEL over 40 characters, or a qualifier that is a key (ADR-0044; ADR-0041 updated).
+- c1-119: `.adam.date()` and `.sdtm.date()` share one `*DTM` path (`impute_dtc_to_datetime`), so one call gives one result in both namespaces. `.sdtm.date()` on a partial date now imputes, as `.adam.date()` does (ADR-0045).
+- c1-119: `time=` on a `*DTM` target first joins the date and the time into one `--DTC` value (`2024-03--T08:15` for a partial date), which then takes the imputation and `highest=`. A partial date with `time=` is now imputed, not null. TMF now flags the imputed time parts (`08:30` gives `S`, a null time `H`); an `hh:mm` time with `impute_time="last"` takes seconds 59. A null time takes `impute_time`, else `impute`. A time in another layout gives one warning (ADR-0045).
+- c1-119: `highest=` on a `*DTM` target takes the admiral levels `"M"`, `"D"`, `"h"`, `"m"`, `"s"` and `"n"`; `"Y"` still raises, because it needs bounds that a `*DTM` target refuses. Parity with admiral 1.4.1 `derive_vars_dtm` is frozen in `tests/fixtures/goldens/dates/admiral_dtm_grid.csv` (`scripts/regen_admiral_dtm_grid.R`).
+- c1-432: the subject-level tables on ADSL (`dmt01`, `dst01`, `dtht01`, `ent01`) group by `TRT01A` by default, else by `TRT01P` when ADSL has no `TRT01A`, not by `TRTA` (ADaMIG 1.3; ADR-0046). A spec or call that names the arm never falls back. The CLI, the MCP tool and `resolve_groupby()` let these specs detect their own arm; `tlg export --domain dm|ds` detects `TRT01A` then `TRT01P`. The golden ARDs of the four tables changed in `group1` only (`TRTA` to `TRT01A`).
+- c1-432: the examples (`r2r_ae_example.py`, `tlg_ae_example.py`, `tlg_vs_example.py`) and the docs (`r2r_strategy.md`, `tlg_pipeline.md`, README, GUIDE) use conformant ADaM variables: ADSL with `TRT01A`, ADAE and ADVS with `TRTA`, and `adsl_group_col` / `population(adsl, group_col="TRT01A")` / `--adsl-groupby TRT01A` for the big N. The planned arm is no longer aliased as `TRTA`.
+- c1-487: `benchmark/run_benchmark.py` now runs Fleet twice per input (default Polars thread count and `POLARS_MAX_THREADS=1`) and oak + admiral once, on the sparse input and on a new dense-subject input (`inflate_data.py --dense-rows`, about 40 AE records per subject). Each scale runs three times (`--reps`); the report gives the median and the min-max range, and records machine, OS, core counts, thread count and load average.
+- c1-484: the record-by-record check of 17 ADAE variables now runs at every scale and on both inputs (Fleet at both thread counts against admiral); `run_benchmark.py` exits 1 on any difference.
+- c1-487: `benchmark/rpy2_adae_benchmark.py` uses the same ANL01FL tie order and ASEQ order as `admiral_adae_benchmark.R`.
+- c1-483, c1-487: `benchmark/REPORT.md` holds the numbers of the rerun only: date, versions, subject and thread counts next to the table, a dense-subject row, a single-thread row and the row-by-row check result per size.
 
 #### Fixed
 
@@ -198,6 +212,9 @@ The high findings of the alpha audit (`HIGH-REMAINING.md`), fixed with the decis
 - c1-674: the ADNCA example writes ADPPK sorted by USUBJID, AFRLT, EVID, CMT: the dose follows the pre-dose sample (ASEQ 2) and the file is the same on each run.
 - c1-678: the documented ADAE chain (GUIDE Part 9, cdiscpilot01_inline, r2r_ae_example, tlg_ae_example, llms.txt) imputes as the admiral template: a partial start gets the first day but not before TRTSDT (`min_date="TRTSDT"`), a partial end gets the last day (`impute="last"`).
 - c1-476: GUIDE no longer says that old spec names keep working and no longer teaches `algorithm: callable`; three code comments and the schema description use `algorithm: derivation`. A test checks every `algorithm:` in the tracked Markdown against the spec registry.
+- c1-355: the `param()` docstring and ADR-0043 state that an event or censor date before `start` is set to `start` and keeps its CNSR (admiral ADT = max(ADT, STARTDT)).
+- c1-119: a `--DTC` value with a hyphen in the time (`2021-03-15T08:-:45`) now gives 08:00:00 with TMF `M`, as admiral, not 00:00:00 with TMF `H`.
+- c1-487: the R benchmark scripts reported the R peak memory from the wrong `gc()` column (a cell count, not MB).
 
 #### Removed
 
@@ -206,6 +223,8 @@ The high findings of the alpha audit (`HIGH-REMAINING.md`), fixed with the decis
 - c1-44: `@derivation(by=..., set_values_to=...)` (kind "param") and `fleet derivation add --kind param` are removed. The decorator raises VerbUsageError that names `.adam.derive_param()`: kind "param" appended no row and overwrote AVAL.
 - c1-264: the shipped custom rule SDTMCHK-VS-001 (DBP > SBP). It compares two records and could never run in CORE (`$SYSBP_VALUE` is never defined).
 - 14 sponsor rules that the engine cannot express with the R condition: the visit-order rules EG-001, EX-009, LB-004, QS-002, RS-002, TR-002, TU-003 (the engine sorts unscheduled records too), DS-005, AE-018, AE-019, AE-020, DM-003, DS-006 (an operation filter takes exact values only) and VS-001 (needs a SYSBP/DIABP merge). (c2-918)
+- c1-119: `fleet.adam.utils.dtm_with_time` (replaced by `dtm_source_text` and the shared path). `refuse_dtm_bounds` no longer takes `highest=`.
+
 
 ### Security
 
