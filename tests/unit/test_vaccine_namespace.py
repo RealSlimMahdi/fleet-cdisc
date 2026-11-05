@@ -7,8 +7,8 @@ import fleet  # noqa: F401 — triggers namespace registration
 from fleet.core.exceptions import DerivationError
 
 # ---------------------------------------------------------------------------
-# LOQ boundary scenarios for aval_adis — mirrors admiralvaccine
-# test-derive_var_aval_adis.R which tests below/at/in-range/at-uloq/above
+# LOQ boundary scenarios for aval_adis: follow the rule of admiralvaccine
+# test-derive_var_aval_adis.R (below/at/in-range/at-uloq/above); values hand-written
 # ---------------------------------------------------------------------------
 _LLOQ_ULOQ_CASES = [
     # (stresn, lloq, uloq, orres,  expected_aval, description)
@@ -350,7 +350,7 @@ class TestAvalAdis:
     """
     Test 4: AVAL derivation with LOQ handling.
 
-    Mirrors admiralvaccine derive_var_aval_adis tests which cover:
+    Follows the rule of admiralvaccine derive_var_aval_adis (hand-written values):
       - below LLOQ → lloq/2 (default rule)
       - exactly AT LLOQ → stresn (boundary condition)
       - in range → stresn
@@ -376,6 +376,49 @@ class TestAvalAdis:
             "AVAL", stresn_col="ISSTRESN", lloq_col="ISLLOQ", uloq_col="ISULOQ", orres_col="ISORRES"
         ).to_frame()
         assert result["AVAL"][0] == pytest.approx(expected), _desc
+
+    def test_without_a_uloq_column_high_values_stay(self):
+        df = pl.from_repr("""
+        ┌──────────┬────────┬─────────┐
+        │ ISSTRESN ┆ ISLLOQ ┆ ISORRES │
+        │ ---      ┆ ---    ┆ ---     │
+        │ f64      ┆ f64    ┆ str     │
+        ╞══════════╪════════╪═════════╡
+        │ 1.0      ┆ 4.0    ┆ 1       │
+        │ 50.0     ┆ 4.0    ┆ 50      │
+        │ 250.0    ┆ 4.0    ┆ 250     │
+        │ null     ┆ 4.0    ┆ <4      │
+        │ null     ┆ 4.0    ┆ >200    │
+        └──────────┴────────┴─────────┘
+        """)
+        result = df.adam.vaccine.aval_adis(
+            "AVAL", stresn_col="ISSTRESN", lloq_col="ISLLOQ", uloq_col=None, orres_col="ISORRES"
+        ).to_frame()
+        # No ULOQ: 250 is kept and ">200" with no number gives null; LLOQ / 2 still applies.
+        assert result["AVAL"].to_list() == [2.0, 50.0, 250.0, 2.0, None]
+
+    def test_round_digits_rounds_every_branch(self):
+        df = pl.from_repr("""
+        ┌───────────┬────────┬────────┬───────────┐
+        │ ISSTRESN  ┆ ISLLOQ ┆ ISULOQ ┆ ISORRES   │
+        │ ---       ┆ ---    ┆ ---    ┆ ---       │
+        │ f64       ┆ f64    ┆ f64    ┆ str       │
+        ╞═══════════╪════════╪════════╪═══════════╡
+        │ 50.123456 ┆ 4.0    ┆ 200.0  ┆ 50.123456 │
+        │ 1.0       ┆ 3.0    ┆ 200.0  ┆ 1         │
+        │ null      ┆ 4.5    ┆ 200.0  ┆ <4.5      │
+        └───────────┴────────┴────────┴───────────┘
+        """)
+        result = df.adam.vaccine.aval_adis(
+            "AVAL",
+            stresn_col="ISSTRESN",
+            lloq_col="ISLLOQ",
+            uloq_col="ISULOQ",
+            orres_col="ISORRES",
+            round_digits=1,
+        ).to_frame()
+        # 50.123456 -> 50.1; 3.0 / 2 = 1.5; 4.5 / 2 = 2.25 -> 2.2 (round half to even).
+        assert result["AVAL"].to_list() == [50.1, 1.5, 2.2]
 
     def test_lloq_rule_lloq(self):
         """lloq_rule='lloq' → value below LLOQ returns full LLOQ (not half)."""
@@ -432,7 +475,7 @@ class TestAvalAdis:
     def test_multi_subject_adis_frame(self, adis_frame):
         """
         Full ADIS fixture test — verifies correct LOQ handling across 3 subjects
-        and 2 visits each, mirroring admiral's multi-parameter test 1.
+        and 2 visits each, in the shape of admiral's multi-parameter test 1.
         """
         result = adis_frame.adam.vaccine.aval_adis(
             "AVAL", stresn_col="ISSTRESN", lloq_col="ISLLOQ", uloq_col="ISULOQ", orres_col="ISORRES"

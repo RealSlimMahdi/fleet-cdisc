@@ -6,7 +6,7 @@ import pytest
 import fleet  # noqa: F401 — triggers namespace registration
 
 # ---------------------------------------------------------------------------
-# Reference RECIST mapping — mirrors admiralonco aval_resp() exactly
+# Reference RECIST mapping: follows the rule of admiralonco aval_resp(); values hand-written
 # ---------------------------------------------------------------------------
 _RECIST_MAPPING = [
     ("CR", 1.0),
@@ -84,8 +84,8 @@ class TestAvalResp:
     """
     Test 1: RECIST text → numeric mapping (all 7 categories + unknown + null).
 
-    Mirrors admiralonco test-derive_param_bor pattern of testing every
-    response category individually via parametrize, then the full vector.
+    Follows the pattern of admiralonco test-derive_param_bor: each response
+    category alone via parametrize, then the full vector. Values are hand-written.
     """
 
     @pytest.mark.parametrize("response,expected_aval", _RECIST_MAPPING)
@@ -287,7 +287,7 @@ class TestFilterPD:
     """
     Test 4: filter_pd — keep records up to and including first PD per group.
 
-    Mirrors admiralonco test-filter_pd.R which tests:
+    Follows the rule of admiralonco test-filter_pd.R (hand-written rows), which tests:
       - subjects with PD (rows after PD dropped)
       - subjects without PD (all rows retained)
       - multiple subjects in one call (independent per subject)
@@ -383,8 +383,8 @@ class TestConfirmedResponseFlag:
         result = df.adam.onco.confirmed_response_flag(
             "CNFFL", source="OVRLRESP", date_col="ADT", confirmation_days=28, by=["USUBJID"]
         ).to_frame()
-        # At least one "Y" in the group (≥28-day gap exists)
-        assert "Y" in result["CNFFL"].to_list()
+        # Only the record that a later response confirms is flagged.
+        assert result["CNFFL"].to_list() == ["Y", None]
 
     def test_gap_too_short_gives_null(self):
         # ADT dates only 19 days apart
