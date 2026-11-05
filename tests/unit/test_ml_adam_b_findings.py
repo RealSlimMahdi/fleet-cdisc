@@ -182,3 +182,201 @@ def test_c1_376_lineage_lists_the_real_outputs():
     assert nodes["CNSR"].sources == ["TRTSDT", "DTHDT"]
     second = ns.param("TTD", "Time to Death", **_tte_frames(adsl))
     assert [n.name for n in second._lineage if n.verb == "param"] == list(nodes)
+
+
+# ------------------------------------------------------------------ #
+# PK                                                                   #
+# ------------------------------------------------------------------ #
+
+PK_BLQ = """
+┌──────────┬────────┬──────────┐
+│ PCSTRESN ┆ PCLLOQ ┆ PCSTRESC │
+│ ---      ┆ ---    ┆ ---      │
+│ f64      ┆ f64    ┆ str      │
+╞══════════╪════════╪══════════╡
+│ 0.5      ┆ 1.0    ┆ 0.5      │
+│ 4.0      ┆ 1.0    ┆ 4.0      │
+│ 0.2      ┆ 1.0    ┆ 0.2      │
+│ 1.0      ┆ 1.0    ┆ 1.0      │
+└──────────┴────────┴──────────┘
+"""
+
+
+def test_c1_396_blq_impute_is_one_rule_for_every_row():
+    """c1-396: BLQ before and after the first quantifiable value get LLOQ/2 alike."""
+    out = (
+        pl.from_repr(PK_BLQ)
+        .adam.pk.blq_impute("AVAL", conc_col="PCSTRESN", lloq_col="PCLLOQ")
+        .to_frame()
+    )
+    assert out["AVAL"].to_list() == [0.5, 4.0, 0.5, 1.0]
+    from fleet.adam.pk_namespace import PKNamespace
+
+    assert "whatever the sample position" in (PKNamespace.blq_impute.__doc__ or "")
+
+
+def test_c1_402_pk_docstring_claims_no_adpp():
+    from fleet.adam.pk_namespace import PKNamespace
+
+    assert "ADPP " not in (PKNamespace.__doc__ or "")
+
+
+def test_c1_401_nominal_time_minutes_is_the_exact_quotient():
+    pc = pl.DataFrame({"PCTPTNUM": list(range(4321))})
+    out = pc.adam.pk.nominal_time("NFRLT", from_col="PCTPTNUM", input_unit="min").to_frame()
+    assert out["NFRLT"].to_list() == [x / 60 for x in range(4321)]
+
+
+def test_c2_lead_1_predose_flag_include_zero():
+    adpc = pl.from_repr("""
+┌───────┐
+│ NFRLT │
+│ ---   │
+│ f64   │
+╞═══════╡
+│ 0.0   │
+│ -0.5  │
+│ 1.0   │
+│ -0.1  │
+└───────┘
+""")
+    default = adpc.adam.pk.predose_flag("PREFL", time_col="NFRLT").to_frame()
+    assert default["PREFL"].to_list() == [None, "Y", None, "Y"]
+    nominal = adpc.adam.pk.predose_flag("PREFL", time_col="NFRLT", include_zero=True).to_frame()
+    assert nominal["PREFL"].to_list() == ["Y", "Y", None, "Y"]
+
+
+PK_EVID = """
+┌──────┬──────┬────────┐
+│ EVID ┆ DV   ┆ EXDOSE │
+│ ---  ┆ ---  ┆ ---    │
+│ i64  ┆ f64  ┆ f64    │
+╞══════╪══════╪════════╡
+│ 0    ┆ 5.0  ┆ null   │
+│ 1    ┆ null ┆ 100.0  │
+│ 2    ┆ null ┆ null   │
+│ 3    ┆ null ┆ null   │
+│ 4    ┆ null ┆ 100.0  │
+│ null ┆ 3.0  ┆ null   │
+└──────┴──────┴────────┘
+"""
+
+
+def test_c1_397_evid_4_is_a_dose_and_mdv_is_1_off_observations():
+    out = (
+        pl.from_repr(PK_EVID)
+        .adam.pk.amt("AMT", dose_col="EXDOSE")
+        .cmt("CMT")
+        .mdv("MDV_E", conc_col=None, evid_col="EVID")
+        .to_frame()
+    )
+    assert out["AMT"].to_list() == [None, 100.0, None, None, 100.0, None]
+    assert out["CMT"].to_list() == [2, 1, None, None, 1, None]
+    assert out["MDV_E"].to_list() == [0, 1, 1, 1, 1, 1]
+
+
+def test_c1_398_mdv_defaults_read_evid_and_dv():
+    out = pl.from_repr(PK_EVID).adam.pk.mdv("MDV").to_frame()
+    assert out["MDV"].to_list() == [0, 1, 1, 1, 1, 1]
+
+
+def test_c1_398_mdv_text_dv_dot_is_missing():
+    pp = pl.from_repr("""
+┌──────┬──────┐
+│ EVID ┆ DV   │
+│ ---  ┆ ---  │
+│ i64  ┆ str  │
+╞══════╪══════╡
+│ 0    ┆ .    │
+│ 0    ┆      │
+│ 0    ┆ null │
+│ 0    ┆ 2.5  │
+└──────┴──────┘
+""")
+    out = pp.adam.pk.mdv("MDV").to_frame()
+    assert out["MDV"].to_list() == [1, 1, 1, 0]
+
+
+def test_c1_395_avalcat_digits():
+    pc = pl.from_repr("""
+┌──────────────┬────────┐
+│ PCSTRESN     ┆ PCLLOQ │
+│ ---          ┆ ---    │
+│ f64          ┆ f64    │
+╞══════════════╪════════╡
+│ 10.27        ┆ 0.1    │
+│ 5.0          ┆ 0.1    │
+│ 12345678.0   ┆ 0.1    │
+│ 0.05         ┆ 0.1    │
+└──────────────┴────────┘
+""")
+    ns = pc.adam.pk
+    kw = dict(conc_col="PCSTRESN", lloq_col="PCLLOQ", text_col=None)
+    assert ns.avalcat("A", **kw).to_frame()["A"].to_list() == ["10.27", "5", "12345678", "BLQ"]
+    # R: prettyNum(signif(c(10.27, 5, 12345678), 3)) gives "10.3", "5", "12300000".
+    three = ns.avalcat("A", **kw, digits=3).to_frame()["A"].to_list()
+    assert three == ["10.3", "5", "12300000", "BLQ"]
+
+
+PK_EDGE = """
+┌──────────┬────────┬──────────┐
+│ PCSTRESN ┆ PCLLOQ ┆ PCSTRESC │
+│ ---      ┆ ---    ┆ ---      │
+│ f64      ┆ f64    ┆ str      │
+╞══════════╪════════╪══════════╡
+│ 1.0      ┆ 1.0    ┆ 1.0      │
+│ 0.99     ┆ 1.0    ┆ 0.99     │
+└──────────┴────────┴──────────┘
+"""
+
+
+def test_c1_404_value_equal_to_lloq_is_not_blq():
+    kw = dict(conc_col="PCSTRESN", lloq_col="PCLLOQ")
+    out = (
+        pl.from_repr(PK_EDGE)
+        .adam.pk.blq_flag("BLQFL", **kw)
+        .blqfn("BLQFN", **kw)
+        .blq_impute("AVAL", **kw)
+        .avalcat("AVALCAT1", **kw)
+        .to_frame()
+    )
+    assert out["BLQFL"].to_list() == [None, "Y"]
+    assert out["BLQFN"].to_list() == [0, 1]
+    assert out["AVAL"].to_list() == [1.0, 0.5]
+    assert out["AVALCAT1"].to_list() == ["1", "BLQ"]
+
+
+def test_c1_404_predose_window_bounds():
+    adpc = pl.from_repr("""
+┌───────┐
+│ ATIME │
+│ ---   │
+│ f64   │
+╞═══════╡
+│ -1.0  │
+│ -1.5  │
+└───────┘
+""")
+    out = adpc.adam.pk.predose_flag("PREDFL", time_col="ATIME").to_frame()
+    assert out["PREDFL"].to_list() == ["Y", None]
+    wide = adpc.adam.pk.predose_flag("PREDFL", time_col="ATIME", window_hrs=1.5).to_frame()
+    assert wide["PREDFL"].to_list() == ["Y", "Y"]
+
+
+def test_c1_404_nominal_time_minutes_and_log2_exact():
+    df = pl.from_repr("""
+┌──────────┬──────┐
+│ PCTPTNUM ┆ DV   │
+│ ---      ┆ ---  │
+│ f64      ┆ f64  │
+╞══════════╪══════╡
+│ 90.0     ┆ 8.0  │
+└──────────┴──────┘
+""")
+    out = (
+        df.adam.pk.nominal_time("NFRLT", from_col="PCTPTNUM", input_unit="min")
+        .log_conc("DVL", conc_col="DV", base="2")
+        .to_frame()
+    )
+    assert out["NFRLT"].to_list() == [1.5]
+    assert out["DVL"].to_list() == [3.0]
