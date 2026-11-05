@@ -1589,6 +1589,9 @@ def _resolve_spec_frames(
     population defaults to the data frame for ADSL-only templates and
     is required for every other table.
     """
+    from fleet.core.exceptions import SchemaError
+    from fleet.tlg import resolve_population
+
     analysis_domain = meta.domains[-1] if meta.domains else None
     is_listing = meta.output_type.value == "listing"
 
@@ -1612,17 +1615,20 @@ def _resolve_spec_frames(
     data_df = _load_dataset(str(data_path))
 
     population = adsl_df
-    if population is None and analysis_domain == "ADSL":
-        population = data_df
-    if population is None and not is_listing and "ADSL" in meta.domains and ctx is not None:
+    if (
+        population is None
+        and not is_listing
+        and analysis_domain != "ADSL"
+        and "ADSL" in meta.domains
+        and ctx is not None
+    ):
         adsl_path = find_dataset_file("ADSL", [ctx.adam_data_dir])
         if adsl_path is not None:
             population = _load_dataset(str(adsl_path))
-    if population is None and not is_listing and "ADSL" in meta.domains:
-        _fail(
-            f"{spec_path}: template '{meta.id}' needs ADSL for population "
-            "denominators. Pass --adsl <path>."
-        )
+    try:
+        population = resolve_population(meta, data_df, population)
+    except SchemaError as exc:
+        _fail(f"{spec_path}: {exc} Pass --adsl <path>.")
     return data_df, population, is_listing
 
 

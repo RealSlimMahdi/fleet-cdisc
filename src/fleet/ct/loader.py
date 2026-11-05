@@ -31,7 +31,7 @@ def load_controlled_terminology(
         CTError: If the file cannot be found, read, or is in an unsupported format.
     """
     if isinstance(ct_path, str):
-        if ct_path.startswith("http"):
+        if ct_path.startswith(("http://", "https://")):
             ct_path = _download_ct(ct_path)
         else:
             ct_path = Path(ct_path)

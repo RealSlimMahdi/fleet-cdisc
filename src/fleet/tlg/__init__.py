@@ -47,6 +47,7 @@ from ._runner import (
     detect_groupby,
     load_spec,
     resolve_groupby,
+    resolve_population,
     run_spec,
     spec_schema,
 )
@@ -185,6 +186,7 @@ __all__ = [
     "GROUPBY_CANDIDATES",
     "detect_groupby",
     "resolve_groupby",
+    "resolve_population",
     "load_spec",
     "run_spec",
     "spec_schema",
