@@ -96,6 +96,12 @@ print(f"   ae_raw : {ae_raw.shape[0]:>3} rows   columns → {ae_raw.columns}")
 #     Admiral uses DM as the starting point for ADSL:
 #       adsl <- dm %>% select(-DOMAIN) %>% mutate(TRT01P = ARM, ...)
 # ════════════════════════════════════════════════════════════════════════════
+_ARMCD_FROM_RAW = [
+    {"condition": pl.col("arm_code") == "Pbo", "value": "PBO"},
+    {"condition": pl.col("arm_code") == "Xan_Lo", "value": "XAN_LO"},
+    {"condition": pl.col("arm_code") == "Xan_Hi", "value": "XAN_HI"},
+]
+
 dm = (
     dm_raw.sdtm.assign("STUDYID", value="CDISCPILOT01")
     .assign("DOMAIN", value="DM")
@@ -123,17 +129,10 @@ dm = (
             "NOT HISPANIC OR LATINO": "NOT HISPANIC OR LATINO",
         },
     )
-    .case_when(
-        "ARMCD",
-        when=[
-            {"condition": pl.col("arm_code") == "Pbo", "value": "PBO"},
-            {"condition": pl.col("arm_code") == "Xan_Lo", "value": "XAN_LO"},
-            {"condition": pl.col("arm_code") == "Xan_Hi", "value": "XAN_HI"},
-        ],
-        else_="SCRNFAIL",
-    )
+    .case_when("ARMCD", when=_ARMCD_FROM_RAW)
     .assign("ARM", source="arm_description")
-    .assign("ACTARMCD", source="arm_code")
+    # The raw data has one arm per subject: the actual arm takes the same codes.
+    .case_when("ACTARMCD", when=_ARMCD_FROM_RAW)
     .assign("ACTARM", source="arm_description")
     .date("RFSTDTC", source="first_dose_date")
     .date("RFENDTC", source="last_dose_date")
@@ -374,7 +373,11 @@ _ds_disp = ds.filter(pl.col("DSCAT") == "DISPOSITION EVENT").select(
 
 adsl = (
     adsl.adam.adsl.last_date(  # EOSDT: latest date of DISPOSITION EVENT (admiral: derive_vars_merged)
-        "EOSDT", from_dataset=ds, date_col="DSSTDTC", where='pl.col("DSCAT") == "DISPOSITION EVENT"'
+        "EOSDT",
+        from_dataset=ds,
+        date_col="DSSTDTC",
+        # admiral ad_adsl.R filter_add: a screen failure has no end of study.
+        where='(pl.col("DSCAT") == "DISPOSITION EVENT") & (pl.col("DSDECOD") != "SCREEN FAILURE")',
     )
     # RANDDT: date of RANDOMIZED protocol milestone (admiral: derive_vars_merged)
     .first_date(
@@ -388,7 +391,7 @@ adsl = (
     .case_when(
         "EOSSTT",
         when=[
-            {"condition": 'pl.col("DSDECOD").is_null()', "value": None},
+            {"condition": 'pl.col("DSDECOD").is_null()', "value": "ONGOING"},
             {"condition": 'pl.col("DSDECOD") == "COMPLETED"', "value": "COMPLETED"},
             {"condition": 'pl.col("DSDECOD") == "SCREEN FAILURE"', "value": None},
         ],
@@ -456,8 +459,8 @@ adsl = (
     adsl.adam.adsl.flag_exists(  # admiral: derive_var_merged_exist_flag
         "SAFFL", from_dataset=ex, on=["USUBJID"], source_filter=_treated, false_value="N"
     )
-    # ITTFL: all randomised subjects (ARMCD not SCRNFAIL)
-    .flag("ITTFL", criteria='pl.col("ARMCD") != "SCRNFAIL"', false_value="N")
+    # ITTFL: all randomised subjects. A screen failure has a null ARMCD (SDTMIG 3.4).
+    .flag("ITTFL", criteria='pl.col("ARMCD").is_not_null()', false_value="N")
     .to_frame()
 )
 
@@ -786,7 +789,7 @@ adae = (
     .to_frame()
 )
 
-ADAE_COLS = [
+ADAE_COLS = [  # a demo subset of ADAE, not the full admiral variable list
     "STUDYID",
     "USUBJID",
     "ASEQ",
