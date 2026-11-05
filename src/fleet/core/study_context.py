@@ -363,7 +363,8 @@ class StudyContext:
         if config_file.exists():
             raise StudyConfigError(
                 f"Study already initialized — '{config_file}' already exists. "
-                "Use load_study_context() to load an existing study."
+                "Run the next step with fleet init define, fleet init ct or fleet init rules "
+                "(--force to write a file again), or load it with load_study_context()."
             )
 
         # ── Create directory tree (idempotent) ────────────────────────────

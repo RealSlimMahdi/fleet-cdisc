@@ -187,8 +187,13 @@ def _check_spec_version(spec: DefineSpec, *, source: str) -> None:
 _ANNOUNCED_MODULES: set[str] = set()
 
 
-def _import_derivations_module(spec: DefineSpec, *, source: str) -> None:
+def _import_derivations_module(spec: DefineSpec, *, source: str, path: Path | None = None) -> None:
     """Import the spec-declared ``derivations_module`` (callable registrations).
+
+    The module path is relative to the study root: the folder of the first
+    ``study_config.yaml`` above the spec *path*.  So
+    ``derivations_module: programs.derivations`` imports from any working
+    directory.  With no config above the spec, the working directory is used.
 
     The module is study Python that runs: one stderr line names it, once
     per process.
@@ -199,10 +204,21 @@ def _import_derivations_module(spec: DefineSpec, *, source: str) -> None:
     if str(module) not in _ANNOUNCED_MODULES:
         _ANNOUNCED_MODULES.add(str(module))
         print(f"# fleet: importing study code derivations_module '{module}'", file=sys.stderr)
+    if path is not None:
+        from fleet.core.study_context import find_study_config
+
+        config = find_study_config(start=path.resolve().parent)
+        root = str(config.parent) if config is not None else None
+        if root is not None and root not in sys.path:
+            sys.path.append(root)  # appended: a study file never shadows an installed package
     try:
         importlib.import_module(str(module))
     except ImportError as err:
         raise SpecError(f"{source}: cannot import derivations_module '{module}': {err}") from err
+    except Exception as err:
+        raise SpecError(
+            f"{source}: cannot import derivations_module '{module}': {type(err).__name__}: {err}"
+        ) from err
 
 
 #: Variable-level metadata keys merged into the derivation dict so that
@@ -2877,7 +2893,7 @@ class SharedVerbsMixin:
         path = Path(spec_path)
         spec = load_define_spec(path)
         _check_spec_version(spec, source=str(path))
-        _import_derivations_module(spec, source=str(path))
+        _import_derivations_module(spec, source=str(path), path=path)
 
         standard = self._VALIDATE_STANDARD
         if spec.datasets is None and dataset is not None:

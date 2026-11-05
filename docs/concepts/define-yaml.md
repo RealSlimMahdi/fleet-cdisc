@@ -424,7 +424,10 @@ The spec keys below apply to every generation:
 
 - **`fleet_spec_version: 2`** — spec dialect version (checked on load; 2 is the verb vocabulary of ADR-0008, `fleet migrate --spec` rewrites a version 1 file).
 - **`derivations_module:`** — a dotted module that `from_spec` imports itself, so
-  `callable:` derivations register without a manual import.
+  `callable:` derivations register without a manual import. The dotted path is
+  relative to the study root (the folder of `study_config.yaml`), so
+  `derivations_module: programs.derivations` finds the package that
+  `fleet derivation add` writes, from any working directory.
 - **`output_format:`** — per-dataset or spec-level export format (`parquet`,
   `dataset-json`, `xpt`) recorded in the DAG and Define-XML leaf hrefs, and
   the format `fleet run` writes when no `--format` is given.

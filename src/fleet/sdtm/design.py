@@ -613,6 +613,7 @@ class StudyDesign(BaseModel):
 
         Raises:
             yaml.constructor.ConstructorError: When a mapping repeats a key.
+            ValueError: When the file is empty or is not a mapping.
             pydantic.ValidationError: When a key is unknown or a value is
                 not valid.
 
@@ -623,6 +624,8 @@ class StudyDesign(BaseModel):
                 frames = design.domains()
         """
         data = load_strict_yaml(Path(path).read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            raise ValueError(f"{path}: the file is empty or is not a mapping of design sections.")
         return cls(**_dates_to_iso(data.get("trial_design", data)))
 
     def to_yaml(self, path: str | Path | None = None) -> str:

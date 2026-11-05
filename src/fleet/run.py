@@ -21,7 +21,7 @@ import polars as pl
 from fleet.core.define_spec import load_define_spec
 from fleet.core.exceptions import PinError, SpecError, StudyRunError
 from fleet.core.frames import frame as _frame
-from fleet.validation.run_setup import DATA_EXTENSIONS
+from fleet.io import DATASET_EXTENSIONS
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping, Sequence
@@ -52,9 +52,6 @@ InputSource = Literal[
     "seed", "built", "declared path", "raw directory", "sdtm directory", "adam directory"
 ]
 
-#: Dataset file extensions searched by name in the data directories.
-DATASET_EXTENSIONS = DATA_EXTENSIONS
-
 
 @dataclass(frozen=True)
 class DeclaredInput:
@@ -80,10 +77,12 @@ class ResolvedInput:
         path: The file it was read from, or ``None`` for a seed or a
             dataset built earlier in the run.
         source: Which of the sources supplied it.
+        rows: Its row count when the run took it.
     """
 
     path: Path | None
     source: InputSource
+    rows: int | None = None
 
 
 @dataclass(frozen=True)
@@ -294,7 +293,7 @@ def run_study(
             advs = next(fleet.run_study(plan, inputs={"ADSL": adsl})).frame
     """
     held: dict[str, _Held] = {
-        name.upper(): _Held(frame, ResolvedInput(path=None, source="seed"))
+        name.upper(): _Held(frame, ResolvedInput(path=None, source="seed", rows=frame.height))
         for name, frame in (inputs or {}).items()
     }
     text_columns = frozenset(c for s in plan.steps for c in s.text_columns)
@@ -333,7 +332,9 @@ def run_study(
         except SpecError as err:
             _undeclared_source(step, err)
             raise
-        held[step.dataset] = _Held(built_frame, ResolvedInput(path=None, source="built"))
+        held[step.dataset] = _Held(
+            built_frame, ResolvedInput(path=None, source="built", rows=built_frame.height)
+        )
         if step.qualifiers:
             seq = f"{step.dataset}SEQ"
             supp = _frame(built_frame).sdtm.export_supp(
@@ -490,7 +491,7 @@ def _resolve_input(
             else {}
         )
         frame = load_raw_data(file, **options).collect()
-        held[key] = _Held(frame, ResolvedInput(path=file, source=source))
+        held[key] = _Held(frame, ResolvedInput(path=file, source=source, rows=frame.height))
         return held[key].origin
 
     if declared.path is not None:

@@ -671,7 +671,7 @@ class TestDeriveSummarySchemaAlignment:
 
 
 class TestANL01FLAdmiralParity:
-    """Byte-for-byte parity with admiral's ANL01FL derivation for BDS.
+    """Same rule as admiral's ANL01FL derivation for BDS (no admiral output is read).
 
     Admiral pattern::
 

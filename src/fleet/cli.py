@@ -37,12 +37,14 @@ import importlib.util
 import json
 import keyword
 import os
+import re
 import sys
+from itertools import takewhile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, NoReturn, get_args, get_type_hints
 
 from fleet.core.define_spec import load_spec_yaml
-from fleet.core.study_context import find_study_config
+from fleet.core.study_context import DEFAULT_SDTM_CT, find_study_config
 from fleet.run import find_dataset_file
 
 if TYPE_CHECKING:
@@ -116,7 +118,7 @@ def _load_ctx(config_arg: str | None) -> StudyContext:
 
 
 def _try_ctx(config_arg: str | None = None) -> StudyContext | None:
-    """Best-effort study context — ``None`` when no config is discoverable.
+    """The study context, or ``None`` when no config is discoverable.
 
     For commands that also work standalone on explicit paths: inside a
     study workspace they resolve defaults from the config, outside one
@@ -125,12 +127,10 @@ def _try_ctx(config_arg: str | None = None) -> StudyContext | None:
     cfg = Path(config_arg) if config_arg else find_study_config()
     if cfg is None or not cfg.is_file():
         return None
-    from fleet.core.study_context import StudyConfigError, load_study_context
+    from fleet.core.study_context import load_study_context
 
-    try:
-        return load_study_context(cfg)
-    except StudyConfigError:
-        return None
+    # A config that is found but invalid is an error, not "no study".
+    return load_study_context(cfg)
 
 
 def _config_flag_hint(config_path: Path) -> str:
@@ -143,6 +143,17 @@ def _config_flag_hint(config_path: Path) -> str:
 # ────────────────────────────────────────────────────────────────────── #
 # Shared helpers                                                          #
 # ────────────────────────────────────────────────────────────────────── #
+
+
+def _positive_int(text: str) -> int:
+    """An argparse type: a whole number of at least 1."""
+    try:
+        value = int(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{text!r} is not a whole number") from None
+    if value < 1:
+        raise argparse.ArgumentTypeError(f"{value} is less than 1")
+    return value
 
 
 def _parse_domains(raw: str) -> list[str]:
@@ -324,14 +335,15 @@ def _run_init_define(args: argparse.Namespace) -> None:
         _fail("nothing to generate — configure domains/datasets in study_config.yaml.")
 
     # Extract CT version date from package string (e.g. "sdtmct-2023-12-15" → "2023-12-15")
-    ct_version = cfg.ct.package.split("-", 1)[-1] if "-" in cfg.ct.package else "2023-12-15"
+    ct_version = cfg.ct.package.split("-", 1)[-1] if "-" in cfg.ct.package else None
+    ct_version = ct_version or DEFAULT_SDTM_CT.split("-", 1)[-1]
     adam_ct = cfg.ct.adam_package
     adam_ct_version = adam_ct.split("-", 1)[-1] if adam_ct and "-" in adam_ct else None
 
     with CDISCClient() as client:
         scaffolder = DefineScaffolder(client)
 
-        force = getattr(args, "force", False)
+        force = args.force
         written: list[Path] = []
 
         if do_sdtm:
@@ -400,25 +412,29 @@ def _run_init_rules(args: argparse.Namespace) -> None:
     do_sdtm = not args.adam_only
     do_adam = not args.sdtm_only
 
+    dirs: list[Path] = []
     with CDISCClient() as client:
         scaffolder = RulesScaffolder(client)
 
         if do_sdtm:
             try:
-                scaffolder.scaffold_sdtm(ctx, force=args.force)
+                dirs.append(scaffolder.scaffold_sdtm(ctx, force=args.force))
             except FileNotFoundError as exc:
                 print(f"Warning: {exc}")
 
         if do_adam:
             try:
-                scaffolder.scaffold_adam(ctx, force=args.force)
+                dirs.append(scaffolder.scaffold_adam(ctx, force=args.force))
             except FileNotFoundError as exc:
                 print(f"Warning: {exc}")
 
+    cached = [d for d in dirs if d.is_dir() and any(d.glob("*.yaml"))]
+    if not cached:
+        _fail("no rule file is cached: no define.yaml was found, or CDISC returned no rules.")
     print()
     print(
-        "Rules cached for reference. CORE runs its own rules; "
-        "pin the engine with fleet install-engine --version."
+        f"Rules cached for reference in {', '.join(map(str, cached))}. CORE runs its own "
+        "rules; pin the engine with fleet install-engine --version."
     )
 
 
@@ -452,7 +468,7 @@ def _run_init_ct_pipeline(args: argparse.Namespace) -> None:
     print()
 
     output = ctx.metadata_sdtm_dir / "codelists.py"
-    force = getattr(args, "force", False)
+    force = args.force
     if output.exists() and not force:
         print(f"Warning: {output} already exists — skipping (use --force to overwrite).")
         return
@@ -538,7 +554,7 @@ def _run_add_ct(args: argparse.Namespace) -> None:
     )
 
     domains = _parse_domains(args.domains)
-    ctx = _try_ctx()
+    ctx = _try_ctx(args.config)
     output = (
         Path(args.output) if args.output else (ctx.codelists_file if ctx else Path("codelists.py"))
     )
@@ -546,19 +562,22 @@ def _run_add_ct(args: argparse.Namespace) -> None:
     # discovered study config, then the hard default. Regenerating existing
     # codelists against a different CT package than the study pins would
     # silently change already-reviewed terms.
-    ig = args.ig or (ctx.config.sdtm.ig_version if ctx else None) or _default_ig("sdtm")
-    package = args.package or (ctx.config.ct.package if ctx else "sdtmct-2023-12-15")
-    if args.package and output.is_file():
-        from fleet.ct.study_codelists import load_codelists
+    from fleet.ct.study_codelists import load_codelists
 
-        current = load_codelists(output)[0]
-        if current and args.package not in current:
-            _fail(
-                f"{output} was generated from {', '.join(current)}, not {args.package}; "
-                "fleet add-ct does not change the CT package of existing codelists. "
-                "Set ct.package in study_config.yaml, then run: fleet init ct --force, "
-                "and set study.ct_version in each define.yaml to the package date"
-            )
+    ig = args.ig or (ctx.config.sdtm.ig_version if ctx else None) or _default_ig("sdtm")
+    # The package the existing file was generated from wins over the default.
+    current = load_codelists(output)[0] if output.is_file() else ()
+    sdtm_marker = next((p for p in current if p.startswith("sdtmct-")), None)
+    package = (
+        args.package or (ctx.config.ct.package if ctx else None) or sdtm_marker or DEFAULT_SDTM_CT
+    )
+    if current and package not in current:
+        _fail(
+            f"{output} was generated from {', '.join(current)}, not {package}; "
+            "fleet add-ct does not change the CT package of existing codelists. "
+            "Set ct.package in study_config.yaml, then run: fleet init ct --force, "
+            "and set study.ct_version in each define.yaml to the package date"
+        )
     existing = existing_concept_ids(output)
 
     print(f"Adding domains: {', '.join(domains)}")
@@ -743,21 +762,15 @@ def _check_extras() -> list[tuple[str, bool, str]]:
     return results
 
 
-def _print_codelists_status(config_path: Path) -> None:
+def _print_codelists_status(ctx: StudyContext) -> None:
     """The doctor line of the study's codelists.py: its CT package, or each problem."""
-    from fleet.core.exceptions import SpecError
-    from fleet.core.study_context import StudyConfigError, load_study_context
     from fleet.ct.study_codelists import check_codelists, load_codelists
 
     try:
-        ctx = load_study_context(config_path)
-    except StudyConfigError:
-        return  # fleet check reports the invalid config
-    try:
         problems = check_codelists(ctx)
         packages = load_codelists(ctx.codelists_file)[0] if ctx.codelists_file.is_file() else ()
-    except SpecError as exc:
-        print(f"  ✗ codelists.py ....... {exc}")
+    except Exception as exc:  # a codelists.py or define.yaml that does not load, as in fleet check
+        print(f"  ✗ codelists.py ....... {_error_line(exc)}")
         return
     for problem in problems:
         print(f"  ✗ codelists.py ....... {problem}")
@@ -799,40 +812,52 @@ def _pinned_engine_missing(config_path: Path | None) -> str | None:
 
 
 def _run_doctor(args: argparse.Namespace) -> None:
+    """Print the setup checks; exit 1 when the study config or the rules engine has a cross."""
     from fleet.core.exceptions import ValidationSetupError
+    from fleet.core.study_context import StudyConfigError, load_study_context
     from fleet.validation import build_run_setup
     from fleet.validation.engine import discover_engine, doctor
 
-    config_path = Path(args.config) if getattr(args, "config", None) else find_study_config()
+    config_path = Path(args.config) if args.config else find_study_config()
 
     print("Fleet Doctor")
     print("=" * 52)
 
+    failed = False
     if config_path and config_path.is_file():
-        print(f"  ✓ study config ....... {config_path}")
-        _print_codelists_status(config_path)
+        try:
+            ctx = load_study_context(config_path)
+        except StudyConfigError as exc:
+            print(f"  ✗ study config ....... {' '.join(str(exc).split())}")
+            failed = True
+        else:
+            print(f"  ✓ study config ....... {config_path}")
+            _print_codelists_status(ctx)
     else:
         print("  ✗ study config ....... not found (run `fleet init cfg`)")
+        failed = True
 
     # A run setup with no datasets: the standard only fills the record.
     try:
         setup = build_run_setup(standard="sdtm", config=config_path)
         engine, where = setup.engine.value, f" ({setup.engine.source})"
-    except ValidationSetupError as exc:
-        print(f"  ✗ run setup .......... {exc}")
+    except (ValidationSetupError, StudyConfigError) as exc:
+        print(f"  ✗ run setup .......... {' '.join(str(exc).split())}")
         study_root = config_path.parent if config_path and config_path.is_file() else None
         engine, where = discover_engine(study_root), ""
 
     if engine is None or _pinned_engine_missing(config_path) is not None:
         reason = _pinned_engine_missing(config_path) or "NOT FOUND — run `fleet install-engine`"
         print(f"  ✗ rules engine ....... {reason}")
+        failed = True
     else:
         checks = doctor(engine=engine)
         print(f"  ✓ rules engine ....... {engine}{where}")
         print(f"      version: {checks['version']}")
         print(f"      type: {checks['type']}")
-        status_mark = "✓" if checks["status"].startswith("OK") else "✗"
-        print(f"  {status_mark} engine status ...... {checks['status']}")
+        status_ok = checks["status"].startswith("OK")
+        print(f"  {'✓' if status_ok else '✗'} engine status ...... {checks['status']}")
+        failed = failed or not status_ok
 
     api_key_set = bool(os.environ.get("CDISC_API_KEY"))
     if api_key_set:
@@ -852,6 +877,8 @@ def _run_doctor(args: argparse.Namespace) -> None:
         else:
             print(f"  ✗ {name:.<20s} {hint}")
     print()
+    if failed:
+        sys.exit(1)
 
 
 # ────────────────────────────────────────────────────────────────────── #
@@ -870,11 +897,11 @@ def _generate_define_xml(args: argparse.Namespace) -> None:
     print(f"Output:   {output}")
     print()
 
-    gen = DefineSpecGenerator(str(spec), strict=getattr(args, "strict", False))
+    gen = DefineSpecGenerator(str(spec), strict=args.strict)
     gen.generate(str(output), html_preview=not args.no_preview)
     print(f"Generated Define-XML → {output}")
-    ctx = _try_ctx(getattr(args, "config", None))
-    if ctx is not None and getattr(args, "standard", None) in ("sdtm", "adam"):
+    ctx = _try_ctx(args.config)
+    if ctx is not None:
         data_dir = ctx.data_dir(args.standard)
         absent = [href for href in gen.leaf_hrefs().values() if not (data_dir / href).is_file()]
         if absent:
@@ -890,9 +917,105 @@ def _generate_define_xml(args: argparse.Namespace) -> None:
             print(f"HTML preview → {preview}")
 
 
-def _run_add_acrf(args: argparse.Namespace) -> None:
+def _content(line: str) -> bool:
+    """Whether a YAML line holds content (not blank, not a comment)."""
+    stripped = line.strip()
+    return bool(stripped) and not stripped.startswith("#")
+
+
+def _indent(line: str) -> int:
+    return len(line) - len(line.lstrip(" "))
+
+
+def _yaml_block(
+    lines: list[str], key: str, lo: int, hi: int, indent: int
+) -> tuple[int, int] | None:
+    """``(key line, end)`` of the block-style ``key:`` at *indent* in ``lines[lo:hi]``.
+
+    The end is the line after the last content line of the block, so trailing
+    comments stay where they are.  A key with an inline value is not a block.
+    """
+    pattern = re.compile(rf"^ {{{indent}}}{re.escape(key)}:\s*(#.*)?$")
+    for i in range(lo, hi):
+        if not pattern.match(lines[i].rstrip("\r\n")):
+            continue
+        end = i + 1
+        for j in range(i + 1, hi):
+            if not _content(lines[j]):
+                continue
+            inside = _indent(lines[j]) > indent or (
+                _indent(lines[j]) == indent and lines[j].lstrip().startswith("-")
+            )
+            if not inside:
+                break
+            end = j + 1
+        return i, end
+    return None
+
+
+def _child_indent(lines: list[str], start: int, end: int, default: int) -> int:
+    """The indent of the first content line inside a block, else *default*."""
+    return next((_indent(line) for line in lines[start + 1 : end] if _content(line)), default)
+
+
+def _yaml_lines(value: Any, indent: int) -> list[str]:
     import yaml
 
+    text = yaml.dump(value, default_flow_style=False, sort_keys=False, allow_unicode=True)
+    return [" " * indent + line for line in text.splitlines(keepends=True)]
+
+
+def _write_yaml_edit(
+    path: Path, text: str, edited: str | None, data: Any, load: Callable[[str], Any]
+) -> None:
+    """Write *edited* when it reads back as *data*; else dump *data* and warn about lost comments.
+
+    The text edit keeps every comment.  The YAML dump is the fallback for a
+    layout the edit does not handle (a flow-style mapping): only the leading
+    comment header survives it.
+    """
+    import yaml
+
+    if edited is not None:
+        try:
+            same = load(edited) == data
+        except Exception:  # the edit broke the document: use the dump
+            same = False
+        if same:
+            path.write_text(edited, encoding="utf-8")
+            return
+    lines = text.splitlines(keepends=True)
+    header = list(takewhile(lambda line: not _content(line), lines))
+    lost = sum("#" in line for line in lines[len(header) :])
+    if lost:
+        _err(f"warning: {path} is rewritten through YAML; {lost} line(s) with a comment are lost.")
+    body = yaml.dump(data, default_flow_style=False, sort_keys=False, allow_unicode=True)
+    path.write_text("".join(header) + body, encoding="utf-8")
+
+
+def _acrf_edit(text: str, acrf: dict[str, Any]) -> str | None:
+    """*text* with ``study.documents.annotated_crf`` set to *acrf*, as a text edit."""
+    lines = text.splitlines(keepends=True)
+    if lines and not lines[-1].endswith("\n"):
+        lines[-1] += "\n"
+    study = _yaml_block(lines, "study", 0, len(lines), 0)
+    if study is None:
+        return None
+    start, end = study
+    indent = _child_indent(lines, start, end, 2)
+    docs = _yaml_block(lines, "documents", start + 1, end, indent)
+    if docs is None:
+        new = [" " * indent + "documents:\n", *_yaml_lines({"annotated_crf": acrf}, indent * 2)]
+        return "".join(lines[:end] + new + lines[end:])
+    inner = _child_indent(lines, docs[0], docs[1], indent * 2)
+    new = _yaml_lines({"annotated_crf": acrf}, inner)
+    crf = _yaml_block(lines, "annotated_crf", docs[0] + 1, docs[1], inner)
+    if crf is None:
+        return "".join(lines[: docs[1]] + new + lines[docs[1] :])
+    return "".join(lines[: crf[0]] + new + lines[crf[1] :])
+
+
+def _run_add_acrf(args: argparse.Namespace) -> None:
     ctx = _load_ctx(args.config)
     standards = ["sdtm", "adam"] if args.standard == "both" else [args.standard]
     touched = 0
@@ -903,14 +1026,6 @@ def _run_add_acrf(args: argparse.Namespace) -> None:
             print(f"  {std}: no define.yaml at {spec_path} — skipped")
             continue
         text = spec_path.read_text(encoding="utf-8")
-        # Preserve the leading comment header (e.g. the yaml-language-server
-        # schema hint) — yaml round-trips drop comments.
-        header: list[str] = []
-        for line in text.splitlines():
-            if line.startswith("#") or not line.strip():
-                header.append(line)
-            else:
-                break
         data = load_spec_yaml(text) or {}
         acrf = (
             data.setdefault("study", {}).setdefault("documents", {}).setdefault("annotated_crf", {})
@@ -921,9 +1036,7 @@ def _run_add_acrf(args: argparse.Namespace) -> None:
         acrf.setdefault("title", "Annotated Case Report Form")
         if args.page_map:
             acrf["page_map"] = args.page_map
-        body = yaml.dump(data, default_flow_style=False, sort_keys=False, allow_unicode=True)
-        prefix = "\n".join(header) + "\n" if header else ""
-        spec_path.write_text(prefix + body, encoding="utf-8")
+        _write_yaml_edit(spec_path, text, _acrf_edit(text, acrf), data, load_spec_yaml)
         print(f"  {std}: annotated_crf ({args.href}) → {spec_path}")
         touched += 1
     if not touched:
@@ -978,13 +1091,28 @@ def _run_run(args: argparse.Namespace) -> None:
     :class:`~fleet.core.exceptions.StudyRunError` is turned into exit 1
     by :func:`main`.
     """
+    from datetime import datetime
+
+    import polars as pl
+
     from fleet.core.define_spec import load_define_spec
-    from fleet.io import save_dataset_json, save_parquet, save_xpt
+    from fleet.core.exceptions import StudyRunError
+    from fleet.io import write_dataset
     from fleet.io.dataset_json import metadata_from_define
     from fleet.run import plan_study, run_study
 
     ctx = _load_ctx(args.config)
     plan = plan_study(ctx, datasets=args.dataset)
+    if not plan.steps:
+        defines = [
+            str(p)
+            for p in (ctx.metadata_sdtm_dir / "define.yaml", ctx.metadata_adam_dir / "define.yaml")
+            if p.is_file()
+        ]
+        _fail(
+            f"no dataset to build in {', '.join(defines) or 'the define files'}. fleet run needs "
+            "the multi-dataset format (datasets:) with at least one dataset."
+        )
     specs = {
         e.name.upper(): spec
         for spec in map(load_define_spec, {s.define for s in plan.steps})
@@ -992,20 +1120,18 @@ def _run_run(args: argparse.Namespace) -> None:
     }
     entries = {name: spec.select(name) for name, spec in specs.items()}
 
-    writers: dict[str, Callable[[pl.DataFrame, Path, str], Path]] = {
-        "parquet": lambda df, d, n: save_parquet(df, d / f"{n.lower()}.parquet"),
-        "xpt": lambda df, d, n: save_xpt(
+    def write(df: pl.DataFrame, out_dir: Path, name: str, fmt: str) -> Path:
+        entry = entries.get(name)
+        return write_dataset(
             df,
-            d / f"{n.lower()}.xpt",
-            label=entries[n].label if n in entries else f"Supplemental Qualifiers for {n[4:]}",
-            column_labels=(
-                {v.name: v.label for v in entries[n].variables} if n in entries else _SUPP_LABELS
-            ),
-        ),
-        "dataset-json": lambda df, d, n: save_dataset_json(
-            df, d / f"{n.lower()}.json", domain=n, **metadata_from_define(specs[n], n)
-        ),
-    }
+            out_dir,
+            name,
+            fmt,
+            label=entry.label if entry else f"Supplemental Qualifiers for {name[4:]}",
+            column_labels=({v.name: v.label for v in entry.variables} if entry else _SUPP_LABELS),
+            json_metadata=metadata_from_define(specs[name], name) if name in specs else None,
+        )
+
     formats = {
         s.dataset: _run_format(args.format, specs[s.dataset], entries[s.dataset])
         for s in plan.steps
@@ -1018,23 +1144,32 @@ def _run_run(args: argparse.Namespace) -> None:
     print(f"Plan:    {total} dataset(s)")
     for i, step in enumerate(plan.steps, start=1):
         print(f"  [{i}/{total}] {step.dataset} ({step.standard}, {step.define.name})")
+    print(f"Start:   {datetime.now().isoformat(timespec='seconds')}")
     print()
 
-    for i, built in enumerate(
-        _cli_spec_hints(run_study(plan, strict=args.strict, overwrite=args.overwrite)), start=1
-    ):
+    builds = _cli_spec_hints(run_study(plan, strict=args.strict, overwrite=args.overwrite))
+    for i, planned in enumerate(plan.steps, start=1):
+        try:
+            built = next(builds)
+        except pl.exceptions.PolarsError as exc:
+            # A corrupt input or a failing expression: name the dataset, not the plan text.
+            if _debug():
+                raise
+            raise StudyRunError(f"{planned.dataset}: {_error_line(exc)}") from exc
         step = built.step
-        _check_built(built.frame, step.define, step.dataset, strict=args.strict)
+        _check_built(built.frame, step.define, step.dataset, strict=args.strict, check=args.check)
         out_dir = out_override or ctx.data_dir(step.standard)
-        out_path = writers[formats[step.dataset]](built.frame, out_dir, step.dataset)
+        fmt = formats[step.dataset]
+        out_path = write(built.frame, out_dir, step.dataset, fmt)
         rows, cols = built.frame.shape
         print(f"[{i}/{total}] {step.dataset}: {rows} rows × {cols} cols → {out_path}")
         if built.supp is not None:
-            supp_path = writers[formats[step.dataset]](built.supp, out_dir, f"SUPP{step.dataset}")
+            supp_path = write(built.supp, out_dir, f"SUPP{step.dataset}", fmt)
             print(f"        SUPP{step.dataset}: {built.supp.height} rows → {supp_path}")
         for name, source in built.inputs.items():
             where = source.path or ("built in this run" if source.source == "built" else "seed")
-            print(f"    input {name} -> {where}")
+            count = "" if source.rows is None else f" ({source.rows} rows)"
+            print(f"    input {name} -> {where}{count}")
         declared = entries[step.dataset].output
         if declared and Path(declared).name != out_path.name:
             _err(
@@ -1043,7 +1178,7 @@ def _run_run(args: argparse.Namespace) -> None:
             )
 
     print()
-    print(f"Done — {total} dataset(s) written.")
+    print(f"Done — {total} dataset(s) written. End: {datetime.now().isoformat(timespec='seconds')}")
 
 
 def _cli_spec_hints[T](built: Iterator[T]) -> Iterator[T]:
@@ -1068,8 +1203,15 @@ def _cli_spec_hints[T](built: Iterator[T]) -> Iterator[T]:
         raise SpecError(text) from exc
 
 
-def _check_built(frame: pl.DataFrame, define: Path, dataset: str, *, strict: bool) -> None:
-    """Stop before the write when the built dataset does not match its define; the old file stays."""
+def _check_built(
+    frame: pl.DataFrame, define: Path, dataset: str, *, strict: bool, check: bool = False
+) -> None:
+    """Stop before the write when the built dataset does not match its define; the old file stays.
+
+    A missing column stops the run.  A value type that differs from the
+    define type is a warning, and stops the run only with *check*
+    (``fleet run --check``).
+    """
     from fleet.core.exceptions import StudyRunError
     from fleet.define_xml import DatasetChecker
 
@@ -1081,6 +1223,18 @@ def _check_built(frame: pl.DataFrame, define: Path, dataset: str, *, strict: boo
         raise StudyRunError(
             f"dataset {dataset} does not match {define.name}: {'; '.join(errors)}. "
             "The old file is kept."
+        )
+    typed = DatasetChecker(define, check_columns=False, check_ct=False, validate_schema=False)
+    mismatches = typed.check(frame, dataset, strict=strict).type_mismatches
+    for mm in mismatches:
+        _err(
+            f"warning: {dataset}.{mm.variable}: define type {mm.define_type}, "
+            f"but the data is {mm.actual_dtype}."
+        )
+    if mismatches and check:
+        raise StudyRunError(
+            f"dataset {dataset}: {len(mismatches)} variable(s) do not match their define "
+            "type (--check). The old file is kept."
         )
 
 
@@ -1109,10 +1263,21 @@ _VALIDATE_ERRORS = 1
 _VALIDATE_COULD_NOT_RUN = 2
 
 
+#: What CORE sees of the labels: Fleet writes the Dataset-JSON from the frame alone.
+_LABEL_NOTE = (
+    "Note: the variable labels and the dataset label that CORE checks come from Fleet "
+    "(each label is the variable name), not from the file."
+)
+
+
 def _run_validate(args: argparse.Namespace) -> None:
-    from fleet.core.exceptions import ValidationSetupError
+    import polars as pl
+
+    from fleet.core.exceptions import FleetError, ValidationSetupError
+    from fleet.io import load_raw_data
     from fleet.validation import ValidationService, build_sweep
     from fleet.validation.models import write_html_report
+    from fleet.validation.run_setup import SweepDataset
 
     try:
         sweep = build_sweep(
@@ -1131,14 +1296,29 @@ def _run_validate(args: argparse.Namespace) -> None:
         print(f"Skipped: {skipped.name} (not a dataset file)")
 
     results = []
-    for standard, datasets in sweep.runs().items():
+    unreadable: list[SweepDataset] = []
+    for standard, all_datasets in sweep.runs().items():
+        # One file that cannot be read is "could not run"; the others still run.
+        frames: dict[str, pl.DataFrame] = {}
+        for d in all_datasets:
+            try:
+                frames[d.name] = load_raw_data(
+                    d.path, **_encoding_option(d.path, args.encoding)
+                ).collect()
+            except (FleetError, pl.exceptions.PolarsError, OSError, UnicodeError) as exc:
+                reason = f"could not run: cannot read the file: {_error_line(exc)}"
+                unreadable.append(SweepDataset(path=d.path, setup=None, reason=reason))
+        datasets = [d for d in all_datasets if d.name in frames]
+        if not datasets:
+            continue
         setup = datasets[0].setup
         assert setup is not None  # runs() holds only datasets with a setup
         print(f"Validating {len(datasets)} {standard} dataset(s) in one engine run:")
         for d in datasets:
             print(f"  {d.name} — {d.path}")
+        print(f"  {_LABEL_NOTE}")
         by_name = ValidationService(rules_engine_path=setup.engine.value).validate_datasets(
-            {d.name: _load_dataset(str(d.path), args.encoding) for d in datasets},
+            frames,
             standard=standard,
             version=setup.ig_version.value,
             custom_rules=setup.custom_rules.value,
@@ -1159,14 +1339,19 @@ def _run_validate(args: argparse.Namespace) -> None:
             for line in problems:
                 print(f"  {line}")
 
-    could_not_run = sweep.could_not_run
+    could_not_run = [*sweep.could_not_run, *unreadable]
     for d in could_not_run:
         _err(f"{d.name} ({d.path}): {d.reason}")
 
+    report_failed = False
     if args.report:
         report_path = Path(args.report)
-        write_html_report(results, report_path, could_not_run=could_not_run)
-        print(f"HTML report → {report_path}")
+        try:
+            write_html_report(results, report_path, could_not_run=could_not_run)
+            print(f"HTML report → {report_path}")
+        except OSError as exc:
+            _err(f"Error: cannot write the HTML report {report_path}: {exc}")
+            report_failed = True
 
     engine_failed = sum(1 for r in results if r.could_not_run is not None)
     failed = sum(1 for r in results if r.could_not_run is None and r.errors)
@@ -1185,7 +1370,7 @@ def _run_validate(args: argparse.Namespace) -> None:
         f"{failed} failed, {len(could_not_run) + engine_failed} could not run. "
         f"Findings: {findings} ({accepted} accepted)."
     )
-    if could_not_run or engine_failed:
+    if could_not_run or engine_failed or report_failed:
         sys.exit(_VALIDATE_COULD_NOT_RUN)
     if failed:
         sys.exit(_VALIDATE_ERRORS)
@@ -1201,11 +1386,15 @@ _COMPARE_IMPOSSIBLE = 2
 
 
 def _scan_comparison_side(path_str: str, side: str, encoding: str | None) -> pl.LazyFrame:
-    """Open one side through the raw-data loader; an unreadable file is exit 2.
+    """Read one side through the raw-data loader; an unreadable file is exit 2.
 
-    A CSV side is read as text: :func:`fleet.comparison.csv_types.type_csv_sides`
-    types it against the other side.
+    The side is read here, not in the engine, so a corrupt Parquet file or a
+    ragged CSV file is named with its side and path.  A CSV side is read as
+    text: :func:`fleet.comparison.csv_types.type_csv_sides` types it against
+    the other side.
     """
+    import polars as pl
+
     from fleet.core.exceptions import FleetError
     from fleet.io import load_raw_data
 
@@ -1214,8 +1403,8 @@ def _scan_comparison_side(path_str: str, side: str, encoding: str | None) -> pl.
     if path.suffix.lower() == ".csv":
         options["infer_schema"] = False
     try:
-        return load_raw_data(path, **options)
-    except (FleetError, ImportError) as exc:
+        return load_raw_data(path, **options).collect().lazy()
+    except (FleetError, ImportError, OSError, UnicodeError, pl.exceptions.PolarsError) as exc:
         _fail(
             f"cannot read the {side} {path_str}: {' '.join(str(exc).split())}",
             code=_COMPARE_IMPOSSIBLE,
@@ -1234,13 +1423,36 @@ def _parse_variable_pairs(text: str) -> dict[str, str]:
     pairs: dict[str, str] = {}
     for item in (i.strip() for i in text.split(",") if i.strip()):
         base, _, candidate = item.partition("=")
+        if "=" in candidate:
+            _fail(f"--pairs: {item!r} has more than one '='", code=_COMPARE_IMPOSSIBLE)
         if not base.strip() or not candidate.strip():
             _fail(
                 f"--pairs expects BASE=CANDIDATE pairs separated by commas, got {item!r}",
                 code=_COMPARE_IMPOSSIBLE,
             )
+        if base.strip() in pairs:
+            _fail(f"--pairs: {base.strip()} is given twice", code=_COMPARE_IMPOSSIBLE)
         pairs[base.strip()] = candidate.strip()
     return pairs
+
+
+def _refuse_overwritten_inputs(args: argparse.Namespace) -> None:
+    """Exit 2 when --out or --report names an input file, or both name one file."""
+    sides = {"base": args.base, "candidate": args.candidate}
+    outputs = {"--out": args.out, "--report": args.report}
+    for flag, out in outputs.items():
+        if out is None:
+            continue
+        for side, path in sides.items():
+            if Path(out).resolve() == Path(path).resolve():
+                _fail(f"{flag} is the {side} file {path}", code=_COMPARE_IMPOSSIBLE)
+    if args.out and args.report and Path(args.out).resolve() == Path(args.report).resolve():
+        _fail(f"--out and --report name the same file {args.out}", code=_COMPARE_IMPOSSIBLE)
+
+
+def _debug() -> bool:
+    """``FLEET_DEBUG=1``: let an unexpected exception end in its traceback."""
+    return os.environ.get("FLEET_DEBUG", "") not in ("", "0")
 
 
 def _run_compare(args: argparse.Namespace) -> None:
@@ -1258,6 +1470,7 @@ def _run_compare(args: argparse.Namespace) -> None:
         [v.strip() for v in args.variables.split(",") if v.strip()] if args.variables else None
     )
     text = [t.strip() for t in args.text.split(",") if t.strip()] if args.text else []
+    _refuse_overwritten_inputs(args)
     base = _scan_comparison_side(args.base, "base", args.encoding)
     candidate = _scan_comparison_side(args.candidate, "candidate", args.encoding)
     base_csv, candidate_csv = (
@@ -1285,11 +1498,19 @@ def _run_compare(args: argparse.Namespace) -> None:
             base_name=args.base,
             candidate_name=args.candidate,
         )
-    except (FleetError, pl.exceptions.PolarsError) as exc:
+    except FleetError as exc:
         # Keys missing, duplicated or incompatible; a tolerance that is not
-        # a tolerance; or a file that scanned but could not be read.
-        # Differences never raise.
+        # a tolerance.  Differences never raise.
         _fail(" ".join(str(exc).split()), code=_COMPARE_IMPOSSIBLE)
+    except Exception as exc:
+        # Exit 1 means "the datasets differ": a defect must not say that.
+        if _debug():
+            raise
+        _fail(
+            f"internal error in fleet compare: {type(exc).__name__}: {' '.join(str(exc).split())} "
+            "(set FLEET_DEBUG=1 for the traceback)",
+            code=_COMPARE_IMPOSSIBLE,
+        )
 
     if args.out:
         _save_comparison_file(args.out, report.save_listing, "value listing")
@@ -1376,12 +1597,13 @@ def _run_check(args: argparse.Namespace) -> None:
         from fleet.define_xml import DefineSpecGenerator
 
         found_define = False
-        for label, path in (
-            ("define (sdtm)", ctx.metadata_sdtm_dir / "define.yaml"),
-            ("define (adam)", ctx.metadata_adam_dir / "define.yaml"),
+        for standard, path in (
+            ("sdtm", ctx.metadata_sdtm_dir / "define.yaml"),
+            ("adam", ctx.metadata_adam_dir / "define.yaml"),
         ):
             if not path.is_file():
                 continue
+            label = f"define ({standard})"
             found_define = True
             rows.extend(_config_vs_define_rows(ctx, label, path))
             try:
@@ -1390,6 +1612,10 @@ def _run_check(args: argparse.Namespace) -> None:
                 rows.append(("PASS", label, f"{path} — generates a valid Define-XML"))
             except Exception as exc:
                 rows.append(("FAIL", label, str(exc)))
+                continue
+            rows.extend(
+                ("FAIL", label, problem) for problem in _derivation_problems(path, standard)
+            )
         if not found_define:
             rows.append(
                 ("WARN", "define.yaml", "no define.yaml files found (run `fleet init define`)")
@@ -1491,13 +1717,46 @@ def _run_check(args: argparse.Namespace) -> None:
         sys.exit(1)
 
 
+def _derivation_problems(path: Path, standard: str) -> list[str]:
+    """Each derivation block of *path* that ``fleet run`` would refuse, as ``DS.VAR: reason``.
+
+    The same static calls as ``from_spec``: fill ``ct`` from the variable's
+    codelist, then validate the block against its verb model.  No data is
+    read and no study code is imported.
+    """
+    from pydantic import ValidationError
+
+    from fleet.core import spec_registry
+
+    data = load_spec_yaml(path.read_text(encoding="utf-8")) or {}
+    problems: list[str] = []
+    for ds in data.get("datasets") or []:
+        for var in ds.get("variables") or []:
+            block = var.get("derivation")
+            if not isinstance(block, dict):
+                continue
+            algo = spec_registry.get_algorithm(standard, str(block.get("algorithm")))
+            if algo is None:
+                continue  # the Define-XML generator reports an unknown algorithm
+            try:
+                block = spec_registry.with_codelist(standard, block, var.get("codelist"))
+                model = spec_registry.model_for(standard, algo.name)
+                model.model_validate({**block, "target": var.get("name")})
+            except ValidationError as exc:
+                problems.append(f"{ds.get('name')}.{var.get('name')}: {_validation_message(exc)}")
+            except ValueError as exc:
+                problems.append(f"{ds.get('name')}.{var.get('name')}: {' '.join(str(exc).split())}")
+    return problems
+
+
 # ────────────────────────────────────────────────────────────────────── #
 # fleet new — chained bootstrap                                           #
 # ────────────────────────────────────────────────────────────────────── #
 
 
 def _run_new(args: argparse.Namespace) -> None:
-    study_root = Path(args.root).resolve()
+    # The study gets its own folder unless --root names one (#52).
+    study_root = Path(args.root if args.root is not None else args.study_id).resolve()
     config_path = study_root / "study_config.yaml"
     api_key_set = bool(os.environ.get("CDISC_API_KEY"))
     hint = _config_flag_hint(config_path)
@@ -1512,6 +1771,8 @@ def _run_new(args: argparse.Namespace) -> None:
         print("  2. fleet init define  — SKIPPED (CDISC_API_KEY not set)")
         print("  3. fleet init ct      — SKIPPED (CDISC_API_KEY not set)")
         print("  4. fleet init rules   — SKIPPED (CDISC_API_KEY not set)")
+    default = " (default)" if args.package == DEFAULT_SDTM_CT else ""
+    print(f"CT package: {args.package}{default}")
     print()
 
     if not args.yes:
@@ -1664,6 +1925,10 @@ def _render_output(
         return
 
     model = ard_to_table_model(result, rmeta)
+    if rmeta.page_by and not any(
+        row.variable == rmeta.page_by and row.row_type in ("group", "section") for row in model.rows
+    ):
+        _err(f"warning: --page-by {rmeta.page_by} matches no group row; no page break is made.")
     table_dispatch: dict[str, Callable[[], Any]] = {
         "html": lambda: write_html(render_html(model, html_wrapper=html_wrapper, **page_kwargs)),
         "rtf": lambda: render_rtf(model, out_path, **page_kwargs),
@@ -1753,7 +2018,7 @@ def _tlg_run_once(args: argparse.Namespace) -> None:
 
     spec_paths = _collect_spec_paths(args.spec)
     named_data, default_data = _parse_data_args(args.data)
-    ctx = _try_ctx()
+    ctx = _try_ctx(args.config)
     out_dir = Path(args.output) if args.output else (ctx.outputs_dir if ctx else Path("."))
     fmt: str = args.fmt
 
@@ -1812,7 +2077,7 @@ def _tlg_explore_once(args: argparse.Namespace) -> None:
 
     spec_paths = _collect_spec_paths(args.spec)
     named_data, default_data = _parse_data_args(args.data)
-    ctx = _try_ctx()
+    ctx = _try_ctx(args.config)
 
     adsl_df: pl.DataFrame | None = None
     if args.adsl:
@@ -1873,7 +2138,7 @@ def _run_tlg_export(args: argparse.Namespace) -> None:
 
     domain: str = args.domain
     fmt: str = args.fmt
-    ctx = _try_ctx()
+    ctx = _try_ctx(args.config)
 
     # Resolve datasets: explicit paths, else the study's configured data dirs.
     # The default dataset comes from the registry: the namespace's t_summary
@@ -1931,11 +2196,16 @@ def _run_tlg_export(args: argparse.Namespace) -> None:
     html_wrapper: str | None = None
     if args.wrap:
         if fmt not in ("html", "pdf"):
-            _fail(f"--wrap applies to html and pdf only, not {fmt}. Remove --wrap.")
+            _fail(
+                f"--wrap is an HTML template: --wrap applies to html and pdf only, "
+                f"not {fmt}. Remove --wrap."
+            )
         wp = Path(args.wrap)
         if not wp.is_file():
             _fail(f"wrapper template not found: {wp}")
         html_wrapper = wp.read_text(encoding="utf-8")
+        if "{table}" not in html_wrapper:
+            _fail(f"the HTML wrapper {wp} has no {{table}} placeholder.")
 
     # Detect the treatment-arm column against the DATA frame (not ADSL).
     # A subject-level table (dm, ds) takes the ADSL arm, TRT01A then TRT01P.
@@ -2080,19 +2350,46 @@ def _run_tdd_ctgov(args: argparse.Namespace) -> None:
         )
     from fleet.sdtm.design import load_strict_yaml
 
-    data = load_strict_yaml(design_path.read_text(encoding="utf-8"))
+    text = design_path.read_text(encoding="utf-8")
+    data = load_strict_yaml(text)
+    if not isinstance(data, dict):
+        _fail(f"{design_path}: the file is empty or is not a mapping of trial design sections.")
     root = data.get("trial_design", data)
     existing = {(p.get("tsparmcd"), p.get("tsseq", 1)) for p in root.get("parameters") or []}
     added = [p for p in params if (p["tsparmcd"], p.get("tsseq", 1)) not in existing]
+    if not added:
+        print(f"0 parameter(s) from {args.nct_id} are new; {design_path} is not changed.")
+        return
     root.setdefault("parameters", []).extend(added)
-    design_path.write_text(
-        yaml.dump(data, default_flow_style=False, sort_keys=False, allow_unicode=True),
-        encoding="utf-8",
-    )
+    edited = _parameters_edit(text, added, wrapped="trial_design" in data)
+    _write_yaml_edit(design_path, text, edited, data, load_strict_yaml)
     print(
         f"{len(added)} parameter(s) from {args.nct_id} merged into {design_path} "
         f"({len(params) - len(added)} already present)."
     )
+
+
+def _parameters_edit(text: str, added: list[dict], *, wrapped: bool) -> str | None:
+    """*text* with *added* appended to its ``parameters:`` list, as a text edit."""
+    lines = text.splitlines(keepends=True)
+    if lines and not lines[-1].endswith("\n"):
+        lines[-1] += "\n"
+    lo, hi, indent = 0, len(lines), 0
+    if wrapped:
+        design = _yaml_block(lines, "trial_design", 0, len(lines), 0)
+        if design is None:
+            return None
+        lo, hi = design[0] + 1, design[1]
+        indent = _child_indent(lines, design[0], design[1], 2)
+    block = _yaml_block(lines, "parameters", lo, hi, indent)
+    if block is None:
+        new = [" " * indent + "parameters:\n", *_yaml_lines(added, indent + 2)]
+        return "".join(lines[:hi] + new + lines[hi:])
+    item = next(
+        (_indent(line) for line in lines[block[0] + 1 : block[1]] if line.lstrip().startswith("-")),
+        indent + 2,
+    )
+    return "".join(lines[: block[1]] + _yaml_lines(added, item) + lines[block[1] :])
 
 
 def _load_design(design_path: Path):
@@ -2102,10 +2399,16 @@ def _load_design(design_path: Path):
         _fail(
             f"trial design spec not found: {design_path}. Create it there or pass --design <path>."
         )
+    from pydantic import ValidationError
+
     try:
-        return StudyDesign.from_yaml(design_path)
+        design = StudyDesign.from_yaml(design_path)
+        design.domains()  # the section models validate here: duplicate VISITNUM, ARMCD
+    except ValidationError as exc:
+        _fail(f"{design_path}: {_validation_message(exc)}")
     except Exception as exc:
         _fail(f"invalid trial design spec {design_path}:\n{exc}")
+    return design
 
 
 def _print_findings(findings) -> int:
@@ -2133,7 +2436,7 @@ def _run_tdd_audit(args: argparse.Namespace) -> None:
 
 
 def _run_tdd_build(args: argparse.Namespace) -> None:
-    from fleet.io import save_dataset_json, save_parquet, save_xpt
+    from fleet.io import write_dataset
     from fleet.sdtm._tdd_mixin import packaged_structure
 
     design = _load_design(_resolve_design_path(args))
@@ -2146,31 +2449,17 @@ def _run_tdd_build(args: argparse.Namespace) -> None:
     if errors and not args.force:
         _fail(f"{errors} conformance error(s) — fix the design or re-run with --force")
 
-    def xpt(df: pl.DataFrame, d: Path, n: str) -> Path:
+    def writer(df: pl.DataFrame, d: Path, n: str) -> Path:
         ig = packaged_structure(n) or {}
-        return save_xpt(
+        return write_dataset(
             df,
-            d / f"{n.lower()}.xpt",
+            d,
+            n,
+            args.format,
             label=ig.get("label"),
             column_labels={v["name"]: v.get("label") for v in ig.get("variables", [])},
         )
 
-    def dataset_json(df: pl.DataFrame, d: Path, n: str) -> Path:
-        ig = packaged_structure(n) or {}
-        return save_dataset_json(
-            df,
-            d / f"{n.lower()}.json",
-            domain=n,
-            label=ig.get("label"),
-            columns={v["name"]: {"label": v.get("label")} for v in ig.get("variables", [])},
-        )
-
-    writers: dict[str, Callable[[pl.DataFrame, Path, str], Path]] = {
-        "parquet": lambda df, d, n: save_parquet(df, d / f"{n.lower()}.parquet"),
-        "xpt": xpt,
-        "dataset-json": dataset_json,
-    }
-    writer = writers[args.format]
     out_dir = Path(args.out) if args.out else _load_ctx(args.config).sdtm_data_dir
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -2308,6 +2597,12 @@ def _add_init_parsers(sub: argparse._SubParsersAction) -> None:
     init_parser = sub.add_parser(
         "init",
         help="Bootstrapping pipeline: cfg → define → ct → rules.",
+        description=(
+            "Run one step of the study bootstrap: cfg, then define, then ct, then rules. "
+            "Use it to continue a study that fleet new started, to run a step again with "
+            "--force, or to build a study one step at a time. For a new study in one "
+            "command, use fleet new."
+        ),
     )
     init_sub = init_parser.add_subparsers(dest="init_command", required=True)
 
@@ -2353,8 +2648,8 @@ def _add_init_parsers(sub: argparse._SubParsersAction) -> None:
     )
     cfg.add_argument(
         "--package",
-        default="sdtmct-2023-12-15",
-        help="SDTM CT package version (default: sdtmct-2023-12-15).",
+        default=DEFAULT_SDTM_CT,
+        help=f"SDTM CT package version (default: {DEFAULT_SDTM_CT}).",
     )
     cfg.add_argument(
         "--adam-package",
@@ -2379,12 +2674,13 @@ def _add_init_parsers(sub: argparse._SubParsersAction) -> None:
         help="Generate define.yaml from the CDISC Library IG.",
     )
     _add_config_flag(define)
-    define.add_argument(
+    define_only = define.add_mutually_exclusive_group()
+    define_only.add_argument(
         "--sdtm-only",
         action="store_true",
         help="Generate SDTM define.yaml only (skip ADaM).",
     )
-    define.add_argument(
+    define_only.add_argument(
         "--adam-only",
         action="store_true",
         help="Generate ADaM define.yaml only (skip SDTM).",
@@ -2420,12 +2716,13 @@ def _add_init_parsers(sub: argparse._SubParsersAction) -> None:
         help="Cache CDISC conformance rules as YAML from the CDISC Library.",
     )
     _add_config_flag(rules)
-    rules.add_argument(
+    rules_only = rules.add_mutually_exclusive_group()
+    rules_only.add_argument(
         "--sdtm-only",
         action="store_true",
         help="Fetch SDTM rules only (skip ADaM).",
     )
-    rules.add_argument(
+    rules_only.add_argument(
         "--adam-only",
         action="store_true",
         help="Fetch ADaM rules only (skip SDTM).",
@@ -2462,7 +2759,8 @@ def _add_ct_parsers(sub: argparse._SubParsersAction) -> None:
         default=None,
         help=(
             "CT package version. Default: ct.package from the discovered "
-            "study_config.yaml (sdtmct-2023-12-15 outside a study). Refused when it "
+            f"study_config.yaml, else the package of the existing codelists.py, else "
+            f"{DEFAULT_SDTM_CT}. Refused when it "
             "differs from the package an existing codelists.py was generated from."
         ),
     )
@@ -2481,6 +2779,7 @@ def _add_ct_parsers(sub: argparse._SubParsersAction) -> None:
         action="store_true",
         help="Omit definitions and preferred terms from generated code.",
     )
+    _add_config_flag(add)
     add.set_defaults(func=_run_add_ct)
 
 
@@ -2660,6 +2959,11 @@ def _add_engine_parsers(sub: argparse._SubParsersAction) -> None:
     doctor = sub.add_parser(
         "doctor",
         help="Check Fleet setup: engine, API key, codelists.py, optional extras.",
+        description=(
+            "Check the Fleet setup: the study config, codelists.py, the rules engine, "
+            "CDISC_API_KEY and the optional extras. Exit 1 when the study config or the "
+            "rules engine has a cross; the API key and the extras are information only."
+        ),
     )
     _add_config_flag(doctor)
     doctor.set_defaults(func=_run_doctor)
@@ -2713,6 +3017,14 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
         help=(
             "Let a spec derivation replace a column that the input already has. "
             "Default off, so a QC run keeps the guard."
+        ),
+    )
+    run.add_argument(
+        "--check",
+        action="store_true",
+        help=(
+            "Stop before the write when a variable's values do not match its define "
+            "type (for CI). Without it the mismatch is a warning on stderr."
         ),
     )
     run.set_defaults(func=_run_run)
@@ -2834,7 +3146,8 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
             "the datasets are equal, 1 when they differ, 2 when the comparison could not run "
             "(unreadable file, missing keys, duplicate keys without --allow-duplicates, a "
             "negative tolerance, a --variables list of keys only, --out or --report not "
-            "writable)."
+            "writable or naming an input file, an internal error; FLEET_DEBUG=1 prints its "
+            "traceback)."
         ),
     )
     compare_parser.add_argument(
@@ -2992,6 +3305,12 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
     new = sub.add_parser(
         "new",
         help="Bootstrap a study: init cfg → define → ct → rules, one confirmation.",
+        description=(
+            "Create a new study in the folder ./STUDY_ID: the study_config.yaml and the "
+            "folders, then the define.yaml files, codelists.py and the cached rules from "
+            "the CDISC Library. Use it once, at the start of a study. To run one step "
+            "again, or to continue after a missing CDISC_API_KEY, use fleet init."
+        ),
     )
     new.add_argument(
         "study_id",
@@ -3029,8 +3348,8 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
     )
     new.add_argument(
         "--package",
-        default="sdtmct-2023-12-15",
-        help="SDTM CT package version (default: sdtmct-2023-12-15).",
+        default=DEFAULT_SDTM_CT,
+        help=f"SDTM CT package version (default: {DEFAULT_SDTM_CT}).",
     )
     new.add_argument(
         "--adam-package",
@@ -3044,8 +3363,8 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
     new.add_argument(
         "--root",
         "-r",
-        default=".",
-        help="Study root directory (default: current directory).",
+        default=None,
+        help="Study root directory (default: ./STUDY_ID). Pass --root . to use the current one.",
     )
     new.add_argument(
         "--yes",
@@ -3076,7 +3395,10 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
     migrate.add_argument(
         "--write",
         action="store_true",
-        help="Rewrite files in place (default: print a unified diff).",
+        help=(
+            "Rewrite files in place (default: print a unified diff). No backup file is "
+            "kept: commit the files to git first."
+        ),
     )
     migrate.set_defaults(func=_run_migrate)
 
@@ -3293,6 +3615,7 @@ def _add_tlg_parsers(sub: argparse._SubParsersAction) -> None:
         action="store_true",
         help="Re-run whenever a spec file changes (requires the 'watch' extra).",
     )
+    _add_config_flag(tlg_run)
     tlg_run.set_defaults(func=_run_tlg_run)
 
     # -- tlg explore --------------------------------------------------------- #
@@ -3363,6 +3686,7 @@ def _add_tlg_parsers(sub: argparse._SubParsersAction) -> None:
         action="store_true",
         help="Rebuild whenever a spec file changes (requires the 'watch' extra).",
     )
+    _add_config_flag(tlg_explore)
     tlg_explore.set_defaults(func=_run_tlg_explore)
 
     # -- tlg export ---------------------------------------------------------- #
@@ -3464,11 +3788,12 @@ def _add_tlg_parsers(sub: argparse._SubParsersAction) -> None:
         "--wrap",
         default=None,
         help=(
-            "Path to an HTML wrapper template with {table} placeholder (html and "
-            "pdf only). A PDF loads no external resource: a logo or style sheet "
-            "the wrapper links is left out, with a warning."
+            "Path to an HTML wrapper template with a {table} placeholder (html and pdf "
+            "only; refused for rtf and pptx). A PDF loads no external resource: a logo "
+            "or style sheet the wrapper links is left out, with a warning."
         ),
     )
+    _add_config_flag(tlg_export)
     tlg_export.set_defaults(func=_run_tlg_export)
 
 
@@ -3580,8 +3905,9 @@ def main(argv: Sequence[str] | None = None) -> None:
             clean message on stderr), ``2`` on argparse usage errors.
     """
     # A cp1252 pipe on Windows cannot encode a check mark; print \u2713 instead of crashing.
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(errors="backslashreplace")
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(errors="backslashreplace")
     parser = _build_parser()
     args = parser.parse_args(argv)
 
@@ -3600,6 +3926,10 @@ def main(argv: Sequence[str] | None = None) -> None:
     if "" not in sys.path and os.getcwd() not in sys.path:
         sys.path.append(os.getcwd())
 
+    import polars as pl
+    import yaml
+    from pydantic import ValidationError
+
     from fleet.core.exceptions import FleetError
     from fleet.core.log import enable_cli_warnings
 
@@ -3610,11 +3940,54 @@ def main(argv: Sequence[str] | None = None) -> None:
         _err("Interrupted.")
         sys.exit(1)
     except FleetError as exc:
+        if isinstance(exc.__cause__, yaml.YAMLError):
+            _fail(_error_line(exc.__cause__))
         _fail(str(exc))
     except ImportError as exc:
         # Optional-dependency errors carry their own install hint —
         # surface it as one clean line instead of a traceback.
         _fail(" ".join(str(exc).split()))
+    except (
+        ValidationError,
+        yaml.YAMLError,
+        OSError,
+        UnicodeDecodeError,
+        pl.exceptions.PolarsError,
+    ) as exc:
+        # A bad input file, folder or model value: one line; FLEET_DEBUG=1 keeps the traceback.
+        if _debug():
+            raise
+        _fail(_error_line(exc))
+
+
+def _error_line(exc: BaseException) -> str:
+    """One line for a YAML, pydantic, file or Polars error."""
+    import yaml
+    from pydantic import ValidationError
+
+    if isinstance(exc, ValidationError):
+        return _validation_message(exc)
+    if isinstance(exc, yaml.MarkedYAMLError) and exc.problem_mark is not None:
+        mark = exc.problem_mark
+        where = "" if mark.name.startswith("<") else f"{mark.name} "
+        return (
+            f"invalid YAML: {where}line {mark.line + 1}, column {mark.column + 1}: "
+            f"{exc.problem or exc.context}"
+        )
+    if isinstance(exc, yaml.YAMLError):
+        return f"invalid YAML: {' '.join(str(exc).split())}"
+    first = next((line for line in str(exc).splitlines() if line.strip()), "")
+    return f"{type(exc).__name__}: {first.strip()}"
+
+
+def _validation_message(exc: Any) -> str:
+    """A pydantic ValidationError as one line: the model, then each location and message."""
+    parts = []
+    for error in exc.errors():
+        loc = ".".join(str(p) for p in error["loc"])
+        msg = error["msg"].removeprefix("Value error, ")
+        parts.append(f"{loc}: {msg}" if loc else msg)
+    return f"invalid {exc.title}: {'; '.join(parts)}"
 
 
 if __name__ == "__main__":

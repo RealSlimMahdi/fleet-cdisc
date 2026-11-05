@@ -21,8 +21,9 @@ Programmatic API (used by the ``fleet migrate --spec`` CLI subcommand)::
 
 The rewriter works line by line, so comments and layout survive.  It
 handles block-style ``derivation:`` mappings and the simplified
-single-dataset format; a flow-style block (``derivation: {algorithm: ...}``)
-is left as is and reported.
+single-dataset format.  A flow-style block (``derivation: {algorithm: ...}``)
+is left as is and reported as "rewrite by hand"; the file then keeps its
+``fleet_spec_version``, and the command exits 1.
 
 What gets rewritten
 -------------------
@@ -38,7 +39,8 @@ What gets rewritten
   once and ``from_spec`` fills it in.
 * Keys Fleet no longer reads are removed (:data:`REMOVED_KEYS`):
   ``depends_on`` did nothing, because every verb checks its own columns.
-* ``fleet_spec_version`` becomes 2, inserted when absent.
+* ``fleet_spec_version`` becomes 2, inserted when absent, once no block is
+  left in the old vocabulary.
 """
 
 from __future__ import annotations
@@ -48,8 +50,9 @@ import difflib
 import re
 import sys
 from collections.abc import Mapping, Sequence
-from pathlib import Path
 from typing import Any
+
+from fleet.tools.migrate import WRITE_HELP, iter_source_files
 
 #: The dialect this module writes.
 SPEC_VERSION = 2
@@ -246,7 +249,7 @@ def migrate_hint(spec: Any) -> str:
 
 _KEY_LINE = re.compile(r"^(\s*)(- )?([A-Za-z_][\w]*):(.*)$")
 _ALGO_LINE = re.compile(r"""^(\s*)(- )?algorithm:\s*["']?([\w.]+)["']?(\s*#.*)?\s*$""")
-_VERSION_LINE = re.compile(r"^fleet_spec_version:\s*\d+(\s*#.*)?\s*$")
+_VERSION_LINE = re.compile(r"""^fleet_spec_version:\s*(["']?)\d+\1(\s*#.*)?\s*$""")
 _SCALAR = re.compile(r"""^\s*(?:"([^"]*)"|'([^']*)'|([^\s#]+))""")
 
 
@@ -392,7 +395,7 @@ def migrate_spec_text(text: str, *, set_version: bool = True) -> tuple[str, list
                 changes.append(f"line {j + 1}: ct: {codelist} dropped (the variable's codelist:)")
         i = end
     text_out = "".join(out)
-    if set_version:
+    if set_version and not unmigrated_blocks(text_out):
         text_out, version_change = _set_version(text_out)
         if version_change:
             changes.append(version_change)
@@ -404,44 +407,64 @@ def _set_version(text: str) -> tuple[str, str | None]:
     lines = text.splitlines(keepends=True)
     for j, line in enumerate(lines):
         if _VERSION_LINE.match(line.rstrip("\n")):
-            if re.match(rf"^fleet_spec_version:\s*{SPEC_VERSION}\b", line):
+            if re.match(rf"""^fleet_spec_version:\s*["']?{SPEC_VERSION}\b""", line):
                 return text, None
             lines[j] = re.sub(r"\d+", str(SPEC_VERSION), line, count=1)
             return "".join(lines), f"line {j + 1}: fleet_spec_version -> {SPEC_VERSION}"
     top_keys = {_key_of(line)[1] for line in lines if _key_of(line) and _key_of(line)[0] == 0}  # type: ignore[index]
     if not top_keys & {"datasets", "variables"}:
         return text, None
+    newline = "\r\n" if lines and lines[0].endswith("\r\n") else "\n"
     for j, line in enumerate(lines):
         if not _is_blank(line) and _key_of(line) and _key_of(line)[0] == 0:  # type: ignore[index]
-            lines.insert(j, f"fleet_spec_version: {SPEC_VERSION}\n")
+            lines.insert(j, f"fleet_spec_version: {SPEC_VERSION}{newline}")
             return "".join(lines), f"line {j + 1}: fleet_spec_version: {SPEC_VERSION} added"
     return text, None
+
+
+def unmigrated_blocks(text: str) -> list[str]:
+    """The derivations of *text* still in the old vocabulary, as ``DATASET.VARIABLE``.
+
+    The line pass does not rewrite a flow-style block
+    (``derivation: {algorithm: hardcode_no_ct, value: DM}``); this check
+    reads the parsed YAML, so such a block is named, not skipped in silence.
+    A text that does not parse gives an empty list.
+    """
+    from fleet.core.define_spec import load_spec_yaml
+
+    try:
+        data = load_spec_yaml(text)
+    except Exception:  # not YAML: the loader reports it, not this check
+        return []
+    if not isinstance(data, dict):
+        return []
+    if isinstance(data.get("datasets"), list):
+        datasets = [d for d in data["datasets"] if isinstance(d, dict)]
+    else:
+        datasets = [{"name": data.get("domain") or data.get("dataset"), **data}]
+    found: list[str] = []
+    for ds in datasets:
+        for var in ds.get("variables") or []:
+            if not isinstance(var, dict):
+                continue
+            block = var.get("derivation") if "algorithm" not in var else var
+            if isinstance(block, dict) and _is_old(block):
+                found.append(f"{ds.get('name')}.{var.get('name') or var.get('target')}")
+    return found
+
+
+def _is_old(block: dict) -> bool:
+    """Whether a derivation block still holds an old algorithm or an old key."""
+    algorithm = str(block.get("algorithm"))
+    if algorithm in ALGORITHM_RENAMES:
+        return True
+    renames = KEY_RENAMES.get(algorithm, {})
+    return any(old in block and new not in block for old, new in renames.items())
 
 
 # --------------------------------------------------------------------- #
 # Files and CLI                                                           #
 # --------------------------------------------------------------------- #
-
-
-def migrate_spec_file(path: str | Path, *, write: bool = False) -> list[str]:
-    """Migrate one file; print a diff, or rewrite it in place with *write*."""
-    p = Path(path)
-    original = p.read_text(encoding="utf-8")
-    new_text, changes = migrate_spec_text(original)
-    if changes and write:
-        p.write_text(new_text, encoding="utf-8")
-    return changes
-
-
-def _iter_yaml_files(paths: Sequence[str]) -> list[Path]:
-    files: list[Path] = []
-    for raw in paths:
-        p = Path(raw)
-        if p.is_dir():
-            files.extend(sorted(q for q in p.rglob("*.y*ml") if q.is_file()))
-        else:
-            files.append(p)
-    return files
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -452,33 +475,43 @@ def main(argv: Sequence[str] | None = None) -> int:
             file/directory paths and ``--write``.
 
     Returns:
-        int: ``0`` on success, ``1`` when a file cannot be read.
+        int: ``0`` on success; ``1`` when a file cannot be read or written,
+            or a block is left for a rewrite by hand.  The other files are
+            still migrated.
     """
     parser = argparse.ArgumentParser(
         prog="python -m fleet.tools.migrate_spec",
         description="Rewrite a define.yaml to the verb vocabulary of ADR-0008.",
     )
     parser.add_argument("files", nargs="+", help="define.yaml files or directories.")
-    parser.add_argument(
-        "--write", action="store_true", help="Rewrite files in place (default: print a diff)."
-    )
+    parser.add_argument("--write", action="store_true", help=WRITE_HELP)
     args = parser.parse_args(argv)
 
     exit_code = 0
     total = 0
-    for path in _iter_yaml_files(args.files):
+    for path in iter_source_files(args.files, (".yaml", ".yml")):
         try:
-            original = path.read_text(encoding="utf-8")
-        except OSError as err:
-            print(f"{path}: {err}", file=sys.stderr)
+            with open(path, encoding="utf-8", newline="") as fh:
+                original = fh.read()
+        except (OSError, UnicodeError) as err:
+            print(f"{path}: cannot read: {err}", file=sys.stderr)
             exit_code = 1
             continue
         new_text, changes = migrate_spec_text(original)
+        left = unmigrated_blocks(new_text)
+        if left:
+            print(f"{path}: left as is, rewrite by hand: {', '.join(left)}", file=sys.stderr)
+            exit_code = 1
         if not changes:
             continue
-        total += len(changes)
         if args.write:
-            path.write_text(new_text, encoding="utf-8")
+            try:
+                with open(path, "w", encoding="utf-8", newline="") as fh:
+                    fh.write(new_text)
+            except OSError as err:
+                print(f"{path}: cannot write: {err}", file=sys.stderr)
+                exit_code = 1
+                continue
             print(f"{path}: {len(changes)} change(s) written")
         else:
             sys.stdout.writelines(
@@ -489,9 +522,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                     tofile=f"{path} (migrated)",
                 )
             )
+        total += len(changes)
         for change in changes:
             print(f"  {change}", file=sys.stderr)
-    if total == 0:
+    if total == 0 and exit_code == 0:
         print("Nothing to migrate.", file=sys.stderr)
     return exit_code
 

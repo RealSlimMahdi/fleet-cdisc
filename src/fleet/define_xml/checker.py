@@ -343,7 +343,7 @@ class DatasetChecker:
         }
 
         # Labels always populated regardless of other flags
-        result.labels = {name: v["label"] for name, v in vars_by_name.items()}
+        result.labels = {name: v.get("label", "") for name, v in vars_by_name.items()}
 
         # Actual DataFrame columns excluding private _-prefix columns
         actual_cols: set[str] = {c for c in df.columns if not c.startswith("_")}
@@ -371,7 +371,11 @@ class DatasetChecker:
         ds_def = self._datasets.get(dataset.upper())
         if ds_def is None:
             return {}
-        return {v["name"]: v["label"] for v in ds_def["variables"] if not v["name"].startswith("_")}
+        return {
+            v["name"]: v.get("label", "")
+            for v in ds_def["variables"]
+            if not v["name"].startswith("_")
+        }
 
     # ------------------------------------------------------------------ #
     # Check runners                                                        #
@@ -416,7 +420,9 @@ class DatasetChecker:
         for col_name, var_def in vars_by_name.items():
             if col_name not in actual_cols:
                 continue  # already reported as missing
-            define_type = var_def["type"]
+            define_type = var_def.get("type")
+            if define_type is None:
+                continue  # the schema check reports a variable with no type
             actual_dtype = schema[col_name]
             # --DTC is ISO 8601 text whatever the define type says (SDTMIG 3.4 4.4)
             is_dtc = col_name.upper().endswith("DTC")

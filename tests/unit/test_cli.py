@@ -1780,13 +1780,14 @@ def test_compare_pairs_compare_a_renamed_variable_instead_of_reporting_it_missin
     assert captured.err == ""
 
 
+@pytest.mark.parametrize("pairs", ["AGE", "AGE=A=B", "AGE=A,AGE=B"])
 def test_compare_pairs_that_are_not_pairs_exit_2(
-    tmp_path: Path, capsys: pytest.CaptureFixture
+    pairs: str, tmp_path: Path, capsys: pytest.CaptureFixture
 ) -> None:
     base = tmp_path / "adsl.parquet"
     _adsl().write_parquet(base)
 
-    code = _run(["compare", str(base), str(base), "--keys", "USUBJID", "--pairs", "AGE"])
+    code = _run(["compare", str(base), str(base), "--keys", "USUBJID", "--pairs", pairs])
 
     captured = capsys.readouterr()
     assert code == 2
