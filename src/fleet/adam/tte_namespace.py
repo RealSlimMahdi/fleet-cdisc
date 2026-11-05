@@ -19,7 +19,7 @@ Polars frame with ``USUBJID`` and ``ADT``::
 from __future__ import annotations
 
 import logging
-from typing import Any, Literal
+from typing import Any, Literal, Self
 
 import polars as pl
 
@@ -68,7 +68,7 @@ class TTENamespace(SharedADaMVerbsMixin):
         create_datetime: bool = False,
         retain: Literal["drop", "censor_at_start"] = "drop",
         explain: bool = False,
-    ) -> TTENamespace:
+    ) -> Self:
         """Derive one time-to-event parameter and append its rows.
 
         Each source is a plain frame with the subject keys and ``ADT``.
@@ -261,7 +261,7 @@ class TTENamespace(SharedADaMVerbsMixin):
         unit: Literal["days", "weeks", "months", "years"] = "days",
         add_one: bool = True,
         avalu: bool = True,
-    ) -> TTENamespace:
+    ) -> Self:
         """Derive ``AVAL`` (and ``AVALU``) from ``STARTDT``/``ADT``.
 
         ``AVAL = (ADT − STARTDT [+ 1 day]) / unit`` using the CDISC

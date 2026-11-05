@@ -41,7 +41,7 @@ from __future__ import annotations
 import difflib
 import warnings
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, Self
 
 import polars as pl
 
@@ -119,7 +119,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
         baseline_flag: str = "ABLFL",
         by: str | list[str] | None = None,
         strict: bool = True,
-    ) -> AdamNamespace:
+    ) -> Self:
         """Derive BASE as the AVAL where the baseline flag equals ``"Y"``.
 
         Uses a window function so all records in the same group receive the
@@ -206,7 +206,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
         *,
         aval: str = "AVAL",
         base: str = "BASE",
-    ) -> AdamNamespace:
+    ) -> Self:
         """Compute change from baseline: ``CHG = AVAL - BASE``.
 
         Args:
@@ -238,7 +238,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
         *,
         aval: str = "AVAL",
         base: str = "BASE",
-    ) -> AdamNamespace:
+    ) -> Self:
         """Compute percent change from baseline.
 
         ``PCHG = (AVAL - BASE) / BASE * 100``.  Returns null when BASE is
@@ -274,7 +274,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
         weight: str,
         height: str,
         round_digits: int | None = None,
-    ) -> AdamNamespace:
+    ) -> Self:
         """Derive Body Mass Index: ``weight_kg / (height_cm / 100) ** 2``.
 
         The value keeps full precision.  A height of 0 gives null, as SAS
@@ -320,7 +320,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
         low: str,
         high: str,
         signif_dig: int = 15,
-    ) -> AdamNamespace:
+    ) -> Self:
         """Categorise *value* relative to normal range: LOW / NORMAL / HIGH.
 
         The value and the limits are compared at *signif_dig* significant
@@ -369,7 +369,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
         trtsdt: str,
         trtedt: str,
         open_ended: bool = True,
-    ) -> AdamNamespace:
+    ) -> Self:
         """Set *target* to ``"Y"`` when *adt* is within [trtsdt, trtedt].
 
         When *open_ended* is ``True`` (default) and *trtedt* is null, the
@@ -427,7 +427,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
         baseline_cat: str,
         post_cat: str,
         sep: str = " to ",
-    ) -> AdamNamespace:
+    ) -> Self:
         """Derive a categorical shift label: ``"<baseline><sep><post>"``.
 
         Args:
@@ -466,7 +466,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
         height: str,
         method: str = "Mosteller",
         round_digits: int | None = None,
-    ) -> AdamNamespace:
+    ) -> Self:
         """Derive Body Surface Area in m², at full precision.
 
         Args:
@@ -516,7 +516,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
         systolic: str = "SYSBP",
         diastolic: str = "DIABP",
         round_digits: int | None = None,
-    ) -> AdamNamespace:
+    ) -> Self:
         """Derive Mean Arterial Pressure: ``DBP + (SBP - DBP) / 3``, at full precision.
 
         Args:
@@ -562,7 +562,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
         method: str = "Fridericia",
         rr_unit: str = "ms",
         round_digits: int | None = None,
-    ) -> AdamNamespace:
+    ) -> Self:
         """Derive corrected QT interval, as admiral ``compute_qtc``, at full precision.
 
         Args:
@@ -637,7 +637,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
         set_values_to: dict[str, Any],
         stat: Literal["mean", "sum", "min", "max", "median", "count"] = "mean",
         where: str | pl.Expr | None = None,
-    ) -> AdamNamespace:
+    ) -> Self:
         """
         Compute a summary statistic per group and append the results as new records.
 
@@ -739,7 +739,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
         analysis_var: str = "AVAL",
         imputation: Literal["add", "update", "update_add"] = "add",
         keep_vars: list[str] | None = None,
-    ) -> AdamNamespace:
+    ) -> Self:
         """Add LOCF records for missed visits and for a null *analysis_var*.
 
         For each *by* group, every row of *dataset_ref* (the expected visits)
@@ -865,7 +865,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
         constant_by: str | list[str] | None = None,
         constant_parameters: dict[str, str] | None = None,
         keep_nas: bool = False,
-    ) -> AdamNamespace:
+    ) -> Self:
         """
         Derive a new parameter (e.g. BMI) from existing records and append
         the computed rows to the dataset.
@@ -1126,7 +1126,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
         unit_var: str,
         signif_dig: int = 15,
         indicators: dict[str, list[str]] | None = None,
-    ) -> AdamNamespace:
+    ) -> Self:
         """Derive a toxicity grade, as admiral ``derive_var_atoxgr_dir``.
 
         Materialises the pipeline and grades every row whose term has
@@ -1224,7 +1224,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
         high_var: str = "ATOXGRH",
         low_desc_var: str = "ATOXDSCL",
         high_desc_var: str = "ATOXDSCH",
-    ) -> AdamNamespace:
+    ) -> Self:
         """Combine low and high toxicity grades into a signed grade, as admiral.
 
         Low grades are prefixed with ``"-"``; high grades are kept as-is.
@@ -1315,7 +1315,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
         fn: str | Callable[[pl.DataFrame], pl.DataFrame],
         *,
         label: str | None = None,  # noqa: ARG002  — cosmetic, intentionally unused
-    ) -> AdamNamespace:
+    ) -> Self:
         """
         Apply an arbitrary ``(pl.DataFrame) -> pl.DataFrame`` function.
 

@@ -26,7 +26,7 @@ Discover every available verb programmatically with ``df.sdtm.verbs()``.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Self
 
 import polars as pl
 
@@ -118,7 +118,7 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
         min_date: str | None = None,
         max_date: str | None = None,
         format: str | None = None,
-    ) -> SDTMNamespace:
+    ) -> Self:
         """Parse, convert, impute, and flag a date or datetime column.
 
         For a DT or DTM target, a partial date is imputed to the first day
@@ -250,9 +250,7 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
         )
         return self._chain(*exprs, verb="date")
 
-    def _dtc(
-        self, target: str, source: str, *, time: str | None, format: str | None
-    ) -> SDTMNamespace:
+    def _dtc(self, target: str, source: str, *, time: str | None, format: str | None) -> Self:
         """``--DTC`` text from raw text: ISO 8601 or null, never a guess, with warnings."""
         raw = pl.col(source)
         guessed = guessed_values(raw, input_format=format).fill_null(False)
@@ -317,7 +315,7 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
         label: str,
         origin: str = "Derived",
         evaluator: str | None = None,
-    ) -> SDTMNamespace:
+    ) -> Self:
         """Derive a Non-Standard Variable with qualifier metadata.
 
         Behaves like ``assign(source=...)`` (when *source* is given) or
@@ -393,7 +391,7 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
         by: list[str] | None = None,
         result_col: str | None = None,
         order_by: str | list[str] | None = None,
-    ) -> SDTMNamespace:
+    ) -> Self:
         """Flag the last observation with a result before the reference date as baseline.
 
         Sets *target* to ``"Y"`` for one record (per subject and optional
@@ -629,7 +627,7 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
         *,
         condition: str | pl.Expr,
         then_value: Any,
-    ) -> SDTMNamespace:
+    ) -> Self:
         """Set *target* to *then_value* where *condition* is true, else null.
 
         Args:
@@ -682,7 +680,7 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
         *,
         source: str = "ae_relationship",
         aerel_map: dict[str, str] | None = None,
-    ) -> SDTMNamespace:
+    ) -> Self:
         """Map free-text AE causality strings to ``AEREL`` values.
 
         Mapping is case-insensitive against *aerel_map*.  The default map
@@ -736,7 +734,7 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
         by: list[str] | None = None,
         start_at: int = 1,
         check_uniqueness: bool = False,
-    ) -> SDTMNamespace:
+    ) -> Self:
         """Derive the ``--SEQ`` sequence number variable.
 
         Generates a 1-based integer sequence that uniquely identifies each
@@ -807,7 +805,7 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
         *,
         by: list[str],
         agg: list[pl.Expr],
-    ) -> SDTMNamespace:
+    ) -> Self:
         """Group by *by* and apply *agg* aggregations (lazily).
 
         The groups come out in the order of their first record, so the
@@ -839,7 +837,7 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
     # 13. notsubmitted — mark variable as null / not-submitted            #
     # ------------------------------------------------------------------ #
 
-    def notsubmitted(self, *targets: str) -> SDTMNamespace:
+    def notsubmitted(self, *targets: str) -> Self:
         """Mark one or more variables as not submitted (set to null).
 
         Useful to explicitly null out eCRF fields that are not included in
@@ -875,7 +873,7 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
         *,
         source: str,
         delimiter: str = "|",
-    ) -> SDTMNamespace:
+    ) -> Self:
         """Explode a delimited multi-response field into separate rows.
 
         Splits *source* on *delimiter* and explodes — lazily, as part of

@@ -107,3 +107,15 @@ def test_keyword_only_after_target(qualname):
         f"if the shape is a deliberate decision — add it to _POSITIONAL_ALLOWANCE "
         f"with a reason."
     )
+
+
+_NAMESPACE_NAMES = {c.__name__ for c in _namespace_classes()}
+
+
+@pytest.mark.parametrize("qualname", sorted(_METHODS))
+def test_a_verb_returns_self_not_its_class(qualname):
+    """c1-335: a verb typed ``-> Self`` keeps a study subclass type in the chain."""
+    returns = _METHODS[qualname].__annotations__.get("return")
+    assert returns not in _NAMESPACE_NAMES, (
+        f"{qualname} is typed -> {returns}; type it -> Self, so a subclass keeps its type."
+    )
