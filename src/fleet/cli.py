@@ -1567,6 +1567,13 @@ def _collect_spec_paths(spec_arg: str) -> list[Path]:
         return specs
     if p.is_file():
         return [p]
+    from fleet.tlg import TEMPLATES
+
+    if spec_arg in TEMPLATES:
+        _fail(
+            f"{spec_arg} is a template id, not a spec file. "
+            f"Create {spec_arg}.yaml with the line: template: {spec_arg}"
+        )
     _fail(f"spec path not found: {spec_arg}")
     raise AssertionError("unreachable")
 

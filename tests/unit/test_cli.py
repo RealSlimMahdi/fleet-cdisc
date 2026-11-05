@@ -1801,3 +1801,14 @@ def test_compare_json_settings_carry_the_pairs_and_the_restriction(
     assert code == 0
     assert settings["pairs"] == {"AGE": "AGEN"}
     assert settings["variables"] == ["AGE", "SEX"]
+
+
+def test_tlg_run_with_a_template_id_says_how_to_write_the_spec(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    """c1-639: ``fleet tlg run aet02`` names the one-line spec, not only a missing path."""
+    monkeypatch.chdir(tmp_path)
+    assert _run(["tlg", "run", "aet02"]) != 0
+    err = capsys.readouterr().err
+    assert "aet02 is a template id" in err
+    assert "template: aet02" in err
