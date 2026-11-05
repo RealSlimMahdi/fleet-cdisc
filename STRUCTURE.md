@@ -127,7 +127,7 @@ The core of Fleet for SDTM work. Registers `df.sdtm` on every Polars DataFrame.
 
 | File           | Purpose                                                                                                                         |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `models.py`    | `SDTMAlgorithm` enum (verb names, kept in sync with `spec_registry`), `SDTMVariableSpec`, `SDTMDomainSpec`                       |
+| `models.py`    | `SDTMAlgorithm` enum (verb names, kept in sync with `spec_registry`), `SDTMVariableSpec`                       |
 | `utils.py`     | Internal helpers — `to_iso8601_date`, `to_iso8601_datetime`, `parse_expression(str) → pl.Expr` (AST whitelist; bare names in arithmetic resolve to `pl.col`) |
 | `namespace.py` | `SDTMNamespace` — the SDTM namespace class + `_tdd_mixin` for Trial Design domains                                              |
 | `tdd.py`       | Trial Design row/collection Pydantic models (TE/TA/TV/TS/TI/TD/TM), `TrialVisits.from_schedule`, `TrialParameters.from_ctgov`, Mermaid parser |
@@ -176,8 +176,8 @@ Registers `df.adam` on every Polars DataFrame.
 
 | File           | Purpose                                                                                                                                                                                                       |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `models.py`    | `ADAMAlgorithm` enum (verb names, kept in sync with `spec_registry`), `ADAMVariableSpec`, `ADAMDatasetSpec`                                                                                                   |
-| `_mixins.py`   | `SharedADaMVerbsMixin` — the shared verbs available on **every** ADaM sub-namespace (`assign`, `case_when`, `merge`, `source`, `derivation`, `recode`, `whereclauses`, `merge_adsl`, `date`, `duration`, `pick`, `first_date`, `last_date`, `count_events`, `join_adsl`, …); `MultiRowMixin` for `seq` |
+| `models.py`    | `ADAMAlgorithm` enum (verb names, kept in sync with `spec_registry`), `ADAMVariableSpec`                                                                                                   |
+| `_mixins.py`   | `SharedADaMVerbsMixin` — the shared verbs available on **every** ADaM sub-namespace (`assign`, `case_when`, `merge`, `source`, `derivation`, `recode`, `whereclauses`, `merge_adsl`, `date`, `duration`, `pick`, `first_date`, `last_date`, `count_events`, `join_adsl`, …) |
 | `utils.py`     | Standard ADaM calculation functions — all return `pl.Expr`: `study_day`, `baseline`, `chg`, `pchg`, `bmi`, `bsa`, `mean_arterial_pressure`, `qtc`, `age_in_years`, `nrind`, `on_treatment`, `shift`           |
 | `namespace.py` | `AdamNamespace` — the BDS namespace; BDS-specific verbs (`baseline`, `chg`, `pchg`, `bmi`, `bsa`, `map`, `qtc`, `nrind`, `on_treatment`, `shift`), record-generating verbs (`derive_summary_records`, `derive_locf_records`, `derive_param`), toxicity grading (`atoxgr`, `combine_grades`), `transform`, and the sub-namespace properties (`adsl`, `occds`, `onco`, …) |
 | `grading/`     | CTCAE / DAIDS toxicity-grading sub-package (see below)                                                                                                                                                        |

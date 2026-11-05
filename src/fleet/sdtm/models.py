@@ -12,8 +12,6 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
-from pydantic import BaseModel
-
 from fleet.core.spec_registry import (
     SpecVariableBase,
     parse_variable_spec,
@@ -82,14 +80,3 @@ def SDTMVariableSpec(**data: Any) -> SpecVariableBase:  # noqa: N802 — back-co
             )
     """
     return parse_variable_spec("sdtm", data)
-
-
-class SDTMDomainSpec(BaseModel):
-    """Full specification for an SDTM domain derivation."""
-
-    domain: str
-    description: str | None = None
-    fleet_spec_version: int | None = None
-    variables: list[SDTMVariableSpecUnion]
-
-    model_config = {"extra": "allow"}

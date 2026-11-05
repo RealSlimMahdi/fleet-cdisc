@@ -120,7 +120,9 @@ def find_engine(
 
     Order: *configured* (``validation.engine_path``), then
     ``FLEET_RULES_ENGINE``, then the managed install, then the legacy
-    sibling checkout.  A candidate that is not a file is skipped.
+    sibling checkout.  A configured path is returned even when it is not a
+    file, so the caller refuses it and names the path; any other
+    candidate that is not a file is skipped.
 
     Args:
         configured: The engine path from the study config, already resolved.
@@ -130,7 +132,7 @@ def find_engine(
     Returns:
         ``(path, source)``, or ``None`` when no engine is found.
     """
-    if configured is not None and configured.is_file():
+    if configured is not None:
         return configured, "study config"
 
     env = (os.environ if environ is None else environ).get("FLEET_RULES_ENGINE")

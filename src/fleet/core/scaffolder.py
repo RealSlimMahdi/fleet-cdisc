@@ -27,12 +27,14 @@ from __future__ import annotations
 import importlib.resources
 import logging
 import re
+import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import yaml
 
 from fleet.core.define_spec import default_repeating
+from fleet.core.exceptions import SpecError
 
 logger = logging.getLogger(__name__)
 
@@ -313,7 +315,7 @@ class DefineScaffolder:
         """Fetch dataset + variable metadata from the SDTM IG."""
         from fleet.core.rules_scaffolder import normalise_ig_version
 
-        ig = self._client._get(f"/mdr/sdtmig/{normalise_ig_version(ig_version)}/datasets")
+        ig = self._client.get(f"/mdr/sdtmig/{normalise_ig_version(ig_version)}/datasets")
         ds_links = ig.get("_links", {}).get("datasets", [])
         domains_upper = {d.upper() for d in domains}
 
@@ -325,17 +327,21 @@ class DefineScaffolder:
             if domain not in domains_upper:
                 continue
             found.add(domain)
-            detail = self._client._get(ds["href"])
+            detail = self._client.get(ds["href"])
             result.append(self._parse_ig_dataset(detail))
 
         # Warn about non-standard domains that were not found in the IG
         missing = domains_upper - found
         for d in sorted(missing):
-            logger.warning(
-                "Domain '%s' not found in SDTM IG %s — skipped. "
-                "If this is a company-specific domain, define it manually in define.yaml.",
-                d,
-                ig_version,
+            message = (
+                f"Domain '{d}' not found in SDTM IG {ig_version} — skipped. "
+                "If this is a company-specific domain, define it manually in define.yaml."
+            )
+            warnings.warn(message, stacklevel=3)
+        if domains_upper and not found:
+            raise SpecError(
+                f"None of the requested domains ({', '.join(sorted(domains_upper))}) "
+                f"is in SDTM IG {ig_version}; no define.yaml was written."
             )
         return result
 
@@ -353,7 +359,7 @@ class DefineScaffolder:
         from fleet.core.rules_scaffolder import normalise_ig_version
 
         ig_path = f"/mdr/adam/adamig-{normalise_ig_version(ig_version)}"
-        ig = self._client._get(ig_path)
+        ig = self._client.get(ig_path)
         structures = ig.get("dataStructures", [])
 
         # Build lookup: structure name → parsed detail
@@ -402,7 +408,12 @@ class DefineScaffolder:
         keys: list[str] = []
         ordinal = 0
 
-        for var_set in ds.get("analysisVariableSets", []):
+        # Library set ordinal order: the Identifier set (STUDYID, USUBJID) comes first.
+        var_sets = sorted(
+            ds.get("analysisVariableSets", []),
+            key=lambda vs: int(vs.get("ordinal", 999)),
+        )
+        for var_set in var_sets:
             for var in var_set.get("analysisVariables", []):
                 ordinal += 1
                 var["ordinal"] = ordinal

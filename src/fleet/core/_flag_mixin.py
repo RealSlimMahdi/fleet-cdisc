@@ -19,6 +19,7 @@ from typing import Literal, Self
 import polars as pl
 
 from fleet.core.exceptions import DerivationError, VerbUsageError
+from fleet.core.joins import require_frames
 
 #: Built-in shortcut keywords accepted by ``flag(criteria=...)``.
 _FLAG_CRITERIA_KEYWORDS: frozenset[str] = frozenset(
@@ -744,6 +745,7 @@ class FlagCriterionMixin:
         """Handle exists set-membership flag criteria."""
         if from_dataset is None or on is None:
             raise DerivationError("flag criteria='exists' requires from_dataset and on.")
+        require_frames(f"flag('{target}', criteria='exists')", from_dataset)
         datasets = from_dataset if isinstance(from_dataset, list) else [from_dataset]
         key_frames: list[pl.DataFrame] = []
         for ds in datasets:
@@ -845,6 +847,7 @@ class FlagCriterionMixin:
             )
         if on is None:
             raise DerivationError(f"flag criteria='{criteria_lower}' requires on.")
+        require_frames(f"flag('{target}', criteria='{criteria_lower}')", from_dataset)
 
         src = from_dataset if isinstance(from_dataset, pl.DataFrame) else pl.concat(from_dataset)
         if source_filter is not None:

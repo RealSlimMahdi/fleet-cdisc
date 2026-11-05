@@ -138,7 +138,7 @@ class CDISCClient:
         Raises:
             CTError: On network or authentication failure.
         """
-        data = self._get(f"/mdr/ct/packages?type={product}")
+        data = self.get(f"/mdr/ct/packages?type={product}")
         packages: list[dict[str, Any]] = data.get("_links", {}).get("packages", [])
         return packages
 
@@ -161,12 +161,27 @@ class CDISCClient:
         Raises:
             CTError: On network, authentication, or 404 errors.
         """
-        return self._get(f"/mdr/ct/packages/{package}/codelists/{concept_id}")
+        return self.get(f"/mdr/ct/packages/{package}/codelists/{concept_id}")
 
-    # -- internals ------------------------------------------------------ #
+    def get(self, path: str) -> dict[str, Any]:
+        """Perform an authenticated GET on a CDISC Library path and return the JSON payload.
 
-    def _get(self, path: str) -> dict[str, Any]:
-        """Perform an authenticated GET and return the JSON payload."""
+        Args:
+            path: API path, e.g. ``"/mdr/sdtmig/3-4/datasets"``.
+
+        Returns:
+            The decoded JSON payload.
+
+        Raises:
+            CTError: On network or authentication failure.
+            CTNotFoundError: When the Library has no such resource (404).
+
+        Examples:
+            List the datasets of an IG::
+
+                with CDISCClient() as client:
+                    ig = client.get("/mdr/sdtmig/3-4/datasets")
+        """
         try:
             response = self._http.get(path)
             response.raise_for_status()

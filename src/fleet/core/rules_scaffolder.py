@@ -233,7 +233,7 @@ class RulesScaffolder:
         api_path = f"/mdr/rules/sdtmig/{version_api}"
 
         logger.info("Fetching SDTM rules from %s", api_path)
-        data = self._client._get(api_path)
+        data = self._client.get(api_path)
         rules = data.get("rules", {})
 
         if not rules:
@@ -301,7 +301,7 @@ class RulesScaffolder:
         api_path = f"/mdr/rules/adam/adamig-{version_api}"
         logger.info("Fetching ADaM rules from %s", api_path)
         try:
-            data = self._client._get(api_path)
+            data = self._client.get(api_path)
             rules = data.get("rules", {})
         except Exception as exc:
             logger.info("Legacy ADaM endpoint failed: %s", exc)
@@ -314,7 +314,7 @@ class RulesScaffolder:
                 tig_path,
             )
             try:
-                data = self._client._get(tig_path)
+                data = self._client.get(tig_path)
                 all_rules = data.get("rules", {})
                 # Filter to ADaM-scoped rules: look for ANALYSIS use-case
                 # or ADaM-specific class markers

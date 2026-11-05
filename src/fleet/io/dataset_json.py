@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, Any
 import polars as pl
 
 from fleet.core import oids
-from fleet.core.exceptions import IOError as FleetIOError
+from fleet.core.exceptions import FleetIOError
 from fleet.core.oids import item_oid
 
 if TYPE_CHECKING:

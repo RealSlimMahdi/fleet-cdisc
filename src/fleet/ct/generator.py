@@ -45,6 +45,7 @@ import keyword
 import logging
 import re
 import textwrap
+import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -150,7 +151,7 @@ def extract_ig_concept_ids(
     """
     from fleet.core.rules_scaffolder import normalise_ig_version
 
-    ig = client._get(f"/mdr/sdtmig/{normalise_ig_version(ig_version)}/datasets")
+    ig = client.get(f"/mdr/sdtmig/{normalise_ig_version(ig_version)}/datasets")
     ds_links = ig.get("_links", {}).get("datasets", [])
     domains_upper = {d.upper() for d in domains}
 
@@ -161,7 +162,7 @@ def extract_ig_concept_ids(
         if domain not in domains_upper:
             continue
         found.add(domain)
-        detail = client._get(ds["href"])
+        detail = client.get(ds["href"])
         for var in detail.get("datasetVariables", []):
             for cl in var.get("_links", {}).get("codelist", []):
                 m = re.search(r"codelists/(C\d+)", cl.get("href", ""))
@@ -171,12 +172,11 @@ def extract_ig_concept_ids(
     # Warn about non-standard domains that were not found in the IG
     missing = domains_upper - found
     for d in sorted(missing):
-        logger.warning(
-            "Domain '%s' not found in SDTM IG %s — no codelists extracted. "
-            "If this is a company-specific domain, add codelists manually.",
-            d,
-            ig_version,
+        message = (
+            f"Domain '{d}' not found in SDTM IG {ig_version} — no codelists extracted. "
+            "If this is a company-specific domain, add codelists manually."
         )
+        warnings.warn(message, stacklevel=2)
     return ids
 
 

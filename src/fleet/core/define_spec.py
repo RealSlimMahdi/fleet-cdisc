@@ -219,6 +219,18 @@ class DefineSpec(BaseModel):
             )
         return self
 
+    @model_validator(mode="after")
+    def _unique_dataset_names(self) -> DefineSpec:
+        seen: dict[str, int] = {}
+        for nr, entry in enumerate(self.datasets or [], start=1):
+            first = seen.setdefault(entry.name.upper(), nr)
+            if first != nr:
+                raise ValueError(
+                    f"dataset {entry.name} is declared twice (datasets {first} and {nr}). "
+                    "Keep one entry per dataset."
+                )
+        return self
+
     def select(self, dataset: str | None) -> DatasetEntry:
         """Return the requested dataset entry from a define.yaml spec.
 
@@ -258,8 +270,34 @@ class SpecYamlLoader(yaml.SafeLoader):
     ``on:``, so that key must stay a string (#87).  YAML 1.1 also reads
     ``010`` as octal 8, ``12:30`` as 750 and ``2024-01-15`` as a date, so
     only plain decimal numbers are resolved: ``010``, ``12:30`` and
-    ``2024-01-15`` stay text.  A duplicate key is refused with its line.
+    ``2024-01-15`` stay text.  A duplicate key is refused with its line,
+    and so is a value its explicit tag cannot read (``!!float abc``) and an
+    alias inside its own anchor (``a: &x {b: *x}``).
     """
+
+    def compose_node(self, parent: Any, index: Any) -> Any:
+        open_anchors: set[str] = self.__dict__.setdefault("_open_anchors", set())
+        event = self.peek_event()
+        if isinstance(event, yaml.AliasEvent) and event.anchor in open_anchors:
+            raise yaml.composer.ComposerError(
+                None, None, f"alias *{event.anchor} refers to itself", event.start_mark
+            )
+        anchor = None if isinstance(event, yaml.AliasEvent) else getattr(event, "anchor", None)
+        if anchor:
+            open_anchors.add(anchor)
+        try:
+            return super().compose_node(parent, index)
+        finally:
+            if anchor:
+                open_anchors.discard(anchor)
+
+    def construct_object(self, node: yaml.Node, deep: bool = False) -> Any:
+        try:
+            return super().construct_object(node, deep=deep)
+        except (ValueError, TypeError) as err:
+            raise yaml.constructor.ConstructorError(
+                None, None, f"{node.tag}: {err}", node.start_mark
+            ) from err
 
     def construct_mapping(self, node: yaml.MappingNode, deep: bool = False) -> dict:
         seen: set[Any] = set()

@@ -46,6 +46,7 @@ from fleet.core.exceptions import (
 )
 from fleet.core.joins import (
     JoinCheck,
+    name_hints,
     refuse_repeated_keys,
     refuse_shared_columns,
     require_columns,
@@ -72,6 +73,25 @@ _CODELIST_META = frozenset({"_concept_id", "_cdisc_url", "_preferred_term"})
 
 #: The keys of one ``case_when`` branch.
 _CASE_WHEN_KEYS = ("condition", "value")
+
+#: The Polars errors of a plan that reads a column it does not have.
+_MISSING_COLUMN_ERRORS = (
+    pl.exceptions.ColumnNotFoundError,
+    pl.exceptions.SchemaFieldNotFoundError,
+    pl.exceptions.StructFieldNotFoundError,
+)
+
+#: The fleet package folder: a warning skips its frames to reach the user line.
+_FLEET_DIR = str(Path(__file__).parent.parent)
+
+#: How many codelist terms a CT warning lists.
+_MAX_TERMS_SHOWN = 20
+
+
+def _shown_terms(terms: list[str]) -> str:
+    """The first codelist terms of a warning, with the count of the others."""
+    more = len(terms) - _MAX_TERMS_SHOWN
+    return f"{terms[:_MAX_TERMS_SHOWN]}" + (f" (and {more} more)" if more > 0 else "")
 
 
 class CaseWhenBranch(TypedDict):
@@ -390,6 +410,8 @@ class SharedVerbsMixin:
 
     Concrete namespace classes must provide:
         - ``_lazy: pl.LazyFrame`` instance attribute (set in ``__init__``)
+        - :class:`~fleet.core._pin_mixin.PinMixin` in their bases: ``to_frame``
+          calls ``_run_fk_checks`` and ``study_day`` calls ``_require_pin``.
 
     Class-level constants for parameterised verbs:
         - ``_STUDY_DAY_REF_COL``: default reference date column (e.g. ``"RFSTDTC"`` or ``"TRTSDT"``)
@@ -405,6 +427,10 @@ class SharedVerbsMixin:
     _STUDY_DAY_REF_PIN: ClassVar[str] = "DM"
     _SEQ_DEFAULT_GROUPS: ClassVar[list[str]] = ["STUDYID", "USUBJID"]
     _VALIDATE_STANDARD: ClassVar[Literal["sdtm", "adam"]] = "sdtm"
+
+    def __repr__(self) -> str:
+        standard = {"sdtm": "SDTM", "adam": "ADaM"}[self._VALIDATE_STANDARD]
+        return f"{standard} pipeline, not materialised. Call .to_frame() to see the data."
 
     # ------------------------------------------------------------------ #
     # Infrastructure (Group A)                                             #
@@ -482,6 +508,47 @@ class SharedVerbsMixin:
                     f"{verb}{target_part}: column '{root}' not found in the frame.{hint} "
                     f"Available columns: {shown}{more}"
                 )
+
+    def _require_columns(
+        self,
+        verb: str,
+        wanted: Sequence[str],
+        *,
+        frame: pl.LazyFrame | None = None,
+        where: str = "the frame",
+    ) -> None:
+        """Raise ``DerivationError`` at the verb call when a column of *wanted* is absent.
+
+        *frame* defaults to the pipeline plan; only the schema is resolved.
+        """
+        names = (self._lazy if frame is None else frame).collect_schema().names()
+        require_columns(verb, list(wanted), names, where=where)
+
+    def _require_expr_columns(
+        self,
+        verb: str,
+        expr: pl.Expr,
+        *,
+        frame: pl.LazyFrame | None = None,
+        where: str = "the frame",
+    ) -> None:
+        """Raise ``DerivationError`` when *expr* reads a column that is absent."""
+        try:
+            roots = expr.meta.root_names()
+        except Exception:
+            return
+        wanted = [r for r in roots if r != "*" and not r.startswith("^")]
+        self._require_columns(verb, wanted, frame=frame, where=where)
+
+    def _collect_checked(self) -> pl.DataFrame:
+        """Collect the plan; a missing column raises the ``DerivationError`` of ``to_frame``.
+
+        Unlike ``to_frame``, no pending foreign-key or join check runs.
+        """
+        try:
+            return self._lazy.collect()
+        except _MISSING_COLUMN_ERRORS as err:
+            raise self._enrich_collect_error(err) from err
 
     def _materialise_then(self, df: pl.DataFrame) -> Self:
         """Return a fresh namespace wrapping *df* as a new lazy plan."""
@@ -652,6 +719,10 @@ class SharedVerbsMixin:
             Self: A fresh namespace wrapping the materialised frame;
                 call further verbs or ``.to_frame()`` to continue.
 
+        Raises:
+            DerivationError: When the plan reads a column that is not in
+                the frame, with the same text as ``to_frame()``.
+
         Examples:
             Inspect the pipeline after assigning key variables::
 
@@ -663,7 +734,7 @@ class SharedVerbsMixin:
                     .to_frame()
                 )
         """
-        df = self._lazy.collect()
+        df = self._collect_checked()
         fleet_log.ensure_default_handler()
         logger.info("[%s] Schema: %s", prefix, df.schema)
         logger.info("[%s] Shape:  %s", prefix, df.shape)
@@ -681,6 +752,10 @@ class SharedVerbsMixin:
             Self: The same namespace instance (unchanged); call
                 further verbs or ``.to_frame()`` to continue.
 
+        Raises:
+            DerivationError: When the plan reads a column that is not in
+                the frame, with the same text as ``to_frame()``.
+
         Examples:
             Log the query plan before collecting::
 
@@ -691,8 +766,12 @@ class SharedVerbsMixin:
                     .to_frame()
                 )
         """
+        try:
+            plan = self._lazy.explain()
+        except _MISSING_COLUMN_ERRORS as err:
+            raise self._enrich_collect_error(err) from err
         fleet_log.ensure_default_handler()
-        logger.info("%s", self._lazy.explain())
+        logger.info("%s", plan)
         return self
 
     def trail(self) -> Self:
@@ -946,23 +1025,27 @@ class SharedVerbsMixin:
 
         # ── value path (hardcode) ──
         if value is not None:
-            if ct_mode:
+            if ct_mode and validate_values is not False:
                 from fleet.ct.validator import get_validator
 
                 validator = ct_validator or get_validator()
-                if ct_id is not None and validator.has_codelist(ct_id):
-                    valid, msg = validator.validate_value(ct_id, str(value))
-                    if not valid:
-                        warnings.warn(msg, stacklevel=3)
-                else:
+                terms = self._codelist_terms(ct_id or "", validator, ct_cls)
+                if not terms:
                     warnings.warn(
                         f"{verb}('{target}'): codelist '{ct_id}' not found / CT not "
                         f"loaded — value {value!r} assigned unvalidated. Load CT via "
-                        "fleet.get_validator().load_ct_file(...) or drop the ct= "
-                        "parameter.",
-                        stacklevel=3,
+                        "fleet.get_validator().load_ct_file(...), drop the ct= "
+                        "parameter, or pass validate_values=False.",
+                        skip_file_prefixes=(_FLEET_DIR,),
+                    )
+                elif str(value) not in terms:
+                    warnings.warn(
+                        f"{verb}('{target}'): value {value!r} not in codelist '{ct_id}'. "
+                        f"Valid values: {_shown_terms(sorted(terms))}",
+                        skip_file_prefixes=(_FLEET_DIR,),
                     )
             ns = self._chain(pl.lit(value).alias(target), verb=verb, params=lineage_params)
+            ns = self._record_codelist(ns, ct_id, ct_cls, ct_validator)
             if target == "DOMAIN":
                 ns._domain = str(value)
             return ns
@@ -975,6 +1058,7 @@ class SharedVerbsMixin:
                 {str(k): v for k, v in ct_map.items()}, default=text, return_dtype=pl.String
             )
             ns = self._chain(mapped.alias(target), verb=verb, params=lineage_params)
+            ns = self._record_codelist(ns, ct_id, ct_cls, ct_validator)
             if validate_values is not False and ct_id:
                 if ct_validator is None:
                     from fleet.ct.validator import get_validator
@@ -995,6 +1079,7 @@ class SharedVerbsMixin:
             return ns
 
         ns = self._chain(pl.col(source).alias(target), verb=verb, params=lineage_params)
+        ns = self._record_codelist(ns, ct_id, ct_cls, ct_validator)
 
         if not ct_mode or validate_values is False:
             return ns
@@ -1044,22 +1129,7 @@ class SharedVerbsMixin:
             available), False when it could not be performed — callers
             use this to report the degradation.
         """
-        valid_values: set[str] = set()
-
-        # Strategy 1: from the validator cache
-        if ct_validator is not None:
-            valid_values = set(ct_validator.get_valid_values(ct_codelist))
-
-        # Strategy 2: introspect the codelist class (works without CT loaded).
-        # A term that starts with a digit (10^9/L) has an attribute name that
-        # starts with "_", so only the class metadata is left out.
-        if not valid_values and ct_codelist_cls is not None:
-            valid_values = set(getattr(ct_codelist_cls, "_terms", ())) or {
-                v
-                for k, v in vars(ct_codelist_cls).items()
-                if not k.startswith("__") and k not in _CODELIST_META and isinstance(v, str)
-            }
-
+        valid_values = self._codelist_terms(ct_codelist, ct_validator, ct_codelist_cls)
         if not valid_values:
             return False
 
@@ -1077,7 +1147,9 @@ class SharedVerbsMixin:
             text_map = {str(k): v for k, v in value_map.items()}
             unique_vals = list(dict.fromkeys(text_map.get(str(v), str(v)) for v in unique_vals))
         # Null and blank are missing values, not CT findings.
-        invalid = [v for v in unique_vals if v not in (None, "") and v not in valid_values]
+        invalid = sorted(
+            {str(v) for v in unique_vals if v not in (None, "") and v not in valid_values}
+        )
         if invalid:
             domain = getattr(self, "_domain", None)
             where = f"{domain}.{target}" if domain and target else (target or source)
@@ -1086,13 +1158,60 @@ class SharedVerbsMixin:
                 if value_map
                 else "Consider providing a ct_map parameter."
             )
+            terms = sorted(valid_values)
             warnings.warn(
                 f"{where}: column '{source}' contains values not in codelist "
                 f"'{ct_codelist}': {invalid}. "
-                f"Valid values: {sorted(valid_values)}. {hint}",
-                stacklevel=4,  # _warn_invalid_values, _assign_impl, assign, the user line
+                f"Valid values: {_shown_terms(terms)}. {hint}",
+                skip_file_prefixes=(_FLEET_DIR,),
             )
         return True
+
+    @staticmethod
+    def _record_codelist(
+        ns: Any, ct_id: str | None, ct_cls: type | None, ct_validator: CTValidator | None
+    ) -> Any:
+        """Keep the codelist of an ``assign(ct=...)`` for ``to_spec_yaml`` (Define-XML CodeList).
+
+        The entry is ``None`` when no term is known (a bare ID, CT not loaded).
+        """
+        if ct_id is None:
+            return ns
+        from fleet.ct.validator import get_validator
+
+        validator = ct_validator or get_validator()
+        terms = sorted(SharedVerbsMixin._codelist_terms(ct_id, validator, ct_cls))
+        entry = None
+        if terms:
+            name = getattr(ct_cls, "_preferred_term", None) or getattr(ct_cls, "__name__", ct_id)
+            entry = {
+                "oid": ct_id,
+                "name": str(name),
+                "type": "text",
+                "items": [{"coded_value": t} for t in terms],
+            }
+        ns._frozen_codelists = {**getattr(ns, "_frozen_codelists", {}), ct_id: entry}
+        return ns
+
+    @staticmethod
+    def _codelist_terms(
+        ct_codelist: str, ct_validator: CTValidator | None, ct_codelist_cls: type | None
+    ) -> set[str]:
+        """Return the submission terms of a codelist: the validator first, then the class.
+
+        A term that starts with a digit (10^9/L) has an attribute name that
+        starts with "_", so only the class metadata is left out.
+        """
+        terms: set[str] = set()
+        if ct_validator is not None and ct_codelist:
+            terms = set(ct_validator.get_valid_values(ct_codelist))
+        if not terms and ct_codelist_cls is not None:
+            terms = set(getattr(ct_codelist_cls, "_terms", ())) or {
+                v
+                for k, v in vars(ct_codelist_cls).items()
+                if not k.startswith("__") and k not in _CODELIST_META and isinstance(v, str)
+            }
+        return terms
 
     def case_when(
         self,
@@ -1286,8 +1405,23 @@ class SharedVerbsMixin:
         if on is None:
             raise VerbUsageError(f"{verb}() requires on= (join key column(s)).")
         on_list = [on] if isinstance(on, str) else list(on)
+        self._require_columns(f"{verb}(on=...)", on_list, where="the pipeline")
+        self._require_columns(f"{verb}(on=...)", on_list, frame=right, where="the right dataset")
+        left_schema, right_schema = self._lazy.collect_schema(), right.collect_schema()
+        for key in on_list:
+            ltype, rtype = left_schema[key], right_schema[key]
+            if ltype != rtype and pl.Null not in (ltype, rtype):
+                if not (ltype.is_numeric() and rtype.is_numeric()):
+                    raise DerivationError(
+                        f"{verb}(on=...): key '{key}' is {ltype} in the pipeline and {rtype} "
+                        "in the right dataset. Cast one side first, as SAS stops on a BY "
+                        "variable that is character on one side and numeric on the other."
+                    )
         if where is not None:
             where_expr = where if isinstance(where, pl.Expr) else parse_expression(str(where))
+            self._require_expr_columns(
+                f"{verb}(where=...)", where_expr, frame=right, where="the right dataset"
+            )
             right = right.filter(where_expr)
         if keep:
             right_names = right.collect_schema().names()
@@ -1385,7 +1519,8 @@ class SharedVerbsMixin:
                 import fleet  # noqa: F401
 
                 catalog = raw_df.sdtm.verbs()
-                print(catalog)
+                with pl.Config(tbl_rows=-1, fmt_str_lengths=200):
+                    print(catalog)
 
             Keep only the verbs a therapeutic-area namespace adds::
 
@@ -1471,10 +1606,12 @@ class SharedVerbsMixin:
                 to materialise.
 
         Raises:
-            ValueError: If *target* is a string but *expression* is not
+            DerivationError: If *target* is a string but *expression* is not
                 provided, or vice-versa.
-            TypeError: If a lambda-style *expression* does not return
-                ``pl.Expr``.
+            VerbUsageError: If *target* is neither a string nor a
+                ``Derivation``, if *expression* is a frame-kind
+                ``Derivation``, or if a lambda-style *expression* does not
+                return ``pl.Expr``.
 
         Examples:
             Case 1 — string expression::
@@ -1503,17 +1640,30 @@ class SharedVerbsMixin:
                     .to_frame()
                 )
         """
+        from fleet.core.derivation import Derivation
         from fleet.sdtm.utils import parse_expression
 
         # Case 4: Derivation object passed as first positional arg.
         if target is not None and not isinstance(target, str):
-            return self._apply_derivation(target)  # type: ignore[arg-type]
+            if not isinstance(target, Derivation):
+                raise VerbUsageError(
+                    f"derivation() takes a target name with expression= (a string, a "
+                    f"pl.Expr or a zero-argument lambda) or a @derivation object, got "
+                    f"{type(target).__name__}."
+                )
+            return self._apply_derivation(target)
 
         # Cases 1–3 require a string target.
         if target is None:
             raise DerivationError("target is required when expression= is provided.")
         if expression is None:
             raise DerivationError("expression is required when target is a string.")
+        if isinstance(expression, Derivation) and expression.kind != "column":
+            raise VerbUsageError(
+                f"derivation('{target}'): expression= takes a column derivation, but "
+                f"'{expression.name}' is kind={expression.kind!r}. Pass it alone: "
+                f".derivation({expression.name})."
+            )
 
         params = {"target": target, "expression": expression}
 
@@ -2040,6 +2190,11 @@ class SharedVerbsMixin:
             Self: A fresh namespace with *target* appended; call
                 ``.to_frame()`` to materialise.
 
+        Raises:
+            DerivationError: When a column of *by* or *order_by* is not in
+                the frame; the message says when it comes from the default
+                *by*.
+
         Examples:
             SDTM sequence number::
 
@@ -2058,6 +2213,14 @@ class SharedVerbsMixin:
                 )
         """
         grps = by or list(self._SEQ_DEFAULT_GROUPS)
+        names = self._lazy.collect_schema().names()
+        absent = [c for c in grps if c not in names]
+        if absent and not by:
+            raise DerivationError(
+                f"seq('{target}'): column(s) {name_hints(absent, names)} (from the default "
+                f"by={grps}) not found in the frame. Pass by=."
+            )
+        require_columns(f"seq('{target}')", [*grps, *(order_by or [])], names, where="the frame")
 
         lf = self._lazy
         if order_by:
@@ -2172,7 +2335,8 @@ class SharedVerbsMixin:
 
         Raises:
             ValidationSetupError: The validation could not run, in every
-                *on_fail* mode: the dataset name belongs to the other
+                *on_fail* mode: no rules engine is installed or the given
+                engine path does not exist, the dataset name belongs to the other
                 standard (``adae.adam.validate("AE")``), the IG version is
                 not supported, the custom rules directory is missing, or
                 the engine crashed, timed out (``validation.timeout``) or
@@ -2205,18 +2369,22 @@ class SharedVerbsMixin:
         from fleet.validation.service import ValidationService
 
         _check_on_fail("validate", on_fail)
-        setup = build_run_setup(
-            name=dataset_or_domain,
-            namespace=self._VALIDATE_STANDARD,
-            version=version,
-            custom_rules=custom_rules,
-            engine=rules_engine_path,
-        )
-        svc = ValidationService(rules_engine_path=setup.engine.value)
+        try:
+            setup = build_run_setup(
+                name=dataset_or_domain,
+                namespace=self._VALIDATE_STANDARD,
+                version=version,
+                custom_rules=custom_rules,
+                engine=rules_engine_path,
+            )
+            svc = ValidationService(rules_engine_path=setup.engine.value)
+        except FileNotFoundError as err:
+            raise ValidationSetupError(str(err)) from err
 
+        frame = self.to_frame()
         if setup.standard.value == "adam":
             result = svc.validate_adam(
-                self.to_frame(),
+                frame,
                 dataset=dataset_or_domain,
                 version=setup.ig_version.value,
                 custom_rules=setup.custom_rules.value,
@@ -2224,7 +2392,7 @@ class SharedVerbsMixin:
             )
         else:
             result = svc.validate_sdtm(
-                self.to_frame(),
+                frame,
                 domain=dataset_or_domain,
                 version=setup.ig_version.value,
                 custom_rules=setup.custom_rules.value,
@@ -2239,7 +2407,7 @@ class SharedVerbsMixin:
                 f"CDISC validation of '{dataset_or_domain}' could not run: {result.could_not_run}"
             )
 
-        new = copy.copy(self)
+        new = self._materialise_then(frame)
         new._last_validation = result
         if not result.is_valid:
             summary = (
@@ -2416,9 +2584,10 @@ class SharedVerbsMixin:
         from fleet.comparison import compare as compare_frames
 
         _check_on_fail("compare", on_fail)
+        frame = self.to_frame()
         report = compare_frames(
             base,
-            self.to_frame(),
+            frame,
             keys=keys,
             by=by,
             pairs=pairs,
@@ -2434,7 +2603,7 @@ class SharedVerbsMixin:
         )
         report.print_report()
 
-        new = copy.copy(self)
+        new = self._materialise_then(frame)
         new._last_comparison = report
         if not report.is_equal:
             summary = f"{report.summary}. Access details via .last_comparison."
@@ -2658,8 +2827,13 @@ class SharedVerbsMixin:
             SpecError: On unknown algorithms (strict mode), invalid or
                 misspelled derivation fields, column overwrites, unknown
                 ``fleet_spec_version``, a ``merge`` block that does not
-                give its variable, or any error raised while executing
-                a variable — always naming file, dataset, and variable.
+                give its variable, a name in *only* or *omit* that is not a
+                spec variable, a *dataset* that a simplified spec does not
+                describe, or any error raised while executing a variable or
+                resolving its schema — always naming file, dataset, and
+                variable.  A type error that the schema does not show (text
+                minus text, text compared with a number) appears only at
+                ``to_frame()``, with no spec context.
             ValueError: When both *only* and *omit* are given, or when
                 *dataset* is required/unknown.
 
@@ -2694,13 +2868,31 @@ class SharedVerbsMixin:
         _import_derivations_module(spec, source=str(path))
 
         standard = self._VALIDATE_STANDARD
+        if spec.datasets is None and dataset is not None:
+            named = spec.domain or spec.dataset
+            if named and str(named).upper() != dataset.upper():
+                raise SpecError(
+                    f"{path}: dataset={dataset!r} was asked, but this simplified spec "
+                    f"describes {named}."
+                )
         ds_name, raw_vars = _extract_spec_variables(spec, dataset)
+        spec_names = [name for name, _, _ in raw_vars]
+        for arg, names in (("only", only), ("omit", omit)):
+            unknown = [n for n in names or [] if n not in spec_names]
+            if unknown:
+                raise SpecError(
+                    f"{path} → dataset {ds_name}: {arg}= names "
+                    f"{name_hints(unknown, spec_names)}, which is not a spec variable."
+                )
 
         # Start clean: the CT state of one spec never reaches the next from_spec call.
         ns = copy.copy(self)
         ns._spec_ct_validate = None
         ns._spec_codelists = None
         ns._spec_ct_validator = None
+        named_spec = spec.datasets is not None or spec.domain or spec.dataset
+        if named_spec and not getattr(ns, "_domain", None):
+            ns._domain = ds_name
 
         # Spec-level CT config: `ct: {validate: true, file: <path>}`.  The file is
         # loaded into a validator of this spec only; the global one is unchanged.
@@ -2794,7 +2986,9 @@ class SharedVerbsMixin:
                 model = spec_registry.model_for(standard, algo.name)
                 var = model.model_validate({**drv, "target": var_name})
             except Exception as err:
-                raise SpecError(f"{context}: {err}") from err
+                from fleet.tools.migrate_spec import migrate_hint
+
+                raise SpecError(f"{context}: {err}{migrate_hint(drv)}") from err
 
             columns = ns._lazy.collect_schema().names()
 
@@ -2814,6 +3008,7 @@ class SharedVerbsMixin:
 
             try:
                 ns = spec_registry.execute_variable(ns, var)
+                ns._lazy.collect_schema()
             except SpecError:
                 raise
             except Exception as err:
@@ -2927,7 +3122,10 @@ class SharedVerbsMixin:
                     "dataset name (expected e.g. 'DM' or 'ADSL')."
                 )
 
-        schema = self._lazy.collect_schema()
+        try:
+            schema = self._lazy.collect_schema()
+        except _MISSING_COLUMN_ERRORS as err:
+            raise self._enrich_collect_error(err) from err
         derived = {n.name: n for n in latest_lineage_of(self)}
         hazards = _spec_order_hazards(lineage_of(self))
         name_pattern = re.compile(r"^[A-Z_][A-Z0-9_]{0,7}$")
@@ -2937,6 +3135,9 @@ class SharedVerbsMixin:
         root_cols = set(root_lazy.collect_schema().names()) if root_lazy is not None else None
 
         entries: list[tuple[dict[str, Any], str | None]] = []
+        frozen_codelists: dict[str, dict | None] = getattr(self, "_frozen_codelists", {})
+        codelists: dict[str, dict] = {}
+        ct_todos: list[str] = []
         for col in schema.names():
             node = derived.get(col)
             if node is None and not name_pattern.match(col):
@@ -2967,6 +3168,8 @@ class SharedVerbsMixin:
                     entry["label"] = str(meta["label"])[:40]
                 if meta.get("origin"):
                     entry["origin"] = meta["origin"]
+                if meta.get("evaluator"):
+                    entry["evaluator"] = meta["evaluator"]
                 if status == "ok":
                     # A pure copy of a CDISC-named upstream column is a
                     # Predecessor in Define-XML terms; an explicit origin
@@ -2984,6 +3187,13 @@ class SharedVerbsMixin:
                     ):
                         entry["origin"] = "Predecessor"
                         entry["predecessor"] = f"{pred_ds}.{source}"
+                    ct_ref = block.get("ct") if block else None
+                    if ct_ref in frozen_codelists:
+                        if frozen_codelists[ct_ref] is None:
+                            ct_todos.append(f"{col} ({ct_ref})")
+                        else:
+                            entry["codelist"] = ct_ref
+                            codelists[ct_ref] = frozen_codelists[ct_ref]
                     entry["derivation"] = block
                 elif status == "stub":
                     srcs = ", ".join(node.sources) if node.sources else "none"
@@ -3067,6 +3277,8 @@ class SharedVerbsMixin:
             "standard_version": DEFAULT_IG_VERSIONS[standard],
         }
         head = {"fleet_spec_version": SUPPORTED_SPEC_VERSION, "study": study}
+        if codelists:
+            head["codelists"] = list(codelists.values())
         ds_head: dict[str, Any] = {
             "name": ds_name,
             "label": ds_name,
@@ -3084,6 +3296,11 @@ class SharedVerbsMixin:
             lines.append(
                 "# TODO: row_steps holds algorithm: TODO for "
                 f"{', '.join(todo_steps)} — write each step before from_spec runs."
+            )
+        if ct_todos:
+            lines.append(
+                f"# TODO: no codelist terms were known for {', '.join(ct_todos)}; add a "
+                "codelists: entry and a codelist: key, or Define-XML has no CodeListRef."
             )
         lines += [
             yaml.safe_dump(head, sort_keys=False, allow_unicode=True).rstrip(),
@@ -3134,8 +3351,8 @@ class SharedVerbsMixin:
     def nodup(
         self,
         *,
-        subset: list[str],
-        sort_by: list[str] | None = None,
+        subset: str | list[str],
+        sort_by: str | list[str] | None = None,
         keep: Literal["first", "last"] | None = None,
         descending: bool | list[bool] = False,
     ) -> Self:
@@ -3173,7 +3390,8 @@ class SharedVerbsMixin:
 
         Raises:
             DerivationError: If ``keep`` is set but ``sort_by`` is not
-                provided, or ``keep`` is not one of the accepted values.
+                provided, ``keep`` is not one of the accepted values, or a
+                column of *subset* or *sort_by* is not in the frame.
 
         References:
             SAS PROC SORT with EQUALS and NODUPKEY; ADR-0023 for the place
@@ -3206,9 +3424,15 @@ class SharedVerbsMixin:
             raise DerivationError("sort_by is required when keep is set.")
         if keep is not None and keep not in ("first", "last"):
             raise DerivationError(f"keep must be 'first', 'last', or None — got {keep!r}.")
+        subset = [subset] if isinstance(subset, str) else list(subset)
+        if isinstance(sort_by, str):
+            sort_by = [sort_by]
+        self._require_columns("nodup(subset=...)", subset)
+        if sort_by:
+            self._require_columns("nodup(sort_by=...)", sort_by)
 
         fleet_log.ensure_default_handler()
-        df = self._lazy.collect()
+        df = self._collect_checked()
         if keep is not None:
             # As PROC SORT NODUPKEY: always sort by the key, then sort_by, so the
             # row order does not depend on whether a duplicate exists.  A missing

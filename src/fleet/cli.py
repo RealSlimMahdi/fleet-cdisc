@@ -226,12 +226,11 @@ def _watch_loop(paths: Sequence[Path], run_once: Callable[[], None]) -> None:
         )
 
     from fleet.core.exceptions import FleetError
-    from fleet.core.study_context import StudyConfigError
 
     def _guarded() -> None:
         try:
             run_once()
-        except (FleetError, StudyConfigError, ImportError) as exc:
+        except (FleetError, ImportError) as exc:
             _err(f"Error: {exc}")
 
     _guarded()
@@ -780,6 +779,8 @@ def _run_doctor(args: argparse.Namespace) -> None:
 
     if engine is None:
         print("  ✗ rules engine ....... NOT FOUND — run `fleet install-engine`")
+    elif not Path(engine).is_file():
+        print(f"  ✗ rules engine ....... pinned engine {engine}{where} not found")
     else:
         checks = doctor(engine=engine)
         print(f"  ✓ rules engine ....... {engine}{where}")
@@ -1255,6 +1256,30 @@ def _save_comparison_file(path_str: str, save: Callable[[Path], None], what: str
 # ────────────────────────────────────────────────────────────────────── #
 
 
+def _config_vs_define_rows(ctx: Any, label: str, path: Path) -> list[tuple[str, str, str]]:
+    """FAIL rows where study_config.yaml and a define.yaml disagree: standard, IG version, study."""
+    std = "sdtm" if "sdtm" in label else "adam"
+    try:
+        study = (load_spec_yaml(path.read_text(encoding="utf-8")) or {}).get("study") or {}
+    except Exception:
+        return []  # the generator row reports an unreadable define
+    rows: list[tuple[str, str, str]] = []
+    where = f"config vs {label}"
+    standard = str(study.get("standard") or "")
+    if standard and not standard.upper().startswith(std.upper()):
+        rows.append(("FAIL", where, f"{path.name} is in the {std} folder, standard {standard}"))
+    configured = getattr(ctx.config, std).ig_version
+    declared = study.get("standard_version")
+    if configured and declared and str(declared).replace(".", "-") != configured:
+        rows.append(
+            ("FAIL", where, f"{std}.ig_version {configured}, define standard_version {declared}")
+        )
+    study_id = study.get("id")
+    if study_id and str(study_id) != ctx.study_id:
+        rows.append(("FAIL", where, f"study_id {ctx.study_id}, define study.id {study_id}"))
+    return rows
+
+
 def _run_check(args: argparse.Namespace) -> None:
     """Run the CI gate: config + Define-XML generation + codelists + run setup + rules + essentials."""
     from fleet.core.study_context import StudyConfigError, load_study_context
@@ -1285,6 +1310,7 @@ def _run_check(args: argparse.Namespace) -> None:
             if not path.is_file():
                 continue
             found_define = True
+            rows.extend(_config_vs_define_rows(ctx, label, path))
             try:
                 # Read-only: the study's derivations_module is not imported.
                 DefineSpecGenerator(path, strict=True, import_study_code=False).to_xml_string()
@@ -1352,7 +1378,9 @@ def _run_check(args: argparse.Namespace) -> None:
         from fleet.validation.engine import discover_engine
 
         engine, where = discover_engine(ctx.study_root if ctx is not None else None), ""
-    if engine is not None:
+    if engine is not None and not Path(engine).is_file():
+        rows.append(("WARN", "rules engine", f"pinned engine {engine}{where} not found"))
+    elif engine is not None:
         rows.append(("PASS", "rules engine", f"{engine}{where}"))
     else:
         rows.append(("WARN", "rules engine", "not found (run `fleet install-engine`)"))
@@ -3446,14 +3474,15 @@ def main(argv: Sequence[str] | None = None) -> None:
         sys.path.append(os.getcwd())
 
     from fleet.core.exceptions import FleetError
-    from fleet.core.study_context import StudyConfigError
+    from fleet.core.log import enable_cli_warnings
 
+    enable_cli_warnings()
     try:
         args.func(args)
     except KeyboardInterrupt:
         _err("Interrupted.")
         sys.exit(1)
-    except (FleetError, StudyConfigError) as exc:
+    except FleetError as exc:
         _fail(str(exc))
     except ImportError as exc:
         # Optional-dependency errors carry their own install hint —

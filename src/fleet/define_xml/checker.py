@@ -181,10 +181,12 @@ class CheckResult:
         print()
 
     def raise_on_errors(self) -> None:
-        """Raise ``ValueError`` if any errors were found."""
+        """Raise ``DefineCheckError`` (a ``ValueError``) if any errors were found."""
+        from fleet.core.exceptions import DefineCheckError
+
         if not self.is_valid:
             summary = "; ".join(self.errors)
-            raise ValueError(f"Dataset '{self.dataset}' failed define checks: {summary}")
+            raise DefineCheckError(f"Dataset '{self.dataset}' failed define checks: {summary}")
 
 
 def _classify(
@@ -291,24 +293,25 @@ class DatasetChecker:
     ) -> CheckResult:
         """Check *df* against the define for *dataset*.
 
-        Parameters
-        ----------
-        df:
-            The materialised ``pl.DataFrame`` to check.
-        dataset:
-            Dataset name to look up in the define (e.g. ``"DM"``).
-            Case-insensitive.
-        strict:
-            When ``True`` (default), ``core="Req"`` issues are errors.
-            When ``False``, ``Req`` issues are downgraded to warnings so
-            the pipeline can proceed despite missing required variables
-            (e.g. during development or when source data is incomplete).
+        Args:
+            df: The materialised ``pl.DataFrame`` to check.
+            dataset: Dataset name to look up in the define (e.g. ``"DM"``).
+                Case-insensitive.
+            strict: When ``True`` (default), ``core="Req"`` issues are
+                errors.  When ``False``, ``Req`` issues are downgraded to
+                warnings so the pipeline can proceed despite missing
+                required variables (e.g. during development or when source
+                data is incomplete).
 
-        Returns
-        -------
-        CheckResult
-            Always returns a result — never raises unless you call
-            ``result.raise_on_errors()``.
+        Returns:
+            CheckResult: Always returns a result — never raises unless you
+                call ``result.raise_on_errors()``.
+
+        Examples:
+            Check DM against the pilot define::
+
+                checker = DatasetChecker("examples/cdiscpilot01/sdtm/define.yaml")
+                checker.check(dm, "DM").print_report()
         """
         result = CheckResult(dataset=dataset.upper())
 
@@ -510,20 +513,20 @@ class DatasetChecker:
         Requires the CDISC Rules Engine to be installed and discoverable.  See
         ``OfficialCDISCValidator`` for setup instructions.
 
-        Parameters
-        ----------
-        df:
-            The materialised ``pl.DataFrame`` to validate.
-        dataset:
-            Dataset / domain name (e.g. ``"DM"``, ``"ADVS"``).
-        standard:
-            Override — e.g. ``"SDTMIG"`` or ``"ADAMIG"``.
-        version:
-            Override — e.g. ``"3.4"`` or ``"1.1"``.
+        Args:
+            df: The materialised ``pl.DataFrame`` to validate.
+            dataset: Dataset / domain name (e.g. ``"DM"``, ``"ADVS"``).
+            standard: Override — e.g. ``"SDTMIG"`` or ``"ADAMIG"``.
+            version: Override — e.g. ``"3.4"`` or ``"1.1"``.
 
-        Returns
-        -------
-        ValidationResult
+        Returns:
+            ValidationResult: The engine findings.
+
+        Examples:
+            Run CORE on DM with the define's standard::
+
+                checker = DatasetChecker("examples/cdiscpilot01/sdtm/define.yaml")
+                result = checker.validate(dm, "DM")
         """
         from fleet.validation.service import ValidationService
 
@@ -559,24 +562,27 @@ class DatasetChecker:
 
         Requires ``pyreadstat``.  Install with ``uv add "fleet-cdisc[io]"``.
 
-        Parameters
-        ----------
-        df:
-            The materialised ``pl.DataFrame`` to write.
-        dataset:
-            Dataset name used to look up the variable order in the define.
-            It must equal the file name (FDA TCG 3.1.1).
-        path:
-            Destination file path (e.g. ``"outputs/dm.xpt"``).
-        reorder:
-            Whether to reorder / filter columns to match define order.
+        Args:
+            df: The materialised ``pl.DataFrame`` to write.
+            dataset: Dataset name used to look up the variable order in the
+                define.  It must equal the file name (FDA TCG 3.1.1).
+            path: Destination file path (e.g. ``"outputs/dm.xpt"``).
+            reorder: Whether to reorder / filter columns to match define
+                order.
 
-        Returns
-        -------
-        Path
-            Resolved path of the written file.
+        Returns:
+            Path: Resolved path of the written file.
+
+        Raises:
+            FleetIOError: When the file name is not the dataset name.
+
+        Examples:
+            Write DM with the define labels::
+
+                checker = DatasetChecker("examples/cdiscpilot01/sdtm/define.yaml")
+                checker.write_xpt(dm, "DM", "outputs/dm.xpt")
         """
-        from fleet.core.exceptions import IOError as FleetIOError
+        from fleet.core.exceptions import FleetIOError
         from fleet.io import save_xpt
 
         out = Path(path)
@@ -608,10 +614,13 @@ class DatasetChecker:
         import jsonschema
 
         from fleet.core.exceptions import SpecSchemaError
+        from fleet.tools.migrate_spec import migrate_hint
 
         schema = json.loads(_SCHEMA_PATH.read_text(encoding="utf-8"))
         validator = jsonschema.Draft202012Validator(schema)
         errors = list(validator.iter_errors(self._data))
         if errors:
             msgs = "\n".join(f"  - {e.json_path}: {e.message}" for e in errors[:5])
-            raise SpecSchemaError(f"define YAML failed schema validation:\n{msgs}")
+            raise SpecSchemaError(
+                f"define YAML failed schema validation:\n{msgs}{migrate_hint(self._data)}"
+            )

@@ -47,7 +47,7 @@ def test_c1_26_join_key_type_clash_is_a_derivation_error():
 │ 1       ┆ 50  │
 └─────────┴─────┘
 """)
-    with pytest.raises(DerivationError, match="Pipeline collection failed"):
+    with pytest.raises(DerivationError, match="key 'USUBJID' is String in the pipeline and Int64"):
         _TEXT_AVAL.adam.merge(right, on="USUBJID").to_frame()
 
 
@@ -1070,7 +1070,7 @@ class _RecordingClient:
     def __init__(self) -> None:
         self.paths: list[str] = []
 
-    def _get(self, path: str) -> dict:
+    def get(self, path: str) -> dict:
         self.paths.append(path)
         return {}
 
@@ -1082,7 +1082,7 @@ def test_c1_547_library_paths_use_the_dashed_version(version):
 
     client = _RecordingClient()
     scaffolder = DefineScaffolder(client)
-    scaffolder._fetch_sdtm_datasets(version, ["DM"])
+    scaffolder._fetch_sdtm_datasets(version, [])
     scaffolder._fetch_adam_datasets(version.replace("3", "1"), [])
     extract_ig_concept_ids(client, version, ["DM"])
     assert client.paths == [

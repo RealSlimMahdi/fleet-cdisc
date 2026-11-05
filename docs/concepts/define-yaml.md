@@ -518,7 +518,8 @@ notations:
   `define.yaml`, never the working directory.
 - When the spec's `ct: file:` (below) or the CT loaded in
   `fleet.get_validator()` holds the codelist, it checks the values in both
-  notations. A constant (`assign` with `value:`) is checked against the loaded CT only.
+  notations. A constant (`assign` with `value:`) is checked against the
+  same terms as a column: the loaded CT, then the study class.
 - Outside a study, before `fleet init ct`, or for an ID without a class,
   only the loaded CT can check the values.
 

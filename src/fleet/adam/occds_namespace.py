@@ -26,13 +26,13 @@ from typing import Self
 
 import polars as pl
 
-from fleet.adam._mixins import MultiRowMixin, SharedADaMVerbsMixin
+from fleet.adam._mixins import SharedADaMVerbsMixin
 from fleet.core.dtc import to_day
 from fleet.core.exceptions import DerivationError
 
 
 @pl.api.register_lazyframe_namespace("occds")
-class OCCDSNamespace(SharedADaMVerbsMixin, MultiRowMixin):
+class OCCDSNamespace(SharedADaMVerbsMixin):
     """
     Immutable pipeline builder for OCCDS (one-row-per-event) derivations.
 

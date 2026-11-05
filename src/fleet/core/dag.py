@@ -11,10 +11,10 @@ Usage
     )
 
     # What needs to run if AE changes?
-    dag.impacted_by("ae_raw")        # → ["ae_raw", "AE", "ADAE", ...]
+    dag.impacted_by("ae_raw")        # → ["ae_raw", "AE", "ADAE"]
 
     # Safe execution order for the whole pipeline
-    dag.execution_order()            # → ["dm_raw", "DM", "ae_raw", "AE", ...]
+    dag.execution_order()            # → ["dm_raw", "ae_raw", "vs_raw", "ex_raw", "DM", ...]
 
     # Export the graph for an orchestrator to read
     dag.to_snakemake()               # → {name: {"input": [...], "output": path}}
@@ -166,11 +166,18 @@ class PipelineDAG:
 
         Uses Kahn's algorithm (BFS on in-degree).
 
-        Raises
-        ------
-        ValueError
-            If the graph contains a cycle (should have been caught by
-            :func:`build_dag`, but re-checked here for safety).
+        Returns:
+            list[str]: Every node name, each after its inputs.
+
+        Raises:
+            ValueError: If the graph contains a cycle (should have been
+                caught by :func:`build_dag`, but re-checked here for
+                safety); the message names the nodes on or after the cycle.
+
+        Examples:
+            Run order of the pilot study::
+
+                order = build_dag("sdtm/define.yaml", "adam/define.yaml").execution_order()
         """
         in_degree: dict[str, int] = {n: 0 for n in self.nodes}
         for node in self.nodes.values():
@@ -190,7 +197,11 @@ class PipelineDAG:
                     queue.append(downstream)
 
         if len(order) != len(self.nodes):
-            raise ValueError("DAG contains a cycle — cannot produce a linear execution order.")
+            stuck = sorted(n for n in self.nodes if n not in order)
+            raise ValueError(
+                f"DAG contains a cycle — cannot produce a linear execution order. "
+                f"Nodes on or after the cycle: {stuck}"
+            )
 
         return order
 
@@ -201,21 +212,21 @@ class PipelineDAG:
         in topological execution order so callers get a ready-made run
         schedule.
 
-        Parameters
-        ----------
-        name:
-            Logical node name (dataset or raw source) that changed.
+        Args:
+            name: Logical node name (dataset or raw source) that changed.
 
-        Returns
-        -------
-        list[str]
-            Topologically-ordered list of node names to rerun, inclusive
-            of *name* itself.
+        Returns:
+            list[str]: Topologically-ordered list of node names to rerun,
+                inclusive of *name* itself.
 
-        Raises
-        ------
-        KeyError
-            If *name* is not a node in this DAG.
+        Raises:
+            KeyError: If *name* is not a node in this DAG.
+
+        Examples:
+            What reruns when the raw AE file changes::
+
+                dag = build_dag("sdtm/define.yaml", "adam/define.yaml")
+                assert dag.impacted_by("ae_raw") == ["ae_raw", "AE", "ADAE"]
         """
         if name not in self.nodes:
             raise KeyError(f"Node '{name}' not found in DAG. Available nodes: {sorted(self.nodes)}")
@@ -485,22 +496,19 @@ class PipelineDAG:
         self-contained and can be consumed by external tools without needing
         to re-parse the define YAMLs.
 
-        Parameters
-        ----------
-        output_path:
-            Destination path for the ``.json`` file (e.g.
-            ``outputs/cdiscpilot01/pipeline_dag.json``).
+        Args:
+            output_path: Destination path for the ``.json`` file (e.g.
+                ``outputs/cdiscpilot01/pipeline_dag.json``).
 
-        Example
-        -------
-        ::
+        Examples:
+            Write the pilot DAG for an orchestrator::
 
-            dag = build_dag(
-                "examples/cdiscpilot01/sdtm/define.yaml",
-                "examples/cdiscpilot01/adam/define.yaml",
-                output_dir="outputs/cdiscpilot01",
-            )
-            dag.generate("outputs/cdiscpilot01/pipeline_dag.json")
+                dag = build_dag(
+                    "examples/cdiscpilot01/sdtm/define.yaml",
+                    "examples/cdiscpilot01/adam/define.yaml",
+                    output_dir="outputs/cdiscpilot01",
+                )
+                dag.generate("outputs/cdiscpilot01/pipeline_dag.json")
         """
         import json
 
@@ -525,45 +533,45 @@ def build_dag(
 ) -> PipelineDAG:
     """Build a :class:`PipelineDAG` from one or more ``define.yaml`` spec files.
 
-    Parameters
-    ----------
-    *spec_paths:
-        Paths to ``define.yaml`` files (SDTM, ADaM, SEND, or any mix).
-        Pass multiple files to span an entire study pipeline.
-    output_dir:
-        Directory where derived dataset outputs land.  A dataset's
-        ``path`` is resolved from, in order: the per-dataset ``output:``
-        key (relative paths are joined onto *output_dir*), then the
-        convention ``{output_dir}/{name.lower()}{ext}`` where *ext*
-        follows the per-dataset or spec-level ``output_format:`` key
-        (``parquet`` → ``.parquet`` by default, ``xpt`` → ``.xpt``,
-        ``dataset-json`` → ``.json``).
-        Defaults to the parent directory of the *first* spec file.
+    A dataset depends on each ``inputs:`` entry and on each dataset a step
+    reads through a pin (``from_dataset: EX``), when that dataset is a node.
 
-    Returns
-    -------
-    PipelineDAG
-        Validated, cycle-free DAG ready for querying.
+    Args:
+        *spec_paths: Paths to ``define.yaml`` files (SDTM, ADaM, SEND, or
+            any mix).  Pass multiple files to span an entire study pipeline.
+        output_dir: Directory where derived dataset outputs land.  A
+            dataset's ``path`` is resolved from, in order: the per-dataset
+            ``output:`` key (relative paths are joined onto *output_dir*),
+            then the convention ``{output_dir}/{name.lower()}{ext}`` where
+            *ext* follows the per-dataset or spec-level ``output_format:``
+            key (``parquet`` → ``.parquet`` by default, ``xpt`` → ``.xpt``,
+            ``dataset-json`` → ``.json``).  Defaults to the parent
+            directory of the *first* spec file.
 
-    Raises
-    ------
-    ValueError
-        If any ``inputs`` entry references an unknown node, or if the
-        resulting graph contains a cycle.
-    FileNotFoundError
-        If a spec path does not exist.
+    Returns:
+        PipelineDAG: Validated, cycle-free DAG ready for querying.
 
-    Examples
-    --------
-    >>> dag = build_dag(
-    ...     "examples/cdiscpilot01/sdtm/define.yaml",
-    ...     "examples/cdiscpilot01/adam/define.yaml",
-    ...     output_dir="outputs/cdiscpilot01",
-    ... )
-    >>> dag.impacted_by("ae_raw")
-    ['ae_raw', 'AE']
-    >>> dag.execution_order()
-    ['dm_raw', 'ae_raw', 'vs_raw', 'DM', 'AE', 'VS', 'ADSL', 'ADVS']
+    Raises:
+        ValueError: If any ``inputs`` entry references an unknown node, a
+            dataset is declared in two spec files, a raw input has two
+            paths or the name of a dataset, or the resulting graph
+            contains a cycle.
+        FileNotFoundError: If a spec path does not exist.
+        SpecError: If a spec file declares one dataset twice.
+
+    Examples:
+        The pilot study::
+
+            dag = build_dag(
+                "examples/cdiscpilot01/sdtm/define.yaml",
+                "examples/cdiscpilot01/adam/define.yaml",
+                output_dir="outputs/cdiscpilot01",
+            )
+            dag.impacted_by("ae_raw")
+            # ['ae_raw', 'AE', 'ADAE']
+            dag.execution_order()
+            # ['dm_raw', 'ae_raw', 'vs_raw', 'ex_raw', 'DM', 'AE', 'VS', 'EX',
+            #  'ADSL', 'ADVS', 'ADAE', 'ADEX']
     """
     if not spec_paths:
         raise ValueError("At least one spec_path must be provided.")
@@ -575,7 +583,12 @@ def build_dag(
 
     out_dir = Path(output_dir) if output_dir else resolved[0].parent
 
+    from fleet.core.spec_registry import pinned_datasets
+
     nodes: dict[str, PipelineNode] = {}
+    declared_in: dict[str, Path] = {}
+    raw_paths: dict[str, str | None] = {}
+    pins: dict[str, list[str]] = {}
 
     for spec_path in resolved:
         spec = load_define_spec(spec_path)
@@ -586,6 +599,12 @@ def build_dag(
 
         for dataset in spec.datasets or []:
             ds_name: str = dataset.name
+            if ds_name in declared_in:
+                raise ValueError(
+                    f"Dataset '{ds_name}' is declared in {declared_in[ds_name]} and in "
+                    f"{spec_path}. Keep one declaration."
+                )
+            declared_in[ds_name] = spec_path
             ds_inputs: list[str] = []
 
             for inp in dataset.inputs:
@@ -593,6 +612,13 @@ def build_dag(
                 inp_type: str = inp.get("type", "dataset")
                 inp_path: str | None = inp.get("path")
 
+                if inp_type == "raw":
+                    if inp_name in raw_paths and raw_paths[inp_name] != inp_path:
+                        raise ValueError(
+                            f"Raw input '{inp_name}' has two paths: "
+                            f"{raw_paths[inp_name]!r} and {inp_path!r}."
+                        )
+                    raw_paths[inp_name] = inp_path
                 # Register raw sources on first encounter only
                 if inp_type == "raw" and inp_name not in nodes:
                     nodes[inp_name] = PipelineNode(
@@ -603,6 +629,10 @@ def build_dag(
                     )
 
                 ds_inputs.append(inp_name)
+
+            pins[ds_name] = pinned_datasets(
+                node_type, [var.derivation for var in dataset.variables]
+            )
 
             declared_output: str | None = dataset.output
             if declared_output:
@@ -616,8 +646,23 @@ def build_dag(
                 name=ds_name,
                 node_type=node_type,
                 path=output_path,
-                inputs=ds_inputs,
+                inputs=list(dict.fromkeys(ds_inputs)),
             )
+
+    clash = sorted(set(raw_paths) & set(declared_in))
+    if clash:
+        raise ValueError(
+            f"Raw input '{clash[0]}' has the name of a dataset declared in "
+            f"{declared_in[clash[0]]}. Give the raw input another name (for example "
+            f"{clash[0].lower()}_raw)."
+        )
+
+    # A dataset that a step reads through a pin (from_dataset: EX) depends on it.
+    for ds_name, pinned in pins.items():
+        node = nodes[ds_name]
+        for name in pinned:
+            if name in nodes and name != ds_name and name not in node.inputs:
+                node.inputs.append(name)
 
     _validate(nodes)
     return PipelineDAG(nodes=nodes)

@@ -1279,8 +1279,9 @@ class AdamNamespace(SharedADaMVerbsMixin):
         """Hand the accumulated state over to a sub-namespace.
 
         The lazy plan is passed through unchanged (no materialisation)
-        and pins, pin lineage, variable lineage, pending FK checks, and
-        FK policy all propagate, so ``.pin("ADSL", adsl).occds`` keeps
+        and pins, pin lineage, variable lineage, pending FK checks, FK
+        policy and the last nodup, validation and comparison reports all
+        propagate, so ``.pin("ADSL", adsl).occds`` keeps
         its pins.  The parent domain tag carries over unless the
         sub-namespace sets its own (ADSL).
         """
@@ -1295,6 +1296,14 @@ class AdamNamespace(SharedADaMVerbsMixin):
         fk_severity = getattr(self, "_fk_severity", None)
         if fk_severity is not None:
             new._fk_severity = fk_severity
+        for report in (
+            "_nodup_report",
+            "_last_validation",
+            "_last_comparison",
+            "_frozen_codelists",
+        ):
+            if hasattr(self, report):
+                setattr(new, report, getattr(self, report))
         if getattr(new, "_domain", None) is None:
             new._domain = getattr(self, "_domain", None)
         return new

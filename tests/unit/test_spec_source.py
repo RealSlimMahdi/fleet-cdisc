@@ -164,8 +164,8 @@ def test_program_from_spec_pins_cross_domain_inputs(tmp_path):
     assert 'adsl = fleet.frame(pl.read_parquet("TODO/adsl.parquet"))' in code
     assert "    ae.adam\n" in code
     assert '    .pin("ADSL", adsl)\n' in code
-    # The call the registry would make, not the algorithm's spelling.
-    assert "    .merge(dataset='ADSL', on=['USUBJID'], keep=['TRTSDT'])\n" in code
+    # The call the registry would make, with the pinned frame itself (c1-757).
+    assert "    .merge(dataset=adsl, on=['USUBJID'], keep=['TRTSDT'])\n" in code
 
 
 def test_program_from_spec_unknown_dataset_raises():

@@ -335,19 +335,23 @@ class DefineSpecGenerator:
     ) -> None:
         """Write a Define-XML 2.1 document to *output_path*.
 
-        Parameters
-        ----------
-        output_path:
-            Destination path for the ``.xml`` file.
-        html_preview:
-            When ``True`` (default), also write an HTML preview by applying
-            the CDISC ``define2-1.xsl`` stylesheet via lxml.  The HTML file
-            is written alongside the XML with a ``_preview.html`` suffix
-            (e.g. ``define_sdtm.xml`` → ``define_sdtm_preview.html``).
-        xsl_path:
-            Path to the ``define2-1.xsl`` stylesheet.  Defaults to
-            ``define2-1.xsl`` in the same directory as *output_path*, which
-            is the standard layout used by Fleet.
+        Args:
+            output_path: Destination path for the ``.xml`` file.
+            html_preview: When ``True`` (default), also write an HTML preview
+                by applying the CDISC ``define2-1.xsl`` stylesheet via lxml.
+                The HTML file is written alongside the XML with a
+                ``_preview.html`` suffix (e.g. ``define_sdtm.xml`` →
+                ``define_sdtm_preview.html``).
+            xsl_path: Path to the ``define2-1.xsl`` stylesheet.  Defaults to
+                ``define2-1.xsl`` in the same directory as *output_path*,
+                which is the standard layout used by Fleet.
+
+        Examples:
+            Write the pilot SDTM Define-XML::
+
+                DefineSpecGenerator("examples/cdiscpilot01/sdtm/define.yaml").generate(
+                    "outputs/define_sdtm.xml", html_preview=False
+                )
         """
         root = self._build_odm()
         xml_str = self._serialise(root)
@@ -533,12 +537,14 @@ class DefineSpecGenerator:
     def _check_spec_version(self) -> None:
         """Raise ``SpecError`` when the spec declares an unknown future version."""
         from fleet.core._verb_mixin import SUPPORTED_SPEC_VERSION
+        from fleet.tools.migrate_spec import migrate_hint
 
         version = self._data.get("fleet_spec_version")
         if version is not None and version != SUPPORTED_SPEC_VERSION:
             raise SpecError(
                 f"{self._path}: unsupported fleet_spec_version {version!r}. "
                 f"This Fleet version supports fleet_spec_version {SUPPORTED_SPEC_VERSION}."
+                f"{migrate_hint(self._data)}"
             )
 
     def _validate(self) -> None:
@@ -566,7 +572,11 @@ class DefineSpecGenerator:
                 "`fleet new --description ... --company ...`.",
             )
         msgs = "\n".join(lines)
-        raise SpecSchemaError(f"{self._path}: define YAML failed schema validation:\n{msgs}")
+        from fleet.tools.migrate_spec import migrate_hint
+
+        raise SpecSchemaError(
+            f"{self._path}: define YAML failed schema validation:\n{msgs}{migrate_hint(self._data)}"
+        )
 
     def _validate_codelist_refs(self) -> None:
         """Fail loudly on ``codelist:`` references to undeclared codelists.

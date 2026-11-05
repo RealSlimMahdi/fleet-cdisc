@@ -690,6 +690,41 @@ def with_codelist(standard: str, block: Mapping[str, Any], codelist: str | None)
     return dict(block)
 
 
+def pinned_datasets(standard: str, derivations: list[Any]) -> list[str]:
+    """Return the datasets that *derivations* read through a pin, in first-use order.
+
+    A parameter the registry converts as a pin (``from_dataset: EX`` of
+    ``first_date``) names a dataset the step reads, as an ``inputs:`` entry
+    does.
+
+    Args:
+        standard: ``"sdtm"`` or ``"adam"``.
+        derivations: The ``derivation:`` blocks of a dataset (non-mappings
+            are skipped).
+
+    Returns:
+        list[str]: The pinned dataset names.
+
+    Examples:
+        The pilot ADSL reads EX for TRTSDT::
+
+            names = pinned_datasets(
+                "adam", [{"algorithm": "first_date", "from_dataset": "EX", "date_col": "EXSTDTC"}]
+            )
+            assert names == ["EX"]
+    """
+    pinned: list[str] = []
+    for derivation in derivations:
+        if not isinstance(derivation, Mapping):
+            continue
+        algo = get_algorithm(standard, str(derivation.get("algorithm", "")))
+        for param in algo.params if algo else ():
+            value = derivation.get(param.name)
+            if param.convert == "pin" and isinstance(value, str) and value not in pinned:
+                pinned.append(value)
+    return pinned
+
+
 # --------------------------------------------------------------------- #
 # Execution engine                                                        #
 # --------------------------------------------------------------------- #

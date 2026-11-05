@@ -26,7 +26,7 @@ adsl = dm.adam.adsl.source("USUBJID").duration("ADY", start="TRTSDT", end="ADT")
 
 Best for: Production clinical trials, regulatory submissions, repeatability across projects.
 
-You define metadata, controlled terminology, and derivations in a central `define.yaml` file. Fleet reads the specification and automatically builds the datasets. In this model, your Python scripts simply load the study context and call `.build()`.
+You define metadata, controlled terminology, and derivations in a central `define.yaml` file. Fleet reads the specification and automatically builds the datasets. In this model, your Python scripts simply load the study context and call `.from_spec()`.
 
 **Example of the Hybrid Escape Hatch:**
 

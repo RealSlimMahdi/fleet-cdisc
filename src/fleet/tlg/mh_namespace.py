@@ -76,6 +76,19 @@ class MHTLGNamespace(BuilderVerbsMixin):
         return summarize_spec(self._df, spec or MHSummarySpec(), groupby=groupby, adsl=adsl)
 
     def check(self, *, spec: MHSummarySpec | None = None) -> list[str]:
-        """Run pre-validation diagnostics without computing."""
+        """Run pre-validation diagnostics without computing.
+
+        Args:
+            spec: The summary spec to check; defaults to ``MHSummarySpec()``.
+
+        Returns:
+            list[str]: One message per problem; empty when the frame fits.
+
+        Examples:
+            Check ADMH before the summary table::
+
+                problems = admh.tlg.mh.check()
+                assert problems == []
+        """
         spec = spec or MHSummarySpec()
         return spec.check(self._df)

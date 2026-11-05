@@ -6,10 +6,25 @@ Adapted from pharmaversepy study/config.py.
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from fleet.core.exceptions import FleetError
 
 
-class StudyPathConfig(BaseModel):
+class _ConfigModel(BaseModel):
+    """A study_config.yaml block: an unknown key (a typo) is an error."""
+
+    model_config = ConfigDict(extra="forbid")
+
+
+def _dash_version(value: object) -> object:
+    """Read an IG version as the CDISC Library form: 3.4, '3.4' and '3-4' give '3-4'."""
+    if value is None:
+        return None
+    return str(value).replace(".", "-")
+
+
+class StudyPathConfig(_ConfigModel):
     """Relative path definitions for a study workspace."""
 
     raw_data: str = Field(default="data/raw")
@@ -27,26 +42,32 @@ class StudyPathConfig(BaseModel):
     programs_misc: str = Field(default="programs/misc")
 
 
-class SDTMConfig(BaseModel):
+class SDTMConfig(_ConfigModel):
     """SDTM Implementation Guide configuration.
 
     ``ig_version`` is ``None`` when the study does not declare it; the
-    validation run setup then applies the built-in default.
+    validation run setup then applies the built-in default.  ``3.4``,
+    ``'3.4'`` and ``'3-4'`` are all read as ``'3-4'``.
     """
 
     ig_version: str | None = Field(default=None)
     domains: list[str] = Field(default_factory=list)
 
+    _dash_ig_version = field_validator("ig_version", mode="before")(_dash_version)
 
-class ADAMConfig(BaseModel):
+
+class ADAMConfig(_ConfigModel):
     """ADaM Implementation Guide configuration.
 
     ``ig_version`` is ``None`` when the study does not declare it; the
-    validation run setup then applies the built-in default.
+    validation run setup then applies the built-in default.  ``1.3``,
+    ``'1.3'`` and ``'1-3'`` are all read as ``'1-3'``.
     """
 
     ig_version: str | None = Field(default=None)
     datasets: list[str] = Field(default_factory=list)
+
+    _dash_ig_version = field_validator("ig_version", mode="before")(_dash_version)
 
 
 #: The default SDTM CT package of a new study.
@@ -55,7 +76,7 @@ DEFAULT_SDTM_CT = "sdtmct-2023-12-15"
 DEFAULT_ADAM_CT = "adamct-2023-06-30"
 
 
-class CTConfig(BaseModel):
+class CTConfig(_ConfigModel):
     """Controlled Terminology package configuration.
 
     CDISC publishes ADaM CT on its own dates, so a study with ADaM
@@ -74,7 +95,7 @@ class CTConfig(BaseModel):
         return (self.package, self.adam_package) if self.adam_package else (self.package,)
 
 
-class AcceptedFinding(BaseModel):
+class AcceptedFinding(_ConfigModel):
     """A CORE finding the study accepts, as an SDRG explanation does (ADR-0017).
 
     Every CORE finding blocks the job unless an entry lists its rule and
@@ -86,7 +107,7 @@ class AcceptedFinding(BaseModel):
     reason: str = Field(min_length=1, description="Why the finding is accepted (SDRG text).")
 
 
-class ValidationConfig(BaseModel):
+class ValidationConfig(_ConfigModel):
     """CDISC Rules Engine configuration.
 
     Optional — when omitted, Fleet auto-discovers the engine via
@@ -116,7 +137,7 @@ class ValidationConfig(BaseModel):
     )
 
 
-class StudyConfig(BaseModel):
+class StudyConfig(_ConfigModel):
     """Top-level study configuration model.
 
     Drives the entire bootstrapping pipeline:
@@ -134,7 +155,7 @@ class StudyConfig(BaseModel):
     validation: ValidationConfig = Field(default_factory=ValidationConfig)
 
 
-class StudyConfigError(Exception):
+class StudyConfigError(FleetError):
     """Raised when study configuration cannot be loaded or validated."""
 
 
@@ -295,7 +316,9 @@ class StudyContext:
         """Scaffold a new study workspace and return a ready-to-use StudyContext.
 
         Creates the directory layout defined by StudyPathConfig and writes
-        ``study_config.yaml``.  Define specs and codelists are created by
+        ``study_config.yaml``.  When the root has no ``.gitignore``, one is
+        written that lists ``.env``, the file that holds the CDISC API key.
+        Define specs and codelists are created by
         subsequent pipeline steps (``fleet init define``, ``fleet init ct``).
 
         Directories are created silently if they already exist.  If
@@ -382,28 +405,42 @@ class StudyContext:
             encoding="utf-8",
         )
 
+        gitignore = study_root / ".gitignore"
+        if not gitignore.exists():
+            gitignore.write_text(".env\n", encoding="utf-8")
+
         return ctx
 
 
-def load_study_context(config_path: Path) -> StudyContext:
+def load_study_context(config_path: str | Path) -> StudyContext:
     """Load study configuration and return a resolved context.
 
     Args:
-        config_path: Path to study_config.yaml
+        config_path: Path to study_config.yaml.  It is resolved to an
+            absolute path, so the study paths do not change after
+            ``os.chdir``.
 
     Returns:
         StudyContext with resolved paths
 
     Raises:
-        StudyConfigError: If the config file is missing or invalid
+        StudyConfigError: If the config file is missing, is not UTF-8
+            text, is not valid YAML, or does not match the schema (an
+            unknown key included).
     """
+    config_path = Path(config_path).resolve()
     if not config_path.exists():
         raise StudyConfigError(f"Study configuration file not found: {config_path}")
 
     try:
         with open(config_path, encoding="utf-8") as f:
             config_data = yaml.safe_load(f) or {}
-    except yaml.YAMLError as e:
+    except UnicodeDecodeError as e:
+        raise StudyConfigError(
+            f"{config_path.name} is not UTF-8 text (byte 0x{e.object[e.start]:02x} "
+            f"at position {e.start}). Save the file as UTF-8."
+        ) from e
+    except (yaml.YAMLError, ValueError) as e:
         raise StudyConfigError(f"Invalid YAML in study configuration: {e}") from e
 
     try:

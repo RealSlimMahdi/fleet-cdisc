@@ -40,17 +40,6 @@ from fleet.sdtm.utils import to_char
 if TYPE_CHECKING:
     from typing import Self
 
-# Map: domain code → expected add verb name
-_DOMAIN_ADD_VERBS: dict[str, str] = {
-    "TE": "add_elements",
-    "TA": "add_arms",
-    "TV": "add_visits",
-    "TS": "add_parameters",
-    "TI": "add_criteria",
-    "TD": "add_disease_assessments",
-    "TM": "add_milestones",
-}
-
 # Packaged SDTMIG 3.4 structures for the TDD domains (offline default).
 _PACKAGED_STRUCTURES = Path(__file__).with_name("_tdd_structures.yaml")
 _PACKAGED_IG_VERSION = "3-4"
@@ -970,7 +959,7 @@ class TrialDesignMixin:
 
         with CDISCClient() as client:
             path = f"/mdr/sdtmig/{normalise_ig_version(ig_version)}/datasets/{domain}"
-            detail = client._get(path)
+            detail = client.get(path)
 
         # Parse into a lightweight dict
         variables: list[dict[str, str]] = []

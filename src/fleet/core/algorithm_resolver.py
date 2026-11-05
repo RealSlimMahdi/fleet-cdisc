@@ -57,17 +57,18 @@ def docstring_summary(doc: str | None) -> str:
     if not text:
         return ""
     # Take everything up to the first blank line, then end at a period that a
-    # space or the end follows, so 18.5 and v2.1 stay whole.
+    # space or the end follows, so 18.5 and v2.1 stay whole; an abbreviation
+    # (e.g., i.e., etc.) does not end the sentence.
     head = text.split("\n\n", 1)[0].strip().replace("\n", " ")
-    match = re.search(r"\.(?=\s|$)", head)
-    if match:
-        head = head[: match.start()].strip() + "."
+    for match in re.finditer(r"\.(?=\s|$)", head):
+        if not _ABBREVIATION.search(head[: match.end()]):
+            head = head[: match.start()].strip() + "."
+            break
     return head
 
 
-#: Backward-compatible aliases.
-first_sentence = docstring_summary
-_first_sentence = docstring_summary
+#: Abbreviations whose final period does not end a sentence.
+_ABBREVIATION = re.compile(r"(?:^|[\s(])(?:e\.g|i\.e|etc|vs|cf)\.$")
 
 
 def _candidate_namespaces() -> list[type]:
