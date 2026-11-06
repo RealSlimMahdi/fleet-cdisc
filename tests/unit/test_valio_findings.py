@@ -705,6 +705,7 @@ class TestLineageJoin:
 def test_fleet_validate_mcp_returns_study_level_findings_once(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    pytest.importorskip("mcp", reason="mcp extra (mcp SDK) not installed")
     import polars as pl
 
     from fleet import mcp_server

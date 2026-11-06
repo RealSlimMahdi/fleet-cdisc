@@ -384,6 +384,13 @@ class TestNodupReport:
 
 
 class TestValidateResultAccess:
+    @pytest.fixture(autouse=True)
+    def fake_engine(self, monkeypatch, tmp_path):
+        """An engine file, so the verb's engine check passes where CI has no CORE install."""
+        engine = tmp_path / "core"
+        engine.write_text("")
+        monkeypatch.setenv("FLEET_RULES_ENGINE", str(engine))
+
     @pytest.fixture
     def failing_ns(self, monkeypatch):
         """An SDTM chain whose validation run reports one error."""

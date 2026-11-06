@@ -1246,6 +1246,7 @@ def test_c1_35_terms_for_asks_the_stores_in_order():
 
 
 def test_c1_35_mcp_ct_terms_reads_the_study_classes(monkeypatch):
+    pytest.importorskip("mcp", reason="mcp extra (mcp SDK) not installed")
     from fleet import mcp_server
     from fleet.ct import terms
 
