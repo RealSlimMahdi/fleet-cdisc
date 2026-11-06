@@ -411,7 +411,7 @@ uv run pytest tests/ -v
 | `pyyaml ≥ 6.0`             | YAML spec / CT file parsing                     |
 | `httpx ≥ 0.27, < 1`        | HTTP downloads (CT files, raw data)             |
 | `jsonschema ≥ 4.26.0`      | Define-XML / spec schema validation             |
-| `lxml ≥ 5.0.0`             | Define-XML ODM XML generation                   |
+| `lxml ≥ 6.1.0`             | Define-XML ODM XML generation                   |
 
 **Optional extras** (`uv sync --extra <name>`):
 
