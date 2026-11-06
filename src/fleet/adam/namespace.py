@@ -952,8 +952,8 @@ class AdamNamespace(SharedADaMVerbsMixin):
         References:
             admiral ``derive_param_computed`` (``constant_by_vars``,
             ``keep_nas = FALSE``, and the warning for a filter with no
-            observations).  ADR-0051
-            (docs/adr/0051-derive-param-adds-no-record-with-a-null-aval.md).
+            observations).  ADR-0047
+            (docs/adr/0047-derive-param-adds-no-record-with-a-null-aval.md).
 
         Examples:
             Derive BMI as a new PARAMCD from WEIGHT and HEIGHT::

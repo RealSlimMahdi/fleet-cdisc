@@ -92,7 +92,7 @@ class ADSLNamespace(SharedADaMVerbsMixin):
             admiral ``compute_age_years`` (pharmaverse): full precision; one year is
             12 months, 365.25/7 weeks, 365.25 days or 8766 hours. CDISC CT
             C66781 (AGEU). ADR-0025: a derived value is rounded only when the
-            call says so. ADR-0053: the week and hour divisors.
+            call says so. ADR-0048: the week and hour divisors.
 
         Examples:
             Derive age in years from DM variables::

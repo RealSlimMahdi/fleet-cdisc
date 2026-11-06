@@ -271,7 +271,7 @@ class StudyDesign(BaseModel):
 
     References:
         SDTMIG 3.4 TA (ARM is the protocol name of the arm);
-        ``docs/adr/0058-a-trial-design-arm-needs-its-protocol-name.md``.
+        ``docs/adr/0052-a-trial-design-arm-needs-its-protocol-name.md``.
     """
 
     model_config = ConfigDict(extra="forbid")

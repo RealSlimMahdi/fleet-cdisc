@@ -67,7 +67,7 @@ class DMSummarySpec(SummarySpecBase):
     References:
         ADaMIG 1.3, section 3.1.4: ADSL carries the arm as TRTxxP and
         TRTxxA; TRTA and TRTP are BDS and OCCDS variables.  ADR-0046.
-        tern ``analyze_vars`` and SAS PROC MEANS N (n row); ADR-0055.
+        tern ``analyze_vars`` and SAS PROC MEANS N (n row); ADR-0049.
     """
 
     context: ClassVar[str] = "t_dm_summary"

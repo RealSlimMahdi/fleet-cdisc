@@ -189,7 +189,7 @@ class Row(BaseModel):
             "of the column within its parent, nulls last, ties by text.  "
             "``None`` takes ``<field>N`` when the dataset has it (ADaMIG: "
             "AVISITN is the sort key of AVISIT), else the text order.  "
-            "PARAMCD has no default: set ``order_by='PARAMN'`` (ADR-0055)."
+            "PARAMCD has no default: set ``order_by='PARAMN'`` (ADR-0049)."
         ),
     )
     decimals: dict[str, str] | None = Field(

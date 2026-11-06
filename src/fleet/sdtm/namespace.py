@@ -482,7 +482,7 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
             RFXSTDTC; CDISC CORE FB2603/FB2604 (one flag per group);
             admiral ``ad_advs.R`` order (ADT, VISITNUM, VSSEQ); sdtm.oak
             ``derive_blfl`` (no default for ``ref_var``);
-            ``docs/adr/0057-baseline-flag-names-its-reference-and-test-code.md``.
+            ``docs/adr/0051-baseline-flag-names-its-reference-and-test-code.md``.
 
         Examples:
             Flag the last value before first exposure::

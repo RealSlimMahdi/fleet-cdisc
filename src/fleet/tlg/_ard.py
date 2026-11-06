@@ -539,7 +539,7 @@ def order_arms(
             *known*.
 
     References:
-        SAS PROC REPORT ``ORDER=``; ADR-0055.
+        SAS PROC REPORT ``ORDER=``; ADR-0049.
 
     Examples:
         ``order_arms({"A", "B", "Total"}, pools, None, ["B"], {"A", "B", "Total"})``
@@ -581,7 +581,7 @@ def nan_to_null(df: pl.DataFrame, value_col: str) -> pl.DataFrame:
         SchemaError: If *value_col* holds ``inf`` or ``-inf``.
 
     References:
-        SAS PROC MEANS (missing values are left out); ADR-0056.
+        SAS PROC MEANS (missing values are left out); ADR-0050.
 
     Examples:
         ``adlb = nan_to_null(adlb, "AVAL")``
@@ -639,7 +639,7 @@ def compute_big_n(
 
     References:
         SAS PROC FREQ, missing class levels; ADR-0038.  ADaMIG v1.3,
-        section 3.1: ADSL has one record per subject; ADR-0056.
+        section 3.1: ADSL has one record per subject; ADR-0050.
 
     Examples:
         ``compute_big_n(adsl, "TRT01A", [], filter_expr=pl.col("SAFFL") == "Y")``
@@ -1479,7 +1479,7 @@ def summarize_ard(
         ADaMIG v1.3 (TRTxxA on ADSL, TRTA on OCCDS/BDS; AVISITN is the
         sort key of AVISIT); FDA CDER
         Standard Safety Tables and Figures IG v2.0, 2.1.2 (missing row);
-        ADR-0038; ADR-0055 (row and column order); ADR-0056 (NaN, inf).
+        ADR-0038; ADR-0049 (row and column order); ADR-0050 (NaN, inf).
 
     Examples:
         ``summarize_ard(adae, rows=["AEBODSYS", "AEDECOD"], stats=[Statistic.N_PCT],
