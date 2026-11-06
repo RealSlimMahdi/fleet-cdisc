@@ -55,3 +55,17 @@ def test_row_zero_is_shown(tmp_path: Path) -> None:
 
     assert "<td>CORE-000001</td><td>official</td><td></td><td>0</td><td>bad</td>" in page
     assert "Row: 0" in str(issue)
+
+
+def test_text_report_labels_one_row_and_a_row_list(capsys) -> None:
+    one = ValidationIssue(Severity.ERROR, "CORE-000001", "bad", row=7)
+    many = [ValidationIssue(Severity.ERROR, "CORE-000002", "worse", row=r) for r in (2, 3, 4, 7)]
+    result = ValidationResult("AE", "sdtmig", "3-4", total_issues=5, errors=[one, *many])
+
+    result.print_report("smart")
+    out = capsys.readouterr()
+    text = out.out + out.err
+
+    assert "Row: 7 (1 occurrence)" in text
+    assert "Rows: 2-4, 7 (4 occurrences)" in text
+    assert "Rows affected" not in text

@@ -699,10 +699,10 @@ class TestLineageJoin:
         assert issue.producing_verb is None
 
 
-# ── c1-267: the MCP tool returns the study-level findings ──
+# ── c1-267: the MCP tool returns the study-level findings once, in issues ──
 
 
-def test_fleet_validate_mcp_returns_study_issues(
+def test_fleet_validate_mcp_returns_study_level_findings_once(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     import polars as pl
@@ -721,7 +721,7 @@ def test_fleet_validate_mcp_returns_study_issues(
     def fake(self: Any, datasets: dict, **kwargs: Any) -> dict:
         return {
             "AE": ValidationResult("AE", "sdtmig", "3-4", rules_executed=1),
-            "STUDY": ValidationResult("STUDY", "sdtmig", "3-4", errors=[study]),
+            "study": ValidationResult("study", "sdtmig", "3-4", errors=[study]),
         }
 
     monkeypatch.setattr(ValidationService, "__init__", lambda self, **kw: None)
@@ -729,8 +729,8 @@ def test_fleet_validate_mcp_returns_study_issues(
 
     out = mcp_server.fleet_validate(str(data))
 
-    assert [i["rule_id"] for i in out["study_issues"]] == ["CORE-000400"]
-    assert [i["dataset"] for i in out["issues"]] == ["STUDY"]
+    assert "study_issues" not in out
+    assert [(i["rule_id"], i["dataset"]) for i in out["issues"]] == [("CORE-000400", "STUDY")]
 
 
 # ── io: c1-580 c1-581 c1-582 c1-583 c1-584 Dataset-JSON ──
