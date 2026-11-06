@@ -12,27 +12,32 @@ Key derivations, inspired by pharmaverse/admiralonco (not ports; values can diff
   - ``filter_pd``             — keep only records up to first PD per group
 
 ``best_overall_response`` reads every record. Run ``filter_pd`` first, on a
-copy, so that a response after the first PD does not set BOR.
+copy, so that a response after the first PD does not set BOR. The verbs read
+every row, so filter a vertical ADRS to one parameter first (OVRLRESP is a
+PARAMCD value, not a column). The response values are the RECIST 1.1 codes
+below, plus ``ND`` and ``UNK`` (no response); iRECIST codes are not
+supported, and another value raises.
 
 Usage
 -----
     import fleet  # triggers registration
 
+    ovr = adrs.filter(pl.col("PARAMCD") == "OVRLRESP")
     bor = (
-        adrs.adam.onco
-        .filter_pd(response_col="OVRLRESP", date_col="ADT", by=["USUBJID"])
-        .best_overall_response("BOR", source="OVRLRESP", date_col="ADT",
+        ovr.adam.onco
+        .filter_pd(response_col="AVALC", date_col="ADT", by=["USUBJID"])
+        .best_overall_response("BOR", source="AVALC", date_col="ADT",
                                reference_date="RANDDT", min_sd_days=42,
                                by=["USUBJID"])
         .to_frame()
         .select("USUBJID", "BOR")
         .unique()
     )
-    adrs = (
-        adrs.join(bor, on="USUBJID", how="left")
+    ovr = (
+        ovr.join(bor, on="USUBJID", how="left")
         .adam.onco
-        .aval_resp("AVAL", source="OVRLRESP")
-        .tumor_response_flag("RSPFL", source="OVRLRESP")
+        .aval_resp("AVAL", source="AVALC")
+        .tumor_response_flag("RSPFL", source="AVALC")
         .to_frame()
     )
 """
@@ -60,10 +65,49 @@ _RESP_TO_NUM: dict[str, int] = {
 
 _NUM_TO_RESP: dict[int, str] = {v: k for k, v in _RESP_TO_NUM.items()}
 
+#: Values that carry no response: not done, unknown. They rank nothing.
+_NO_RESPONSE = frozenset({"ND", "UNK"})
+
 
 def _resp_num_expr(source: str) -> pl.Expr:
     """Return an expression mapping *source* to its RECIST numeric rank."""
-    return pl.col(source).replace_strict(_RESP_TO_NUM, default=None)
+    return pl.col(source).cast(pl.String).replace_strict(_RESP_TO_NUM, default=None)
+
+
+def _check_columns(verb: str, names: list[str], cols: list[str]) -> None:
+    """Raise a DerivationError that names the verb and each missing column."""
+    missing = [c for c in cols if c not in names]
+    if missing:
+        raise DerivationError(f"{verb}(): column(s) {missing} not found. Available: {names[:25]}")
+
+
+def _check_responses(verb: str, values: pl.Series) -> None:
+    """Raise on a non-null response value that is not a known RECIST code."""
+    known = set(_RESP_TO_NUM) | _NO_RESPONSE
+    unknown = sorted({v for v in values.cast(pl.String).drop_nulls() if v not in known})
+    if unknown:
+        raise DerivationError(
+            f"{verb}(): unknown response values {unknown}; known: "
+            f"{', '.join([*_RESP_TO_NUM, *sorted(_NO_RESPONSE)])}. Recode them first "
+            "(trim blanks, upper case); iRECIST codes are not supported."
+        )
+
+
+def _as_date(verb: str, frame: pl.DataFrame, col: str) -> pl.Series:
+    """Return *col* as Date; a text value that is not a complete date raises."""
+    series = frame.get_column(col)
+    if series.dtype == pl.Date:
+        return series
+    if isinstance(series.dtype, pl.Datetime):
+        return series.dt.date()
+    text = series.cast(pl.String)
+    parsed = text.str.strptime(pl.Date, "%Y-%m-%d", strict=False)
+    bad = text.filter(text.is_not_null() & parsed.is_null())
+    if bad.len():
+        raise DerivationError(
+            f"{verb}(): {col} must be a complete date (YYYY-MM-DD); got '{bad[0]}'"
+        )
+    return parsed
 
 
 def _num_resp_expr(num_expr: pl.Expr) -> pl.Expr:
@@ -136,8 +180,9 @@ class OncoNamespace(SharedADaMVerbsMixin):
             Map overall response to a numeric code::
 
                 adrs = (
-                    rs_raw.adam.onco
-                    .aval_resp("AVAL", source="OVRLRESP")
+                    adrs.filter(pl.col("PARAMCD") == "OVRLRESP")
+                    .adam.onco
+                    .aval_resp("AVAL", source="AVALC")
                     .to_frame()
                 )
 
@@ -175,8 +220,9 @@ class OncoNamespace(SharedADaMVerbsMixin):
             Flag objective responders (CR or PR)::
 
                 adrs = (
-                    rs_raw.adam.onco
-                    .tumor_response_flag("RSPFL", source="OVRLRESP")
+                    adrs.filter(pl.col("PARAMCD") == "OVRLRESP")
+                    .adam.onco
+                    .tumor_response_flag("RSPFL", source="AVALC")
                     .to_frame()
                 )
         """
@@ -209,7 +255,11 @@ class OncoNamespace(SharedADaMVerbsMixin):
         NON-CR/NON-PD assessed before *reference_date* + *min_sd_days*, or
         with a null date, counts as NE. The verb reads every record: it does
         not remove records after the first PD or after new anti-cancer
-        therapy. Run ``filter_pd`` on a copy first and join BOR back.
+        therapy. Run ``filter_pd`` on a copy first and join BOR back. It also
+        reads every parameter, so filter a vertical ADRS to one PARAMCD
+        first. A group whose rows hold no known response (null, ``ND``,
+        ``UNK``) gets ``MISSING``. A subject with no row gets no value, so
+        take the denominator from ADSL. An unknown value raises.
 
         Args:
             target: Name of the output column.
@@ -225,16 +275,18 @@ class OncoNamespace(SharedADaMVerbsMixin):
             Self: The namespace with *target* appended.
 
         Raises:
-            DerivationError: If *min_sd_days* is negative.
+            DerivationError: If *min_sd_days* is negative, or *source* holds
+                a value that is not a known response code.
 
         Examples:
             Derive BOR per subject up to the first PD, with a 42-day SD minimum::
 
+                ovr = adrs.filter(pl.col("PARAMCD") == "OVRLRESP")
                 bor = (
-                    adrs.adam.onco
-                    .filter_pd(response_col="OVRLRESP", date_col="ADT",
+                    ovr.adam.onco
+                    .filter_pd(response_col="AVALC", date_col="ADT",
                                by=["USUBJID"])
-                    .best_overall_response("BOR", source="OVRLRESP",
+                    .best_overall_response("BOR", source="AVALC",
                                            date_col="ADT",
                                            reference_date="RANDDT",
                                            min_sd_days=42, by=["USUBJID"])
@@ -242,7 +294,7 @@ class OncoNamespace(SharedADaMVerbsMixin):
                     .select("USUBJID", "BOR")
                     .unique()
                 )
-                adrs = adrs.join(bor, on="USUBJID", how="left")
+                ovr = ovr.join(bor, on="USUBJID", how="left")
 
         References:
             RECIST 1.1 (Eisenhauer EA et al. Eur J Cancer. 2009;45(2):228-247),
@@ -259,7 +311,12 @@ class OncoNamespace(SharedADaMVerbsMixin):
                 f"best_overall_response(): min_sd_days={min_sd_days}. Give 0 or more days."
             )
         grps = by or ["USUBJID"]
-        resp = pl.col(source)
+        if source in self._lazy.collect_schema().names():
+            _check_responses(
+                "best_overall_response",
+                self._lazy.select(pl.col(source).unique()).collect().get_column(source),
+            )
+        resp = pl.col(source).cast(pl.String)
         if min_sd_days:
             early = (
                 pl.col(date_col).cast(pl.Date)
@@ -271,7 +328,7 @@ class OncoNamespace(SharedADaMVerbsMixin):
                 .otherwise(resp)
             )
         best_num = resp.replace_strict(_RESP_TO_NUM, default=None).min().over(grps)
-        return self._chain(_num_resp_expr(best_num).alias(target))
+        return self._chain(_num_resp_expr(best_num).fill_null("MISSING").alias(target))
 
     # ------------------------------------------------------------------ #
     # 4. confirmed_response_flag — confirm response sustained N days      #
@@ -324,15 +381,18 @@ class OncoNamespace(SharedADaMVerbsMixin):
             Self: A fresh namespace wrapping the updated frame.
 
         Raises:
-            DerivationError: If *responses* holds a value other than CR or PR.
+            DerivationError: If *responses* holds a value other than CR or PR,
+                a column is missing, *source* holds an unknown response code,
+                or a text date is not a complete date.
 
         Examples:
             Flag confirmed CR/PR responses::
 
                 adrs = (
-                    rs_raw.adam.onco
+                    adrs.filter(pl.col("PARAMCD") == "OVRLRESP")
+                    .adam.onco
                     .confirmed_response_flag(
-                        "CRSPFL", source="OVRLRESP", date_col="ADT",
+                        "CRSPFL", source="AVALC", date_col="ADT",
                         confirmation_days=28, by=["USUBJID"])
                     .to_frame()
                 )
@@ -356,11 +416,13 @@ class OncoNamespace(SharedADaMVerbsMixin):
             )
         grps = by or ["USUBJID"]
         df = self.to_frame().with_row_index("__row")
+        _check_columns("confirmed_response_flag", df.columns, [*grps, date_col, source])
+        _check_responses("confirmed_response_flag", df.get_column(source))
         work = df.select(
             "__row",
             *grps,
-            pl.col(date_col).cast(pl.Date).alias("__dt"),
-            pl.col(source).alias("__v"),
+            _as_date("confirmed_response_flag", df, date_col).alias("__dt"),
+            pl.col(source).cast(pl.String).alias("__v"),
         )
         first_pd = (
             work.filter(pl.col("__v") == "PD")
@@ -429,18 +491,23 @@ class OncoNamespace(SharedADaMVerbsMixin):
 
         Args:
             response_col: Column containing response text.
-            date_col: Assessment date column.
+            date_col: Assessment date column (Date, or complete ISO text).
             by: Partition columns (default ``["USUBJID"]``).
 
         Returns:
             Self: A fresh namespace wrapping the filtered frame.
 
+        Raises:
+            DerivationError: If a column is missing, *response_col* holds an
+                unknown response code, or a text date is not complete.
+
         Examples:
             Filter to records up to first progressive disease::
 
                 adrs = (
-                    rs_raw.adam.onco
-                    .filter_pd(response_col="OVRLRESP", date_col="ADT",
+                    adrs.filter(pl.col("PARAMCD") == "OVRLRESP")
+                    .adam.onco
+                    .filter_pd(response_col="AVALC", date_col="ADT",
                                by=["USUBJID"])
                     .to_frame()
                 )
@@ -451,19 +518,21 @@ class OncoNamespace(SharedADaMVerbsMixin):
         """
         grps = by or ["USUBJID"]
         df = self.to_frame()
+        _check_columns("filter_pd", df.columns, [*grps, response_col, date_col])
+        _check_responses("filter_pd", df.get_column(response_col))
+        work = df.with_columns(_as_date("filter_pd", df, date_col).alias("_dt"))
 
         # First PD date per group
         pd_dates = (
-            df.filter(pl.col(response_col) == "PD")
-            .with_columns(pl.col(date_col).cast(pl.Date))
+            work.filter(pl.col(response_col).cast(pl.String) == "PD")
             .group_by(grps)
-            .agg(pl.col(date_col).min().alias("_first_pd"))
+            .agg(pl.col("_dt").min().alias("_first_pd"))
         )
 
-        joined = df.join(pd_dates, on=grps, how="left", nulls_equal=True)
+        joined = work.join(pd_dates, on=grps, how="left", nulls_equal=True)
         filtered = joined.filter(
-            pl.col("_first_pd").is_null() | (pl.col(date_col).cast(pl.Date) <= pl.col("_first_pd"))
-        ).drop("_first_pd")
+            pl.col("_first_pd").is_null() | (pl.col("_dt") <= pl.col("_first_pd"))
+        ).drop("_first_pd", "_dt")
 
         from fleet.core.lineage import record_row_step
 

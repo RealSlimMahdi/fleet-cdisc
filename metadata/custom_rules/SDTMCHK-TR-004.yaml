@@ -64,3 +64,6 @@ Authorities:
       - Cited Guidance: check_tr_trdtc_across_visit
         Document: pharmaverse sdtmchecks
         Section: TR Domain
+  Category:
+    Purpose: Data quality check from sdtmchecks
+    Keywords: [TR]

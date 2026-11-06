@@ -1,5 +1,7 @@
 # Fleet DX Review — What's Suboptimal, What's Next
 
+> **Status:** partly done. Open items are tracked in [issue #144](https://github.com/RealSlimMahdi/fleet-cdisc/issues/144) and the ideas tracker.
+
 > Consolidated audit of Fleet's developer experience for the statistical programmer:
 > verb API, core engine, CLI, TLG engine, YAML schemas (TLG + define.yaml), the dual
 > inline/spec path, typing/IDE support, and the interactive-vs-batch TLG question.

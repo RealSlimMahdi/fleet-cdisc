@@ -176,8 +176,8 @@ class TestStudyEye:
     """
     Test 3: Eye code → study eye text derivation.
 
-    Mirrors admiralophtha test-derive_var_studyeye.R which checks all 4 valid
-    codes (OS, OD, OU, OP/unknown) plus case-insensitivity.
+    Follows the rule of admiralophtha derive_var_studyeye for the 4 codes
+    (OS, OD, OU, OP/unknown). Values are hand-written.
     """
 
     @pytest.mark.parametrize("code,expected_eye", _EYE_CODE_MAPPING)
@@ -187,7 +187,7 @@ class TestStudyEye:
         assert result["STUDYEYE"][0] == expected_eye
 
     def test_case_insensitive_full_vector(self):
-        """admiral tests case-insensitive parsing — lower/mixed case must work."""
+        """Fleet reads the eye code in any letter case (a Fleet rule, not an admiral test)."""
         df = pl.from_repr("""\
 ┌──────────┐
 │ SCSTRESC │
@@ -301,6 +301,15 @@ class TestBcvaCriterion:
             "FL", value_col="ETDRS", threshold=threshold, direction=direction
         ).to_frame()
         assert result["FL"].to_list() == expected
+
+    @pytest.mark.parametrize("direction", ["ge", "gt", "le", "lt"])
+    def test_a_nan_score_is_not_flagged(self, direction):
+        """c1-855: NaN is a missing score, as null is."""
+        df = pl.DataFrame({"ETDRS": [float("nan"), None]})
+        result = df.adam.ophtha.bcva_criterion(
+            "FL", value_col="ETDRS", threshold=70.0, direction=direction
+        ).to_frame()
+        assert result["FL"].to_list() == [None, None]
 
     def test_at_exact_ge_threshold_flagged(self):
         """At exactly the ge threshold → must flag (inclusive)."""

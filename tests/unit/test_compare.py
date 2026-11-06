@@ -934,8 +934,8 @@ class TestStatistics:
             ("difference", "Difference"),
             ("percent_difference", "% difference"),
         ):
-            # a null in the JSON would fail the :g format here
-            expected = [f"{record[f'{side}_{m}']:g}" for m in ("n", "mean", "std", "min", "max")]
+            # a null in the JSON would fail the :.12g format here
+            expected = [f"{record[f'{side}_{m}']:.12g}" for m in ("n", "mean", "std", "min", "max")]
             text_row = next(
                 line.strip()[len(label) :].split()
                 for line in text.splitlines()
@@ -1036,11 +1036,14 @@ class TestTolerances:
         assert compare(b, c, keys="ID", rel_tol=0.99).is_equal is False
         assert compare(b, c, keys="ID", rel_tol=0.99, abs_tol=0.5).is_equal is True
 
-    def test_tolerances_apply_to_integer_and_decimal_variables(self):
-        b = pl.DataFrame({"ID": [1], "N": pl.Series([100], dtype=pl.Int64)})
-        c = pl.DataFrame({"ID": [1], "N": pl.Series([101], dtype=pl.Int64)})
+    @pytest.mark.parametrize("dtype", [pl.Int64, pl.Decimal(10, 1)], ids=["int", "decimal"])
+    def test_tolerances_apply_to_integer_and_decimal_variables(self, dtype):
+        b = pl.DataFrame({"ID": [1], "N": pl.Series([100]).cast(dtype)})
+        c = pl.DataFrame({"ID": [1], "N": pl.Series([101]).cast(dtype)})
         assert compare(b, c, keys="ID", abs_tol=1.0).is_equal is True
         assert compare(b, c, keys="ID", abs_tol=0.5).is_equal is False
+        assert compare(b, c, keys="ID", rel_tol=0.01).is_equal is True
+        assert compare(b, c, keys="ID").is_equal is False
 
     def test_tolerances_survive_a_numeric_dtype_difference(self, base):
         c = base.with_columns((pl.col("AGE").cast(pl.Float64) + 0.4).alias("AGE"))
@@ -1629,6 +1632,8 @@ class TestVariablePairs:
             pytest.param({"FOO": "WEIGHT"}, "absent from the base", id="unknown-base-variable"),
             pytest.param({"USUBJID": "SUBJID"}, "may not rename a key", id="key"),
             pytest.param({"AGE": "X", "WT": "X"}, "more than one", id="two-pairs-one-target"),
+            pytest.param({"AGE": "WT"}, "also match by name", id="target-matched-by-name"),
+            pytest.param({"AGE": "USUBJID"}, "also match by name", id="target-is-a-key"),
         ],
     )
     def test_a_pair_that_cannot_be_honoured_is_refused(self, base, pairs, message):
@@ -1714,7 +1719,7 @@ class TestMatchingSettingsOnEverySurface:
 
     def test_the_text_report_names_the_pairs_and_the_restriction(self, report):
         text = report.to_text()
-        assert "Pairs:     WT = WEIGHT" in text
+        assert re.search(r"Pairs:\s+WT = WEIGHT", text)
         assert "Variables: AGE, WT" in text
 
     def test_an_ordinary_comparison_says_nothing_about_either(self, base):
@@ -1801,7 +1806,7 @@ class TestTextReport:
         text = compare(base, candidate, keys="USUBJID").to_text()
         statistics = text[text.index("Summary statistics") : text.index("Value listing")]
         assert "AGE" in statistics
-        assert "43.6667" in statistics and "9.07377" in statistics  # base mean and std
+        assert "43.6666666667" in statistics and "9.07377172588" in statistics  # base mean, std
         for label in ("Base", "Candidate", "Difference", "% difference"):
             assert label in statistics
         assert "SEX" in statistics  # a string contributes only its count
@@ -1950,6 +1955,7 @@ class TestJsonReport:
             "observations_with_differences": 2,
             "total_differences": 3,
             "per_group": [],
+            "within_tolerance": 0,
         }
         assert [r["variable"] for r in document["statistics"]] == ["AGE", "SEX", "WT"]
         assert document["settings"] == {
@@ -2242,7 +2248,7 @@ class TestHtmlReport:
         page = compare(base, candidate, keys="USUBJID").to_html()
         age = page[page.index("<summary>AGE") : page.index("<summary>SEX")]
         assert "Summary statistics" in age
-        assert "43.6667" in age and "9.07377" in age  # base mean and std
+        assert "43.6666666667" in age and "9.07377172588" in age  # base mean and std
         for label in ("Base", "Candidate", "Difference", "% difference"):
             assert label in age
         sex = page[page.index("<summary>SEX") : page.index("<summary>WT")]
@@ -2255,6 +2261,248 @@ class TestHtmlReport:
         report.save_html_report(str(path))
         assert path.read_text(encoding="utf-8") == report.to_html()
         assert "Mâle" in path.read_text(encoding="utf-8")
+
+
+# ── Medium and low audit findings ─────────────────────────────────────────────
+
+
+def _by_arm() -> tuple[pl.DataFrame, pl.DataFrame]:
+    base = pl.from_repr("""\
+┌─────┬─────┬───────┐
+│ K   ┆ TRT ┆ V     │
+│ --- ┆ --- ┆ ---   │
+│ i64 ┆ str ┆ f64   │
+╞═════╪═════╪═══════╡
+│ 1   ┆ A   ┆ 1.0   │
+│ 2   ┆ A   ┆ 2.0   │
+│ 3   ┆ B   ┆ 1.0   │
+│ 4   ┆ B   ┆ 300.0 │
+│ 5   ┆ B   ┆ 299.0 │
+└─────┴─────┴───────┘
+""")
+    candidate = pl.from_repr("""\
+┌─────┬─────┬───────┐
+│ K   ┆ TRT ┆ V     │
+│ --- ┆ --- ┆ ---   │
+│ i64 ┆ str ┆ f64   │
+╞═════╪═════╪═══════╡
+│ 1   ┆ A   ┆ 1.0   │
+│ 2   ┆ A   ┆ 2.5   │
+│ 3   ┆ B   ┆ 1.0   │
+│ 4   ┆ B   ┆ 300.0 │
+│ 5   ┆ B   ┆ 349.0 │
+└─────┴─────┴───────┘
+""")
+    return base, candidate
+
+
+class TestAuditFindings:
+    """Regression tests for the medium and low findings of the alpha audit."""
+
+    def test_c1_722_by_statistics_are_drawn_once_over_all_groups(self):
+        page = compare(*_by_arm(), keys="K", by="TRT").to_html()
+        assert page.count("<caption>Summary statistics") == 1
+        assert "over all groups</caption>" in page
+        assert page.index("over all groups") < page.index("<h3>Group TRT=A")
+
+    def test_c1_515_an_unpaired_candidate_variable_of_a_paired_name_is_extra(self):
+        base = pl.from_repr("""\
+┌─────┬──────┐
+│ ID  ┆ AVAL │
+│ --- ┆ ---  │
+│ i64 ┆ i64  │
+╞═════╪══════╡
+│ 1   ┆ 1    │
+└─────┴──────┘
+""")
+        candidate = pl.from_repr("""\
+┌─────┬──────┬────────┐
+│ ID  ┆ AVAL ┆ RESULT │
+│ --- ┆ ---  ┆ ---    │
+│ i64 ┆ i64  ┆ i64    │
+╞═════╪══════╪════════╡
+│ 1   ┆ 999  ┆ 1      │
+└─────┴──────┴────────┘
+""")
+        report = compare(base, candidate, keys="ID", pairs={"AVAL": "RESULT"})
+        assert report.is_equal is False
+        assert report.variables.candidate_only == ("AVAL",)
+        assert "candidate_only_variables" in report.flags
+
+    def test_c1_515_a_swap_of_two_base_variables_is_legal(self):
+        base = pl.from_repr("""\
+┌─────┬─────┬─────┐
+│ ID  ┆ A   ┆ B   │
+│ --- ┆ --- ┆ --- │
+│ i64 ┆ i64 ┆ i64 │
+╞═════╪═════╪═════╡
+│ 1   ┆ 1   ┆ 2   │
+└─────┴─────┴─────┘
+""")
+        candidate = pl.from_repr("""\
+┌─────┬─────┬─────┐
+│ ID  ┆ A   ┆ B   │
+│ --- ┆ --- ┆ --- │
+│ i64 ┆ i64 ┆ i64 │
+╞═════╪═════╪═════╡
+│ 1   ┆ 2   ┆ 1   │
+└─────┴─────┴─────┘
+""")
+        assert compare(base, candidate, keys="ID", pairs={"A": "B", "B": "A"}).is_equal
+        with pytest.raises(ComparisonError, match="also match by name"):
+            compare(base, candidate, keys="ID", pairs={"A": "B"})
+
+    def test_c1_518_a_duration_difference_is_listed(self):
+        base = pl.from_repr("""\
+┌─────┬──────────────┐
+│ K   ┆ D            │
+│ --- ┆ ---          │
+│ i64 ┆ duration[μs] │
+╞═════╪══════════════╡
+│ 1   ┆ 1d           │
+│ 2   ┆ 1d           │
+└─────┴──────────────┘
+""")
+        candidate = pl.from_repr("""\
+┌─────┬──────────────┐
+│ K   ┆ D            │
+│ --- ┆ ---          │
+│ i64 ┆ duration[μs] │
+╞═════╪══════════════╡
+│ 1   ┆ 1d           │
+│ 2   ┆ 3d           │
+└─────┴──────────────┘
+""")
+        report = compare(base, candidate, keys="K")
+        assert report.flags == {"values_differ"}
+        assert report.listing.select("K", "base", "candidate").rows() == [(2, "P1D", "P3D")]
+
+    @pytest.mark.parametrize(
+        "name", ["matched", "base_only", "candidate_only", "observations_with_differences"]
+    )
+    def test_c1_519_a_by_variable_may_share_a_summary_column_name(self, name):
+        base, candidate = (frame.rename({"TRT": name}) for frame in _by_arm())
+        report = compare(base, candidate, keys="K", by=name)
+        assert report.observations.per_group["group"].to_list() == [f"{name}=A", f"{name}=B"]
+        assert report.values.per_group["observations_with_differences"].to_list() == [1, 1]
+
+    @pytest.mark.parametrize("by", [None, "TRT"])
+    def test_c1_723_the_block_header_counts_duplicate_observations(self, by):
+        base = pl.from_repr("""\
+┌─────┬─────┬─────┐
+│ K   ┆ TRT ┆ V   │
+│ --- ┆ --- ┆ --- │
+│ str ┆ str ┆ i64 │
+╞═════╪═════╪═════╡
+│ a   ┆ A   ┆ 1   │
+│ a   ┆ A   ┆ 2   │
+│ b   ┆ A   ┆ 3   │
+└─────┴─────┴─────┘
+""")
+        candidate = pl.from_repr("""\
+┌─────┬─────┬─────┐
+│ K   ┆ TRT ┆ V   │
+│ --- ┆ --- ┆ --- │
+│ str ┆ str ┆ i64 │
+╞═════╪═════╪═════╡
+│ a   ┆ A   ┆ 9   │
+│ a   ┆ A   ┆ 8   │
+│ b   ┆ A   ┆ 3   │
+└─────┴─────┴─────┘
+""")
+        report = compare(base, candidate, keys="K", by=by, allow_duplicates=True)
+        assert report.values.observations_with_differences == 2
+        page = report.to_html()
+        assert "2 values in 2 observations" in page  # the chip
+        assert "2 unequal values in 2 observations" in page  # the block header
+        assert "in 1 observation," not in page
+
+    @pytest.mark.parametrize("save", ["save_json", "save_html_report", "save_listing"])
+    def test_c1_724_a_missing_parent_folder_is_made(self, base, candidate, tmp_path, save):
+        path = tmp_path / "build" / "nested" / "out"
+        getattr(compare(base, candidate, keys="USUBJID"), save)(path)
+        assert path.is_file()
+
+    def test_c1_727_values_inside_the_tolerance_are_counted(self):
+        base = pl.from_repr("""\
+┌─────┬───────┐
+│ K   ┆ V     │
+│ --- ┆ ---   │
+│ i64 ┆ f64   │
+╞═════╪═══════╡
+│ 1   ┆ 100.0 │
+│ 2   ┆ 200.0 │
+│ 3   ┆ 300.0 │
+└─────┴───────┘
+""")
+        candidate = pl.from_repr("""\
+┌─────┬───────┐
+│ K   ┆ V     │
+│ --- ┆ ---   │
+│ i64 ┆ f64   │
+╞═════╪═══════╡
+│ 1   ┆ 100.9 │
+│ 2   ┆ 199.1 │
+│ 3   ┆ 300.5 │
+└─────┴───────┘
+""")
+        report = compare(base, candidate, keys="K", abs_tol=1.0)
+        assert report.is_equal is True
+        assert report.values.within_tolerance == 3
+        assert json.loads(report.to_json())["values"]["within_tolerance"] == 3
+        assert (
+            "All compared values are within the rule in effect; 3 of them are not exactly equal."
+            in report.to_text()
+        )
+        assert "3 of them are not exactly equal" in report.to_html()
+        assert compare(base, candidate, keys="K").values.within_tolerance == 0
+
+    def test_c1_727_stripped_whitespace_is_counted_too(self):
+        base = pl.DataFrame({"K": [1, 2], "S": ["M ", "F"]})  # a trailing blank from_repr drops
+        candidate = pl.DataFrame({"K": [1, 2], "S": ["M", "F"]})
+        report = compare(base, candidate, keys="K", ignore_trailing_whitespace=True)
+        assert (report.is_equal, report.values.within_tolerance) == (True, 1)
+
+    def test_c1_729_ambiguous_listed_values_are_quoted(self):
+        # a trailing blank, the text "null" and an empty string: from_repr cannot carry them
+        base = pl.DataFrame({"K": [1, 2, 3, 4], "S": ["M ", "null", "", "X"]})
+        candidate = pl.DataFrame({"K": [1, 2, 3, 4], "S": ["M", None, None, "Y"]})
+        report = compare(base, candidate, keys="K")
+        rows = report.to_text().split("Value listing")[1].splitlines()
+        cells = [
+            line.split(maxsplit=1)[1].rstrip() for line in rows if line.strip().startswith("S ")
+        ]
+        assert cells == ['"M "    M', '"null"  null', '""      null', "X       Y"]
+        page = report.to_html()
+        assert '<td class="base changed">&quot;M &quot;</td>' in page
+        assert "white-space: pre-wrap" in page
+        assert report.listing["base"].to_list() == ["M ", "null", "", "X"]  # raw values kept
+
+    def test_c1_730_statistics_carry_twelve_significant_digits(self):
+        base = pl.from_repr("""\
+┌─────┬─────────┐
+│ K   ┆ X       │
+│ --- ┆ ---     │
+│ i64 ┆ i64     │
+╞═════╪═════════╡
+│ 1   ┆ 1234567 │
+│ 2   ┆ 1234568 │
+└─────┴─────────┘
+""")
+        candidate = pl.from_repr("""\
+┌─────┬─────────┐
+│ K   ┆ X       │
+│ --- ┆ ---     │
+│ i64 ┆ i64     │
+╞═════╪═════════╡
+│ 1   ┆ 1234568 │
+│ 2   ┆ 1234569 │
+└─────┴─────────┘
+""")
+        report = compare(base, candidate, keys="K")
+        for rendered in (report.to_text(), report.to_html()):
+            assert "1234567.5" in rendered and "1234568.5" in rendered
+            assert "1.23457e+06" not in rendered
 
 
 # ── Purity ────────────────────────────────────────────────────────────────────

@@ -17,7 +17,7 @@ progressing from simple record-level checks to advanced cross-domain validations
 Custom rules are executed using the `-lr` (local rules) flag:
 
 ```bash
-fleet validate --datasets ./data --local-rules ./metadata/custom_rules/
+fleet validate ./data --custom-rules ./metadata/custom_rules/
 ```
 
 Or with the engine directly:
@@ -474,10 +474,10 @@ frame the R function fails and one frame it passes.
 | # | Function | Domain(s) | Status | Rule ID | Fidelity | Notes |
 |---|----------|-----------|--------|---------|----------|-------|
 | 1 | `check_ae_aedecod` | AE | ✅ | SDTMCHK-AE-001 | Same as R | `empty` operator |
-| 2 | `check_ae_aedthdtc_aesdth` | AE | ✅ | SDTMCHK-AE-002 | Same as R | `non_empty` + `not_equal_to` |
-| 3 | `check_ae_aesdth_aedthdtc` | AE | ✅ | SDTMCHK-AE-003 | Same as R | `equal_to` + `empty` |
-| 4 | `check_ae_aeout` (part 1) | AE | ✅ | SDTMCHK-AE-004 | Same as R | AEDTHDTC present, AEOUT≠FATAL |
-| 5 | `check_ae_aeout` (part 2) | AE | ✅ | SDTMCHK-AE-005 | Same as R | AEOUT=FATAL, AEDTHDTC missing |
+| 2 | `check_ae_aedthdtc_aesdth` | AE | ✅ | SDTMCHK-AE-002 | Same as R | `non_empty` + `not_equal_to`. Needs a sponsor AEDTHDTC (not in SDTMIG 3.4 AE); on standard data see CORE-000253, CORE-000254, CORE-000841. |
+| 3 | `check_ae_aesdth_aedthdtc` | AE | ✅ | SDTMCHK-AE-003 | Same as R | `equal_to` + `empty`. Needs a sponsor AEDTHDTC (not in SDTMIG 3.4 AE); on standard data see CORE-000253, CORE-000254, CORE-000841. |
+| 4 | `check_ae_aeout` (part 1) | AE | ✅ | SDTMCHK-AE-004 | Same as R | AEDTHDTC present, AEOUT≠FATAL. Needs a sponsor AEDTHDTC (not in SDTMIG 3.4 AE); on standard data see CORE-000253, CORE-000254, CORE-000841. |
+| 5 | `check_ae_aeout` (part 2) | AE | ✅ | SDTMCHK-AE-005 | Same as R | AEOUT=FATAL, AEDTHDTC missing. Needs a sponsor AEDTHDTC (not in SDTMIG 3.4 AE); on standard data see CORE-000253, CORE-000254, CORE-000841. |
 | 6 | `check_ae_death` | AE | ✅ | SDTMCHK-AE-006 | Same as R | Grade 5 death inconsistency |
 | 7 | `check_ae_fatal` | AE | ✅ | SDTMCHK-AE-007 | Differs (stated in the rule) | AEOUT is 'FATAL' but AEDTHDTC is missing, AESDTH is not 'Y', AETOXGR is not 5 or AESEV is not SEVERE. |
 | 8 | `check_ae_aeout_aeendtc_nonfatal` (part 1) | AE | ✅ | SDTMCHK-AE-008 | Same as R | Resolved AE, AEENDTC missing |
@@ -490,16 +490,16 @@ frame the R function fails and one frame it passes.
 | 15 | `check_ae_dup` | AE | ✅ | SDTMCHK-AE-014 | Differs (stated in the rule) | Duplicate AE record: USUBJID, AETERM, AEDECOD, AESTDTC, AEENDTC and AESEV are not unique. |
 | 16 | `check_ae_aeacnoth` | AE | ✅ | SDTMCHK-AE-022 | Same as R | AEACNOTH is 'MULTIPLE' but AEACNOT1 or AEACNOT2 is missing. |
 | 17 | `check_ae_aestdtc_after_dd` | AE, DS | ✅ | SDTMCHK-AE-013 | Differs (stated in the rule) | AESTDTC is after the death date (DM.DTHDTC). |
-| 18 | `check_ae_aedthdtc_ds_death` | AE, DS | ✅ | SDTMCHK-AE-015 | Same as R | DS records a death due to an adverse event, but no AE record of the subject has AEDTHDTC. |
+| 18 | `check_ae_aedthdtc_ds_death` | AE, DS | ✅ | SDTMCHK-AE-015 | Same as R | DS records a death due to an adverse event, but no AE record of the subject has AEDTHDTC. Needs a sponsor AEDTHDTC (not in SDTMIG 3.4 AE); on standard data see CORE-000253, CORE-000254, CORE-000841. |
 | 19 | `check_ae_death_ds_discon` | AE, DS | ⚠️ | — (was SDTMCHK-AE-019) | Removed | Removed (c2-918): R selects the study discontinuation record by partial DSSCAT text; an operation filter takes exact values only |
-| 20 | `check_ae_ds_partial_death_dates` | AE | ✅ | SDTMCHK-AE-017 | Differs (stated in the rule) | AEDTHDTC is a partial date (fewer than 10 characters). |
+| 20 | `check_ae_ds_partial_death_dates` | AE | ✅ | SDTMCHK-AE-017 | Differs (stated in the rule) | AEDTHDTC is a partial date (fewer than 10 characters). Needs a sponsor AEDTHDTC (not in SDTMIG 3.4 AE); on standard data see CORE-000253, CORE-000254, CORE-000841. |
 | 21 | `check_ae_withdr_ds_discon` | AE, DS | ⚠️ | — (was SDTMCHK-AE-018) | Removed | Removed (c2-918): R needs a single-agent study (TS) and DS records selected by partial text; an operation filter takes exact values only |
 | 22 | `check_ae_aeacn_ds_disctx_covid` | AE, DS | 🟡 | — | — | COVID-specific |
 | 23 | `check_ae_aeacnoth_ds_disctx` | AE, DS | ⚠️ | — (was SDTMCHK-AE-020) | Removed | Removed (c2-918): R reads every AEACNOTx and selects DS records by partial DSSCAT text; an operation filter takes exact values only |
 | 24 | `check_ae_aeacnoth_ds_stddisc_covid` | AE, DS | 🟡 | — | — | COVID-specific |
-| — | `check_dd_ae_aedthdtc_ds_dsstdtc` | AE, DS | ✅ | SDTMCHK-AE-016 | Differs (stated in the rule) | AEDTHDTC equals none of the DS death dates (DSSTDTC where DSDECOD = 'DEATH'). |
-| — | `check_dd_ae_aeout_aedthdtc` | AE | ✅ | SDTMCHK-AE-004/005 | Same as R | Covered by the custom rules AE-004 and AE-005, not by CORE |
-| — | `check_dd_death_date` | AE, DS | 🔄 | SDTMCHK-AE-015 | Partial | DS records a death due to an adverse event, but no AE record of the subject has AEDTHDTC. |
+| — | `check_dd_ae_aedthdtc_ds_dsstdtc` | AE, DS | ✅ | SDTMCHK-AE-016 | Differs (stated in the rule) | AEDTHDTC equals none of the DS death dates (DSSTDTC where DSDECOD = 'DEATH'). Needs a sponsor AEDTHDTC (not in SDTMIG 3.4 AE); on standard data see CORE-000253, CORE-000254, CORE-000841. |
+| — | `check_dd_ae_aeout_aedthdtc` | AE | ✅ | SDTMCHK-AE-004/005 | Same as R | Covered by the custom rules AE-004 and AE-005, not by CORE. Needs a sponsor AEDTHDTC (not in SDTMIG 3.4 AE); on standard data see CORE-000253, CORE-000254, CORE-000841. |
+| — | `check_dd_death_date` | AE, DS | 🔄 | SDTMCHK-AE-015 | Partial | DS records a death due to an adverse event, but no AE record of the subject has AEDTHDTC. Needs a sponsor AEDTHDTC (not in SDTMIG 3.4 AE); on standard data see CORE-000253, CORE-000254, CORE-000841. |
 
 ---
 

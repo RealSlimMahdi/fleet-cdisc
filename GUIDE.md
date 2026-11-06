@@ -23,7 +23,8 @@ uv add fleet-cdisc --prerelease=allow
 ### From TestPyPI (development builds)
 
 ```bash
-uv pip install -i https://test.pypi.org/simple/ fleet-cdisc
+uv pip install -i https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple \
+  --index-strategy unsafe-best-match --prerelease allow fleet-cdisc
 ```
 
 ### For development (source checkout)
@@ -78,7 +79,7 @@ sdtm:
   ig_version: "3-4"
   domains: [DM, AE, VS, EX, DS]
 adam:
-  ig_version: "1-1"
+  ig_version: "1-3"
   datasets: [ADSL, ADVS, ADAE]
 ct:
   package: "sdtmct-2023-12-15"
@@ -300,10 +301,17 @@ dm = (
             {"condition": pl.col("arm_code") == "Xan_Lo", "value": "XAN_LO"},
             {"condition": pl.col("arm_code") == "Xan_Hi", "value": "XAN_HI"},
         ],
-        else_="SCRNFAIL",
     )
     .assign("ARM", source="arm_description")
-    .assign("ACTARMCD", source="arm_code")
+    # One arm per subject in the raw data: the actual arm takes the same codes.
+    .case_when(
+        "ACTARMCD",
+        when=[
+            {"condition": pl.col("arm_code") == "Pbo", "value": "PBO"},
+            {"condition": pl.col("arm_code") == "Xan_Lo", "value": "XAN_LO"},
+            {"condition": pl.col("arm_code") == "Xan_Hi", "value": "XAN_HI"},
+        ],
+    )
     .assign("ACTARM", source="arm_description")
     .date("RFSTDTC", source="first_dose_date")
     .date("RFENDTC", source="last_dose_date")
@@ -316,7 +324,7 @@ print(dm.select("STUDYID", "DOMAIN", "USUBJID", "SEX", "RACE", "ARMCD", "RFSTDTC
 
 > **Renamed in pre-alpha.** The old spellings (`assign_no_ct` / `assign_ct` /
 > `hardcode_no_ct` / `hardcode_ct` / `dataset_level` / `if_then_else`, …) were
-> removed outright — `assign` / `case_when` / `merge` with `by=` / `keep=` are
+> removed outright — `assign` / `case_when` / `merge` with `on=` / `keep=` are
 > the only spellings. Run `python -m fleet.tools.migrate <files...> --write`
 > (or `fleet migrate`) to rewrite old external scripts automatically.
 
@@ -497,7 +505,10 @@ adsl = (
     .duration("TRTDURD", start="TRTSDT", end="TRTEDT")
     # ── Disposition ──
     .last_date(
-        "EOSDT", from_dataset=ds, date_col="DSSTDTC", where='pl.col("DSCAT") == "DISPOSITION EVENT"'
+        "EOSDT",
+        from_dataset=ds,
+        date_col="DSSTDTC",
+        where='(pl.col("DSCAT") == "DISPOSITION EVENT") & (pl.col("DSDECOD") != "SCREEN FAILURE")',
     )
     .first_date(
         "RANDDT", from_dataset=ds, date_col="DSSTDTC", where='pl.col("DSDECOD") == "RANDOMIZED"'
@@ -516,7 +527,8 @@ adsl = (
     # Treated = a dose record in EX. The SAP decides; the admiral template also
     # counts a placebo dose of 0 (EXDOSE = 0 with PLACEBO in EXTRT).
     .flag("SAFFL", criteria='pl.col("TRTSDT").is_not_null()', false_value="N")
-    .flag("ITTFL", criteria='pl.col("ARMCD") != "SCRNFAIL"', false_value="N")
+    # All randomised subjects: a screen failure has a null ARMCD (SDTMIG 3.4).
+    .flag("ITTFL", criteria='pl.col("ARMCD").is_not_null()', false_value="N")
     # ── AE counts ──
     .count_events("NUMAE", from_dataset=ae)
     .count_events("NUMSAE", from_dataset=ae, where='pl.col("AESER") == "Y"')
@@ -553,8 +565,14 @@ advs = (
     # Join TRTSDT for study day calculation
     .merge(_trtsdt_map, on="USUBJID")
     .duration("ADY", start="TRTSDT", end="ADT")
-    # Baseline flag: last pre-dose visit (vsdy <= 0)
-    .flag("ABLFL", criteria='pl.col("vsdy") <= 0', by=["USUBJID", "PARAMCD"])
+    # Baseline flag: the last pre-dose record (vsdy <= 0) per subject and parameter
+    .flag(
+        "ABLFL",
+        criteria="last",
+        order_by="ADT",
+        where='pl.col("vsdy") <= 0',
+        by=["USUBJID", "PARAMCD"],
+    )
     # BASE = AVAL where ABLFL == "Y" — reads the flag written one line up
     .baseline("BASE", aval="AVAL", baseline_flag="ABLFL", by=["USUBJID", "PARAMCD"])
     # CHG / PCHG read BASE — still the same chain
@@ -619,8 +637,8 @@ print(adae.select("USUBJID", "AETERM", "TRTEMFL", "AESEVN", "ASEQ"))
 
 ## Part 10 — Trial Design Domains (TDD)
 
-Fleet supports all nine CDISC Trial Design domains (TE, TA, TV, TS, TI, TD,
-TM protocol-reference; SV, SE subject-level) through two complementary paths:
+Fleet supports the seven Trial Design domains (TE, TA, TV, TS, TI, TD, TM),
+plus the subject-level SV and SE, through two complementary paths:
 
 1. **`fleet.StudyDesign`** — define the design once, derive every domain.
 2. **Row-level pipeline** — `fetch_structure() → study_header() → add_*() → to_frame()`
@@ -1101,8 +1119,9 @@ Header rows emit `variable=""` and `variable_level=label` in the ARD.
 
 ### Pre-merge stratification (C3 pattern)
 
-When a stratification column lives in another dataset (e.g. AGEGR1 from ADSL),
-pre-merge it before calling the namespace — no hidden joins:
+The builder groups by one column. For a table of one stratum whose column
+lives in another dataset (e.g. AGEGR1 from ADSL), pre-merge the column and
+filter both frames to the stratum, so the big N matches. There are no hidden joins:
 
 ```python
 adae_strat = adae.join(
@@ -1111,9 +1130,9 @@ adae_strat = adae.join(
     how="left",
 )
 ard = (
-    adae_strat.tlg.ae.population(adsl)
+    adae_strat.filter(pl.col("AGEGR1") == ">64")
+    .tlg.ae.population(adsl, adsl_filter=pl.col("AGEGR1") == ">64")
     .by("TRTA")
-    .by2("AGEGR1")
     .rows(["AEBODSYS", "AEDECOD"])
     .stats([Statistic.N_SUBJECTS, Statistic.N_PCT])
     .to_ard()
@@ -1169,10 +1188,14 @@ html = (
 )
 ```
 
-PDF export requires WeasyPrint (`uv add weasyprint` or `pip install fleet-cdisc[tlg-pdf]`):
+PDF export requires WeasyPrint (`uv add weasyprint` or `pip install fleet-cdisc[tlg-pdf]`).
+WeasyPrint also needs the Pango system libraries; when they are missing, the export stops
+with an `ImportError` that names them (`fleet doctor` reports "not usable"). Every physical
+PDF page shows "Page X of Y", and the PDF loads no external resource (a logo in an HTML
+wrapper is left out, with a warning):
 
 ```python
-path = builder.to_pdf("ae_summary.pdf", metadata=meta)
+path = builder.to_pdf("ae_summary.pdf", metadata=meta, rows_per_page=25)
 ```
 
 PPTX slide export requires python-pptx (`uv add python-pptx` or `pip install fleet-cdisc[tlg-pptx]`).
@@ -1235,15 +1258,15 @@ uv run fleet install-engine
 uv run fleet doctor
 ```
 
-Expected output:
+Expected output (excerpt):
 
 ```
 Fleet Doctor
-========================================
-  engine.............. /Users/you/.fleet/cdisc-rules-engine/core/core
-  type................ binary
-  status.............. OK — validate command available
-  pyreadstat.......... installed
+====================================================
+  ✓ rules engine ....... /Users/you/.fleet/cdisc-rules-engine/core/core (default)
+      version: 0.15.0 (tested with Fleet)
+      type: binary
+  ✓ engine status ...... OK — validate command available
 ```
 
 The engine is stored at:
@@ -1309,7 +1332,7 @@ advs_result.print_report()
 uv run fleet uninstall-engine
 ```
 
-> **Note:** `pyreadstat` is also required for validation (XPT serialization). Install it with `uv sync --extra io`.
+> **Note:** `pyreadstat` is needed only to read or write XPT. Install it with `uv sync --extra io`.
 
 ### 11.5 Cache CDISC conformance rules
 
@@ -1457,10 +1480,11 @@ The vendored JSON Schema at `src/fleet/validation/schemas/cdisc_rule_schema.json
 be used to validate your rule before running the engine:
 
 ```python
-from fleet.validation.rule_scaffolder import scaffold_rule
-from test_custom_rule import validate_rule_schema
+from pathlib import Path
 
-errors = validate_rule_schema(rule_dict)
+from fleet.validation.rule_scaffolder import check_rule
+
+errors = check_rule(Path("metadata/custom_rules/FLEET-AE-001.yaml"))  # [] when the rule is valid
 ```
 
 ---
@@ -1777,7 +1801,7 @@ uv run python scripts/build_llms.py --check   # CI stale-check
 Fleet creates this structure on `fleet init cfg`:
 
 ```
-specs/<study_id>/adam/derivations/
+programs/derivations/
     __init__.py    # import all derivations here for auto-registration
     AGEGR1.py
     BMI.py
@@ -1804,10 +1828,10 @@ A new parameter row (BMI from WEIGHT and HEIGHT) is not a derivation: use
   label: Pooled Age Group 1
   derivation:
     algorithm: derivation
-    callable: examples.cdiscpilot01.adam.derivations.AGEGR1
+    callable: programs.derivations.AGEGR1
 ```
 
-At runtime, `from_spec()` calls `_resolve_callable("examples.cdiscpilot01.adam.derivations.AGEGR1")`,
+At runtime, `from_spec()` calls `_resolve_callable("programs.derivations.AGEGR1")`,
 which either:
 
 1. Looks up the name in the transform registry (if the derivations module was imported), or

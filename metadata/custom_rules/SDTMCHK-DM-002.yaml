@@ -59,3 +59,6 @@ Authorities:
       - Cited Guidance: check_dm_actarm_arm
         Document: pharmaverse sdtmchecks
         Section: DM Domain
+  Category:
+    Purpose: Data quality check from sdtmchecks
+    Keywords: [DM]

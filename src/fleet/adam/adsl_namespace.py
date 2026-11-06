@@ -23,12 +23,15 @@ Usage
 
 from __future__ import annotations
 
+import difflib
+import warnings
 from typing import Any, Literal, Self
 
 import polars as pl
 
 from fleet.adam._mixins import SharedADaMVerbsMixin
 from fleet.core.dtc import to_day
+from fleet.core.exceptions import DerivationError
 
 
 @pl.api.register_lazyframe_namespace("adsl")
@@ -70,9 +73,10 @@ class ADSLNamespace(SharedADaMVerbsMixin):
     ) -> Self:
         """Convert age to years, handling common unit strings.
 
-        Recognises *AGEU* values: ``YEARS``, ``MONTHS``, ``WEEKS``, ``DAYS``
-        (case-insensitive).  Unknown units produce null.  The value keeps full
-        precision (AGE 7 MONTHS gives 0.5833...).
+        Recognises *AGEU* values: ``YEARS``, ``MONTHS``, ``WEEKS``, ``DAYS``,
+        ``HOURS`` (case-insensitive).  Unknown units produce null and a
+        warning with their count.  The value keeps full precision (AGE 7
+        MONTHS gives 0.5833...).
 
         Args:
             target: Name of the output column (default ``"AAGE"``).
@@ -86,8 +90,9 @@ class ADSLNamespace(SharedADaMVerbsMixin):
 
         References:
             admiral ``compute_age_years`` (pharmaverse): full precision; one year is
-            12 months, 52.1775 weeks or 365.25 days.
-            ADR-0025: a derived value is rounded only when the call says so.
+            12 months, 365.25/7 weeks, 365.25 days or 8766 hours. CDISC CT
+            C66781 (AGEU). ADR-0025: a derived value is rounded only when the
+            call says so. ADR-0048: the week and hour divisors.
 
         Examples:
             Derive age in years from DM variables::
@@ -100,6 +105,23 @@ class ADSLNamespace(SharedADaMVerbsMixin):
         """
         from fleet.adam.utils import age_in_years as _age_in_years_expr
 
+        if age_unit_col in self._lazy.collect_schema().names():
+            unit = pl.col(age_unit_col).cast(pl.String).str.to_uppercase()
+            known = ["YEARS", "MONTHS", "WEEKS", "DAYS", "HOURS"]
+            bad = (
+                self._lazy.filter(unit.is_not_null() & ~unit.is_in(known))
+                .select(pl.col(age_unit_col).cast(pl.String))
+                .collect()
+                .get_column(age_unit_col)
+            )
+            if bad.len():
+                warnings.warn(
+                    f"age_years(): {bad.len()} row(s) have an {age_unit_col} that is not "
+                    f"{', '.join(known)} (for example {bad.unique(maintain_order=True).head(3).to_list()}); "
+                    f"{target} is null on them.",
+                    UserWarning,
+                    stacklevel=2,
+                )
         return self._chain(
             _age_in_years_expr(
                 age_col=age_col,
@@ -190,10 +212,16 @@ class ADSLNamespace(SharedADaMVerbsMixin):
 
         Args:
             periods: List of dicts each with ``"number"``, ``"start"``,
-                ``"end"``, and optionally ``"treatment"``.
+                ``"end"``, and optionally ``"treatment"`` (a column name)
+                or ``"treatment_value"`` (a literal).
 
         Returns:
             Self: The namespace with period columns appended.
+
+        Raises:
+            DerivationError: If a ``"treatment"`` column is not in the
+                pipeline (with a did-you-mean suggestion), or a period
+                gives both ``"treatment"`` and ``"treatment_value"``.
 
         Examples:
             Define two treatment periods::
@@ -212,6 +240,7 @@ class ADSLNamespace(SharedADaMVerbsMixin):
                 )
         """
         exprs: list[pl.Expr] = []
+        names = self._lazy.collect_schema().names()
         for period in periods:
             n = period["number"]
             prefix = f"AP{n:02d}"
@@ -222,11 +251,23 @@ class ADSLNamespace(SharedADaMVerbsMixin):
             exprs.append(pl.col(edt_col).alias(f"{prefix}EDT"))
 
             trt = period.get("treatment")
+            trt_value = period.get("treatment_value")
+            trt_target = f"TRT{n:02d}P"
+            if trt is not None and trt_value is not None:
+                raise DerivationError(
+                    f"derive_period(): period {n} gives both 'treatment' and "
+                    "'treatment_value'. Give a column or a literal, not both."
+                )
             if trt is not None:
-                trt_target = f"TRT{n:02d}P"
-                if trt in self._lazy.collect_schema().names():
-                    exprs.append(pl.col(trt).alias(trt_target))
-                else:
-                    exprs.append(pl.lit(trt).alias(trt_target))
+                if trt not in names:
+                    close = difflib.get_close_matches(str(trt), names, n=1)
+                    raise DerivationError(
+                        f"derive_period(): period {n} treatment column {trt!r} not found."
+                        + (f" Did you mean {close[0]!r}?" if close else "")
+                        + " For a literal value, use 'treatment_value'."
+                    )
+                exprs.append(pl.col(trt).alias(trt_target))
+            elif trt_value is not None:
+                exprs.append(pl.lit(trt_value).alias(trt_target))
 
         return self._chain(*exprs)

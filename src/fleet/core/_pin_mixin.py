@@ -11,8 +11,10 @@ Duplicate-pin guard (Option C — warn + ``.repin()`` hybrid):
 * ``.pin("DM", df).pin("DM", df2)`` → emits ``UserWarning``, proceeds
 * ``.repin("DM", df2)`` → silent replacement (explicit intent)
 
-Every pin access is recorded in ``_pin_lineage`` via
-``record_pin_lineage()`` so lineage / DAG integration is automatic.
+A verb that consumes a pin records the read in ``_pin_lineage`` with
+``record_pin_lineage()``.  A frame passed directly to a verb
+(``study_day(adsl=...)``, ``merge``) leaves no pin record, so lineage
+shows what was read through a pin, not every input of the pipeline.
 """
 
 from __future__ import annotations
@@ -34,6 +36,17 @@ def _normalize_key(join_on: str | list[str]) -> list[str]:
     return [join_on] if isinstance(join_on, str) else list(join_on)
 
 
+def _pin_frame(name: str, frame: Any) -> pl.DataFrame:
+    """Return *frame* as a DataFrame: a LazyFrame is collected once, here."""
+    if isinstance(frame, pl.LazyFrame):
+        return frame.collect()
+    if not isinstance(frame, pl.DataFrame):
+        raise DerivationError(
+            f"pin '{name.upper()}': expected a DataFrame or LazyFrame, got {type(frame).__name__}."
+        )
+    return frame
+
+
 class PinMixin:
     """Mixin that lets any namespace attach reference-domain DataFrames.
 
@@ -47,7 +60,8 @@ class PinMixin:
       | ``"off"``).
     """
 
-    # Namespace subclasses override with domain-specific rules.
+    # Namespace subclasses override with domain-specific rules. Rule keys: pin, ref_col,
+    # allow (space-separated legal values), max_severity ("warn"), note (added to the message).
     _FK_RULES: ClassVar[dict[str, dict[str, str]]] = {}
 
     # ------------------------------------------------------------------ #
@@ -97,7 +111,8 @@ class PinMixin:
 
         Args:
             domain: Logical name (e.g. ``"DM"``, ``"ADSL"``, ``"TV"``).
-            df: The materialised reference DataFrame for *domain*.
+            df: The reference DataFrame for *domain*.  A LazyFrame is
+                collected once, at pin time.
             join_on: Column(s) used to join these references into the
                 pipeline.  Applies to every pin in this call; pin
                 separately for per-domain join keys.
@@ -149,11 +164,7 @@ class PinMixin:
         new = copy.copy(self)
         pinned: dict[str, tuple[pl.DataFrame, list[str]]] = dict(getattr(self, "_pinned", {}))
         for name, frame in pins.items():
-            if not isinstance(frame, (pl.DataFrame, pl.LazyFrame)):
-                raise DerivationError(
-                    f"pin '{name.upper()}': expected a DataFrame or LazyFrame, "
-                    f"got {type(frame).__name__}."
-                )
+            frame = _pin_frame(name, frame)
             key = name.upper()
             if key in pinned:
                 warnings.warn(
@@ -175,11 +186,15 @@ class PinMixin:
 
         Args:
             domain: Logical name to replace.
-            df: The new reference DataFrame.
+            df: The new reference DataFrame.  A LazyFrame is collected
+                once, at pin time.
             join_on: Column(s) for the join key.
 
         Returns:
             Self: A shallow copy with the pin replaced.
+
+        Raises:
+            DerivationError: When *df* is not a DataFrame or LazyFrame.
 
         Examples:
             Replace a previously pinned DM with a filtered version::
@@ -194,7 +209,7 @@ class PinMixin:
         """
         new = copy.copy(self)
         pinned: dict[str, tuple[pl.DataFrame, list[str]]] = dict(getattr(self, "_pinned", {}))
-        pinned[domain.upper()] = (df, _normalize_key(join_on))
+        pinned[domain.upper()] = (_pin_frame(domain, df), _normalize_key(join_on))
         new._pinned = pinned
         return new
 
@@ -216,11 +231,19 @@ class PinMixin:
         return {domain: {"df": df, "join_on": list(key)} for domain, (df, key) in pinned.items()}
 
     def fk_policy(self, severity: str) -> Self:
-        """Set the default FK-check severity for this pipeline.
+        """Set the FK-check severity for this pipeline.
+
+        The check runs once, at the public ``to_frame()`` (and the
+        terminal verbs that call it), on the final frame, with the
+        severity in force at that point.  The order of ``pin``,
+        ``fk_policy`` and the verbs does not matter.  It checks
+        ``USUBJID`` against the pinned ``DM`` (SDTM) or ``ADSL`` (ADaM),
+        and the SDTM trial-design keys of ``_FK_RULES`` against a pinned
+        TA, TE or TV.
 
         Args:
             severity: One of ``"warn"`` (emit ``UserWarning``),
-                ``"error"`` (raise ``ValueError``), or ``"off"``
+                ``"error"`` (raise ``DerivationError``), or ``"off"``
                 (disable FK checks).
 
         Returns:
@@ -257,7 +280,7 @@ class PinMixin:
     ) -> pl.DataFrame:
         """Retrieve a pinned DataFrame or raise an actionable error.
 
-        Records the access in ``_pin_lineage`` automatically.
+        The calling verb records the read with ``record_pin_lineage()``.
 
         Args:
             domain: Upper-cased domain name (e.g. ``"DM"``).
@@ -302,62 +325,43 @@ class PinMixin:
             raise PinError(f"No pin found for domain '{key}'.")
         return list(pinned[key][1])
 
-    def _auto_fk_check(self, target: str) -> None:
-        """Queue an FK check if *target* matches a rule in ``_FK_RULES``.
+    def _run_fk_checks(self, df: pl.DataFrame) -> None:
+        """Check the foreign keys of the final frame *df* against the pins.
 
-        The check itself is deferred to the next materialisation
-        (``to_frame()`` runs all pending checks in one pass over the
-        final frame) so pinning no longer forces a collect on every
-        assign verb.  The severity in force *now* is captured with the
-        queue entry, preserving ``fk_policy`` semantics.
+        Called by the public ``to_frame()`` only, with the ``fk_policy`` in
+        force on this namespace.  Each ``_FK_RULES`` column of *df* with a
+        pinned reference is checked once.  A
+        warning is given once per namespace; an error raises on every call.
         """
-        rules: dict[str, dict[str, str]] = self.__class__._FK_RULES
-        if target not in rules:
-            return
-        rule = rules[target]
-        pin_domain = rule.get("pin", "")
-        # Only check if the pin actually exists (no pin = no noise)
-        if pin_domain.upper() not in getattr(self, "_pinned", {}):
-            return
         severity = getattr(self, "_fk_severity", "warn")
         if severity == "off":
             return
-        entry = (target, pin_domain, rule.get("ref_col", target), severity)
-        pending: list[tuple[str, str, str, str]] = list(getattr(self, "_pending_fk_checks", []))
-        if entry not in pending:
-            pending.append(entry)
-        self._pending_fk_checks = pending
-
-    def _run_pending_fk_checks(self, df: pl.DataFrame) -> None:
-        """Run all queued FK checks against the materialised *df*.
-
-        Called by ``to_frame()`` after collection — one batched pass
-        over the final frame instead of one collect per assign verb.
-        A warning is given once; an ``"error"`` check stays queued, so
-        every later ``to_frame()`` and terminal verb raises again.
-        """
-        pending: list[tuple[str, str, str, str]] = list(getattr(self, "_pending_fk_checks", []))
-        if not pending:
-            return
-        # Drop the warn entries before warning so a second to_frame() does not
-        # repeat them (rebind, never mutate — earlier chain copies keep their own queue).
-        self._pending_fk_checks = [entry for entry in pending if entry[3] == "error"]
+        rules: dict[str, dict[str, str]] = self.__class__._FK_RULES
         pinned: dict[str, tuple[pl.DataFrame, list[str]]] = getattr(self, "_pinned", {})
-        for col, pin, ref_col, severity in pending:
-            if severity == "off" or pin.upper() not in pinned:
+        warned: frozenset[str] = getattr(self, "_fk_warned", frozenset())
+        for col, rule in rules.items():
+            if col not in df.columns:
                 continue
-            ref_df, _ = pinned[pin.upper()]
-            if ref_col not in ref_df.columns or col not in df.columns:
+            pin = rule.get("pin", "").upper()
+            ref_col = rule.get("ref_col", col)
+            if pin not in pinned or ref_col not in pinned[pin][0].columns:
                 continue
-            current_vals = set(df[col].drop_nulls().to_list())
-            ref_vals = set(ref_df[ref_col].drop_nulls().to_list())
-            orphans = current_vals - ref_vals
+            ref_df = pinned[pin][0]
+            current_vals = set(df[col].drop_nulls().unique().to_list())
+            ref_vals = set(ref_df[ref_col].drop_nulls().unique().to_list())
+            orphans = current_vals - ref_vals - set(rule.get("allow", "").split())
             if not orphans:
                 continue
             msg = (
                 f"FK check: {len(orphans)} value(s) in '{col}' not found in "
                 f"pinned {pin}.{ref_col}: {sorted(orphans)[:5]}"
             )
-            if severity == "error":
+            if rule.get("note"):
+                msg += f". {rule['note']}"
+            if severity == "error" and rule.get("max_severity") != "warn":
                 raise DerivationError(msg)
-            warnings.warn(msg, stacklevel=3)
+            if msg not in warned:
+                # Rebind, never mutate: earlier chain copies keep their own memo.
+                warned = warned | {msg}
+                self._fk_warned = warned
+                warnings.warn(msg, stacklevel=3)

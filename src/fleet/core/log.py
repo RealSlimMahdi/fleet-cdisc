@@ -15,11 +15,19 @@ Default behaviour
 A ``NullHandler`` is attached to the ``"fleet"`` logger at import time.
 The first time a diagnostic is emitted, Fleet lazily attaches a plain
 ``INFO``-level handler writing to ``sys.stdout`` — *unless* the user has
-already attached their own handler to the ``"fleet"`` logger.  Rationale:
+already attached their own handler to the ``"fleet"`` logger, or set the
+logger to a level above ``INFO``.  A ``"fleet"`` logger with no level of
+its own is set to ``INFO``, so a routed handler receives the diagnostics.
+Rationale:
 these verbs are explicitly invoked to be *read* (``.inspect()``,
 ``.trail()``, ``.nodup()``), so silent-by-default would break the
 documented interactive UX; any user configuration takes precedence, and
 :func:`disable_console` turns the default handler off entirely.
+A program that configures the root logger with ``logging.basicConfig``
+calls :func:`disable_console` to keep each line once.
+
+The ``fleet`` command line also writes every ``WARNING`` of the ``"fleet"``
+logger to ``sys.stderr`` (:func:`enable_cli_warnings`).
 
 The default handler resolves ``sys.stdout`` at emit time (late binding),
 so output redirection and pytest's ``capsys`` capture keep working.
@@ -56,7 +64,49 @@ class _StdoutHandler(logging.StreamHandler):
 
 
 _console_handler: _StdoutHandler | None = None
+_cli_warning_handler: logging.Handler | None = None
 _auto_checked = False
+
+
+class _StderrHandler(logging.StreamHandler):
+    """Stream handler that resolves ``sys.stderr`` at emit time."""
+
+    def __init__(self) -> None:
+        super().__init__(sys.stderr)
+
+    @property
+    def stream(self):  # noqa: D102 — property overriding base attribute
+        return sys.stderr
+
+    @stream.setter
+    def stream(self, value) -> None:
+        pass
+
+
+def enable_cli_warnings() -> logging.Handler:
+    """Write every ``WARNING`` of the ``fleet`` logger to ``sys.stderr``.
+
+    The ``fleet`` command line calls it at start, so a skipped domain or a
+    missing codelist reaches the user.  This handler does not count as a
+    user handler: the stdout report of ``fleet validate`` still prints.
+
+    Returns:
+        logging.Handler: The active stderr handler.
+
+    Examples:
+        Show Fleet warnings on stderr in a script::
+
+            from fleet.core.log import enable_cli_warnings
+
+            enable_cli_warnings()
+    """
+    global _cli_warning_handler
+    if _cli_warning_handler is None:
+        _cli_warning_handler = _StderrHandler()
+        _cli_warning_handler.setLevel(logging.WARNING)
+        _cli_warning_handler.setFormatter(logging.Formatter("%(levelname)s %(message)s"))
+        _FLEET_LOGGER.addHandler(_cli_warning_handler)
+    return _cli_warning_handler
 
 
 def get_logger(name: str = "fleet") -> logging.Logger:
@@ -134,7 +184,9 @@ def disable_console() -> None:
 def _user_has_fleet_handlers() -> bool:
     """Return True if the user attached their own handler to ``fleet``."""
     return any(
-        not isinstance(h, logging.NullHandler) and h is not _console_handler
+        not isinstance(h, logging.NullHandler)
+        and h is not _console_handler
+        and h is not _cli_warning_handler
         for h in _FLEET_LOGGER.handlers
     )
 
@@ -142,14 +194,17 @@ def _user_has_fleet_handlers() -> bool:
 def ensure_default_handler() -> None:
     """Attach the default stdout handler once, unless user-configured.
 
-    Called by diagnostic verbs before emitting.  No-op after the first
-    call or when the user has attached a handler to the ``fleet``
-    logger.
+    Called by diagnostic verbs before emitting.  A ``fleet`` logger with no
+    level gets ``INFO``.  No-op after the first call, when the user set the
+    logger above ``INFO`` (silence), or when the user attached a handler
+    to the ``fleet`` logger (route).
     """
     global _auto_checked
     if _auto_checked:
         return
     _auto_checked = True
-    if _user_has_fleet_handlers():
+    if _FLEET_LOGGER.level == logging.NOTSET:
+        _FLEET_LOGGER.setLevel(logging.INFO)
+    if _FLEET_LOGGER.level > logging.INFO or _user_has_fleet_handlers():
         return
     enable_console(logging.INFO)

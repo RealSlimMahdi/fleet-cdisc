@@ -21,6 +21,7 @@ applyTo: "src/fleet/adam/**"
 1. Add method to appropriate mixin in `src/fleet/adam/_mixins.py`.
 2. Return type MUST be `Self` (from `typing`).
 3. Use `self._chain(*exprs)` for lazy expressions, `self._materialise_then(df)` for materialisation.
+4. A verb that a `define.yaml` can call needs four more edits (registry, enum, JSON schema, round-trip case): see `CONTRIBUTING.md`, section "Add a verb".
 
 ```python
 # src/fleet/adam/_mixins.py

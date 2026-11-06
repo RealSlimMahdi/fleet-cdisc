@@ -7,8 +7,9 @@ across the entire pipeline chain.
 
 The capture path is intentionally lightweight: a single frame walk per
 call to retrieve the verb name and its keyword arguments, plus Polars
-expression metadata for column names.  No verb code needs to be
-modified.
+expression metadata for column names.  Verbs that go through ``_chain``
+need no lineage code; verbs that sort, join or materialise record their
+node themselves (``append_verb_node``, ``record_pin_lineage``).
 
 Re-derivation policy (documented contract): ``_lineage`` keeps the
 **full history** — a target derived twice has two entries in pipeline
@@ -32,6 +33,7 @@ Examples:
 
 from __future__ import annotations
 
+import dataclasses
 import inspect
 import sys
 from typing import TYPE_CHECKING, Any
@@ -57,6 +59,10 @@ UNSERIALISABLE = _Unserialisable()
 #: Maximum frames walked above ``_chain`` when locating the verb frame.
 _MAX_FRAME_WALK = 6
 
+#: Values never compared with ``==`` to a default: Polars answers with an
+#: expression or a frame, and may warn.
+_POLARS_OBJECTS = (pl.Expr, pl.DataFrame, pl.LazyFrame, pl.Series)
+
 
 def _expr_output_name(expr: pl.Expr) -> str | None:
     """Return the alias / output column name of *expr*, or ``None``."""
@@ -74,19 +80,35 @@ def _expr_sources(expr: pl.Expr) -> list[str]:
         return []
 
 
-def defining_method_path(cls: type, verb: str) -> str:
-    """Return ``module.Class.verb`` of the class in the MRO of *cls* that defines *verb*.
+def sub_namespace_class(cls: type, part: str) -> type | None:
+    """The class a sub-namespace property of *cls* returns (``adam.onco``)."""
+    fget = getattr(getattr(cls, part, None), "fget", None)
+    if fget is None:
+        return None
+    try:
+        return type(fget(cls(pl.DataFrame())))
+    except Exception:
+        return None
 
-    Lineage records this path in ``VariableNode.method``, and the Define-XML
-    ``FormalExpression`` names the same one.
+
+def defining_method_path(cls: type, verb: str) -> str:
+    """Return the importable ``module.Class.verb`` path of *verb* on *cls*.
+
+    The path names the class in the MRO of *cls* that defines *verb* when
+    that class sits in a public module, and *cls* itself when the verb
+    comes from a private mixin (``fleet.core._verb_mixin``).  So the path
+    stays the same when Fleet moves a verb between its internal mixins.
+    A dotted verb (``onco.best_overall_response``) walks the sub-namespace
+    properties first.  Lineage records this path in
+    ``VariableNode.method``, and the Define-XML ``FormalExpression`` names
+    the same one.
 
     Args:
         cls: The namespace class the verb runs on.
-        verb: The method name.
+        verb: The method name, dotted for a sub-namespace verb.
 
     Returns:
-        str: The dotted path of the defining class, or of *cls* when no
-            class in the MRO defines *verb*.
+        str: The dotted path of the method.
 
     Examples:
         Name the method an ADaM pipeline runs for ``.duration()``::
@@ -95,10 +117,22 @@ def defining_method_path(cls: type, verb: str) -> str:
             from fleet.core.lineage import defining_method_path
 
             defining_method_path(AdamNamespace, "duration")
-            # "fleet.core._verb_mixin.SharedVerbsMixin.duration"
+            # "fleet.adam.namespace.AdamNamespace.duration"
+            defining_method_path(AdamNamespace, "onco.best_overall_response")
+            # "fleet.adam.onco_namespace.OncoNamespace.best_overall_response"
     """
+    *path, name = verb.split(".")
+    for part in path:
+        sub = sub_namespace_class(cls, part)
+        if sub is None:
+            break
+        cls = sub
+    else:
+        verb = name
     for klass in cls.__mro__:
         if verb in klass.__dict__:
+            if any(part.startswith("_") for part in klass.__module__.split(".")):
+                break  # a private mixin: name the public namespace class
             return f"{klass.__module__}.{klass.__qualname__}.{verb}"
     return f"{cls.__module__}.{cls.__qualname__}.{verb}"
 
@@ -193,12 +227,12 @@ def _capture_verb_params(owner: Any, verb: str) -> dict[str, Any] | None:
                 # A Polars frame or expression == None warns: test None by identity.
                 if value is default:
                     continue
-            elif default is not inspect.Parameter.empty:
+            elif default is not inspect.Parameter.empty and not isinstance(value, _POLARS_OBJECTS):
                 try:
                     if bool(value == default):
                         continue
                 except Exception:
-                    pass  # rich objects (pl.Expr, frames) — keep and sanitise
+                    pass  # rich objects — keep and sanitise
             captured[name] = value
         return sanitise_params(captured)
     except Exception:
@@ -338,12 +372,16 @@ def record_pin_lineage(
     pin_lineage.append(pin_dep)
     owner._pin_lineage = pin_lineage
 
-    # Also populate pin_sources on the matching VariableNode in _lineage
-    # so it's available immediately without needing inject_lineage()
+    # Also populate pin_sources on the matching VariableNode in _lineage, on a
+    # copy of the node: the parent namespace and sibling branches share it.
     existing_lineage: list = list(getattr(owner, "_lineage", []))
-    for vnode in reversed(existing_lineage):  # last-write-wins
+    for idx in range(len(existing_lineage) - 1, -1, -1):  # last-write-wins
+        vnode = existing_lineage[idx]
         if vnode.name == target_col:
-            vnode.pin_sources.append(pin_dep)
+            existing_lineage[idx] = dataclasses.replace(
+                vnode, pin_sources=[*vnode.pin_sources, pin_dep]
+            )
+            owner._lineage = existing_lineage
             break
 
 
@@ -352,7 +390,7 @@ def pin_lineage_of(namespace: Any) -> list:
     return list(getattr(namespace, "_pin_lineage", []))
 
 
-def _append_lineage_nodes(ns: Any, drv: Any) -> Any:
+def _append_lineage_nodes(ns: Any, drv: Any, targets: list[str] | None = None) -> Any:
     """Inject ``VariableNode`` entries for frame-level / param-level ``Derivation`` s.
 
     Called from ``_apply_derivation()`` after ``_materialise_then()``, because
@@ -364,6 +402,8 @@ def _append_lineage_nodes(ns: Any, drv: Any) -> Any:
         ns:  The namespace instance (already materialised).
         drv: The :class:`~fleet.core.derivation.Derivation` whose ``targets``
              and ``sources`` are to be recorded.
+        targets: The columns to record, when they differ from ``drv.targets``
+             (the columns the returned frame holds).
 
     Returns:
         The same namespace instance with ``_lineage`` extended in place.
@@ -373,7 +413,7 @@ def _append_lineage_nodes(ns: Any, drv: Any) -> Any:
     lineage: list[VariableNode] = list(getattr(ns, "_lineage", []))
     domain: str | None = getattr(ns, "_domain", None)
     spec_block = {"algorithm": "derivation", "callable": drv.dotted_path}
-    for t in drv.targets:
+    for t in drv.targets if targets is None else targets:
         lineage.append(
             VariableNode(
                 name=t,

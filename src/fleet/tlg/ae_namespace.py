@@ -11,7 +11,7 @@ from typing import ClassVar, Self
 import polars as pl
 from pydantic import Field, model_validator
 
-from ._ard import summarize_spec
+from ._ard import listing_frame, summarize_spec
 from ._builder import BuilderVerbsMixin
 from ._specs import (
     Column,
@@ -21,7 +21,6 @@ from ._specs import (
     SummarySpecBase,
     TLGSpec,
     Uncoded,
-    check_listing_columns,
     resolve_filter,
 )
 
@@ -496,6 +495,11 @@ class AETLGNamespace(BuilderVerbsMixin):
     ) -> pl.DataFrame:
         """Produce an AE listing DataFrame.
 
+        Applies ``dataset_filter``, sorts by ``sort_by`` (a key need not
+        be a displayed column; ties keep the input order), formats each
+        column with its ``Column.format`` and keeps the requested
+        columns, as PROC SORT BY then PROC PRINT VAR.
+
         Args:
             spec: Optional ``AEListingSpec`` override.  If ``None``, the
                 default spec is used.
@@ -503,6 +507,11 @@ class AETLGNamespace(BuilderVerbsMixin):
         Returns:
             pl.DataFrame: A plain DataFrame with the requested columns,
                 sorted per spec.
+
+        Raises:
+            SchemaError: If a listing column or a sort key that the user
+                set is not in the dataset, or a format cannot print a
+                value.
 
         Examples:
             Default AE listing::
@@ -529,28 +538,7 @@ class AETLGNamespace(BuilderVerbsMixin):
         dataset_filter = resolve_filter(spec.dataset_filter)
         if dataset_filter is not None:
             df = df.filter(dataset_filter)
-
-        # Select only requested columns (that exist)
-        available = set(df.columns)
-        check_listing_columns(spec, available)
-        select_cols = [c.field for c in spec.columns if c.field in available]
-        df = df.select(select_cols)
-
-        # Rename to labels
-        rename_map = {c.field: c.label for c in spec.columns if c.label and c.field in available}
-        if rename_map:
-            df = df.rename(rename_map)
-
-        # Sort
-        sort_cols = []
-        for s in spec.sort_by:
-            col_name = rename_map.get(s, s)
-            if col_name in df.columns:
-                sort_cols.append(col_name)
-        if sort_cols:
-            df = df.sort(sort_cols, maintain_order=True)
-
-        return df
+        return listing_frame(df, spec)
 
     # ------------------------------------------------------------------ #
     # Pre-validation diagnostic                                            #

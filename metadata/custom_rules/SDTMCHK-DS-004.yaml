@@ -55,3 +55,6 @@ Authorities:
       - Cited Guidance: check_ds_multdeath_dsstdtc
         Document: pharmaverse sdtmchecks
         Section: DS Domain
+  Category:
+    Purpose: Data quality check from sdtmchecks
+    Keywords: [DS]

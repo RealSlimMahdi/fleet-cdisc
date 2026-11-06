@@ -14,7 +14,7 @@ import httpx
 import polars as pl
 import polars.selectors as cs
 
-from fleet.core.exceptions import IOError as FleetIOError
+from fleet.core.exceptions import FleetIOError
 
 _IO_EXTRA_HINT = 'Install it with: uv add "fleet-cdisc[io]"'
 
@@ -33,7 +33,7 @@ _POLARS_CSV_ENCODINGS = ("utf8", "utf8-lossy")
 
 def download_raw_data(
     url: str,
-    destination: Path,
+    destination: str | Path,
     overwrite: bool = False,
 ) -> Path:
     """Download a raw data file from a URL.
@@ -49,6 +49,7 @@ def download_raw_data(
     Raises:
         FleetIOError: On download or write failure.
     """
+    destination = Path(destination)
     if destination.exists() and not overwrite:
         return destination
 
@@ -90,6 +91,9 @@ def load_raw_data(
     text, with a warning, because a number would lose the zero.  Give
     ``schema_overrides={"SITEID": pl.String}`` for a text column, the
     equivalent of a SAS ``$`` informat; the caller's types always win.
+
+    A float NaN in a CSV (the text ``NaN``) or Parquet file reads as null,
+    as a SAS missing value, so no NaN reaches a comparison.
 
     Args:
         file_path: Path to the data file.
@@ -140,13 +144,16 @@ def load_raw_data(
 
     try:
         if file_type == "csv":
-            return _load_csv(file_path, **kwargs)
+            return _load_csv(file_path, **kwargs).with_columns(cs.float().fill_nan(None))
         elif file_type == "excel":
             return pl.read_excel(file_path, **kwargs).lazy()
         elif file_type == "parquet":
-            return pl.scan_parquet(file_path, **kwargs)
+            # The file is named, so glob characters in its name are literal: adsl[1].parquet.
+            return pl.scan_parquet(file_path, **{"glob": False, **kwargs}).with_columns(
+                cs.float().fill_nan(None)
+            )
         elif file_type in ("sas", "xpt"):
-            return _load_sas(file_path, **kwargs)
+            return _load_sas(file_path, sas_type=file_type, **kwargs)
         elif file_type in ("rds", "rdata"):
             return _load_r(file_path, dataset_name=rdata_dataset, **kwargs)
         elif file_type == "dataset-json":
@@ -167,7 +174,7 @@ def _load_csv(file_path: Path, **kwargs) -> pl.LazyFrame:
 
     def scan(**options) -> pl.LazyFrame:
         if encoding in _POLARS_CSV_ENCODINGS:
-            return pl.scan_csv(file_path, **options)
+            return pl.scan_csv(file_path, **{"glob": False, **options})
         return pl.read_csv(file_path, **options).lazy()  # Python decodes other encodings
 
     if "schema" in kwargs or kwargs.get("infer_schema") is False:
@@ -190,14 +197,18 @@ def _load_csv(file_path: Path, **kwargs) -> pl.LazyFrame:
     return scan(**kwargs, schema_overrides=overrides | dict.fromkeys(leading, pl.String))
 
 
-def _load_sas(file_path: Path, **kwargs) -> pl.LazyFrame:
-    """Load SAS7BDAT or XPT via pyreadstat (returns LazyFrame + extracts labels)."""
+def _load_sas(file_path: Path, *, sas_type: str = "sas", **kwargs) -> pl.LazyFrame:
+    """Load SAS7BDAT (*sas_type* ``"sas"``) or XPT (``"xpt"``) via pyreadstat.
+
+    The reader follows *sas_type*, not the file suffix, so an explicit
+    ``file_type`` wins.
+    """
     try:
         import pyreadstat
     except ImportError as exc:
         raise ImportError(f"pyreadstat is required for SAS file support. {_IO_EXTRA_HINT}") from exc
 
-    is_sas7bdat = file_path.suffix.lower() == ".sas7bdat"
+    is_sas7bdat = sas_type == "sas"
     if not is_sas7bdat:
         members = _xpt_members(file_path)
         if len(members) > 1:
@@ -229,11 +240,6 @@ def _load_sas(file_path: Path, **kwargs) -> pl.LazyFrame:
         )
         .with_columns(cs.string().replace("", None))
     )
-
-    # Attach SAS labels as a retrievable attribute on the LazyFrame
-    # (the profiler checks for this when building ColumnProfiles)
-    if meta.column_names_to_labels:
-        lf._sas_labels = meta.column_names_to_labels  # type: ignore[attr-defined]
 
     return lf
 
@@ -267,8 +273,7 @@ def _load_r(file_path: Path, *, dataset_name: str | None = None, **kwargs) -> pl
         import pyreadr
     except ImportError as exc:
         raise ImportError(
-            "pyreadr is required for R file support. "
-            "Install it with: uv add pyreadr (or uv sync --extra clinical-io)"
+            "pyreadr is required for R file support. Install it with: uv add pyreadr"
         ) from exc
 
     result = pyreadr.read_r(str(file_path), **kwargs)
@@ -322,7 +327,7 @@ def load_datasets(
     return {name: load_raw_data(path, file_type, **kwargs) for name, path in file_paths.items()}
 
 
-def save_parquet(df: pl.DataFrame, output_path: Path, **kwargs) -> Path:
+def save_parquet(df: pl.DataFrame, output_path: str | Path, **kwargs) -> Path:
     """Save a DataFrame to Parquet.
 
     Args:
@@ -341,7 +346,7 @@ def save_parquet(df: pl.DataFrame, output_path: Path, **kwargs) -> Path:
 
 def save_xpt(
     df: pl.DataFrame,
-    output_path: Path,
+    output_path: str | Path,
     *,
     label: str | None = None,
     column_labels: Mapping[str, str | None] | None = None,

@@ -29,7 +29,7 @@ from typing import Self
 
 import polars as pl
 
-from fleet.adam._mixins import MultiRowMixin, SharedADaMVerbsMixin
+from fleet.adam._mixins import SharedADaMVerbsMixin
 from fleet.core.exceptions import DerivationError
 from fleet.sdtm.utils import to_char
 
@@ -43,17 +43,20 @@ _UNIT_SCALE: dict[str, float] = {
 # Default BLQ texts in --STRESC; the data transfer agreement decides the real list.
 BLQ_TEXT = r"(?i)^\s*(<|(BLQ|BQL|BLOQ|LLOQ)\s*$)"
 
+#: NONMEM EVID values of a dose record: 1 (dose) and 4 (reset and dose).
+_DOSE_EVIDS = (1, 4)
 
-class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
+
+class PKNamespace(SharedADaMVerbsMixin):
     """
     Immutable pipeline builder for PK (pharmacokinetics) derivations.
 
-    Covers concentration-time datasets such as ADPC and parameter datasets
-    such as ADPP.
+    Covers concentration-time datasets such as ADPC and the inputs of
+    population PK datasets such as ADPPK.
 
     Inherits shared verbs from ``SharedADaMVerbsMixin``
     (source, derivation, assign, recode, case_when,
-    whereclauses, merge_adsl) and ``MultiRowMixin`` (seq), and adds
+    whereclauses, merge_adsl, seq), and adds
     PK-specific verbs for BLQ handling, time derivation, and
     dose normalisation.
     """
@@ -163,6 +166,9 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
         """Impute BLQ concentrations with a standard substitution method.
 
         BLQ follows :meth:`blq_flag`.  Other records keep *conc_col*.
+        One rule applies to every row, whatever the sample position. For a
+        SAP rule by position (for example 0 before the first quantifiable
+        value, missing after it), use ``.derivation`` with ``pl.when``.
 
         Args:
             target: Name of the output numeric column.
@@ -223,7 +229,9 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
     ) -> Self:
         """Derive nominal elapsed time from a planned timepoint column.
 
-        Applies a unit conversion from *input_unit* to *output_unit*.
+        Applies a unit conversion from *input_unit* to *output_unit*:
+        ``x * scale(input_unit) / scale(output_unit)`` with the scales in
+        seconds, so 23 minutes gives the correctly rounded ``23 / 60``.
 
         Args:
             target: Name of the output column.
@@ -250,8 +258,9 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
                     f"nominal_time unit={u!r} is not supported. "
                     f"Choose one of: {sorted(valid_units)}"
                 )
-        scale = _UNIT_SCALE[input_unit] / _UNIT_SCALE[output_unit]
-        expr = (pl.col(from_col).cast(pl.Float64) * scale).alias(target)
+        expr = (
+            pl.col(from_col).cast(pl.Float64) * _UNIT_SCALE[input_unit] / _UNIT_SCALE[output_unit]
+        ).alias(target)
         return self._chain(expr)
 
     def predose_flag(
@@ -260,15 +269,21 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
         *,
         time_col: str,
         window_hrs: float = 1.0,
+        include_zero: bool = False,
     ) -> Self:
         """Flag pre-dose samples within an allowable window before dosing.
 
-        Sets *target* to ``"Y"`` when ``-window_hrs <= time_col < 0``.
+        Sets *target* to ``"Y"`` when ``-window_hrs <= time_col < 0``, or
+        ``-window_hrs <= time_col <= 0`` with *include_zero*. Use
+        ``include_zero=True`` on a nominal time column (NFRLT), where the
+        pre-dose sample is planned at time 0.
 
         Args:
             target: Name of the output flag column.
             time_col: Column containing elapsed time relative to dose.
             window_hrs: Size of the pre-dose window (default ``1.0``).
+            include_zero: Also flag time 0 (default ``False``, for an
+                actual time column).
 
         Returns:
             Self: The namespace with *target* appended.
@@ -281,9 +296,18 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
                     .predose_flag("PREDFL", time_col="ATIME")
                     .to_frame()
                 )
+
+            Flag the nominal pre-dose sample at NFRLT 0::
+
+                adpc = (
+                    pc_raw.adam.pk
+                    .predose_flag("PREFL", time_col="NFRLT", include_zero=True)
+                    .to_frame()
+                )
         """
         t = pl.col(time_col).cast(pl.Float64)
-        cond = (t >= -window_hrs) & (t < 0.0)
+        upper = (t <= 0.0) if include_zero else (t < 0.0)
+        cond = (t >= -window_hrs) & upper
         return self._chain(pl.when(cond).then(pl.lit("Y")).otherwise(pl.lit(None)).alias(target))
 
     def dose_normalized(
@@ -483,21 +507,32 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
         self,
         target: str = "MDV",
         *,
-        conc_col: str | None = None,
-        evid_col: str | None = None,
+        conc_col: str | None = "DV",
+        evid_col: str | None = "EVID",
     ) -> Self:
         """Derive MDV (Missing Dependent Variable) for PopPK datasets.
 
-        ``MDV = 1`` when the dependent variable is missing or the record is
-        a dosing record; ``0`` otherwise.
+        ``MDV = 1`` when the dependent variable is missing (null, or a text
+        that is not a number, such as ``"."``) or the record is not an
+        observation (EVID is not 0, or is null); ``0`` otherwise.
 
         Args:
             target: Name of the output column (default ``"MDV"``).
-            conc_col: Concentration column (null → ``MDV = 1``).
-            evid_col: Event ID column (``EVID = 1`` → ``MDV = 1``).
+            conc_col: Concentration column (default ``"DV"``; missing gives
+                ``MDV = 1``). ``None`` skips this check.
+            evid_col: Event ID column (default ``"EVID"``; EVID other than 0
+                gives ``MDV = 1``). ``None`` skips this check.
 
         Returns:
             Self: The namespace with *target* appended.
+
+        Raises:
+            DerivationError: When both columns are ``None`` or a named
+                column is not in the frame.
+
+        References:
+            NONMEM users guide: MDV = 1 on every record with EVID other
+            than 0, and on an observation with no DV.
 
         Examples:
             Derive MDV from concentration and EVID::
@@ -508,14 +543,21 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
                     .to_frame()
                 )
         """
+        names = self._lazy.collect_schema().names()
+        used = [c for c in (evid_col, conc_col) if c is not None]
+        if not used:
+            raise DerivationError("mdv(): give conc_col=, evid_col= or both.")
+        missing = [c for c in used if c not in names]
+        if missing:
+            raise DerivationError(
+                f"mdv(): column(s) {missing} not in the frame. Pass the right name, or "
+                "None to skip that check."
+            )
         conditions: list[pl.Expr] = []
         if evid_col is not None:
-            conditions.append(pl.col(evid_col).cast(pl.Int64) == 1)
+            conditions.append(pl.col(evid_col).cast(pl.Int64).ne_missing(0))
         if conc_col is not None:
-            conditions.append(pl.col(conc_col).is_null())
-        if not conditions:
-            # No condition supplied — default to 0
-            return self._chain(pl.lit(0).cast(pl.Int64).alias(target))
+            conditions.append(pl.col(conc_col).cast(pl.Float64, strict=False).is_null())
         combined = conditions[0]
         for cond in conditions[1:]:
             combined = combined | cond
@@ -532,8 +574,8 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
     ) -> Self:
         """Derive AMT (dose amount) for PopPK / NONMEM-style datasets.
 
-        Sets *target* to the dose on dosing records (``EVID = 1``) and null
-        on observation records.
+        Sets *target* to the dose on dosing records (``EVID`` 1 or 4) and
+        null on other records.
 
         Args:
             target: Name of the output column (default ``"AMT"``).
@@ -555,7 +597,10 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
         dose = pl.col(dose_col).cast(pl.Float64)
         evid = pl.col(evid_col).cast(pl.Int64)
         return self._chain(
-            pl.when(evid == 1).then(dose).otherwise(pl.lit(None).cast(pl.Float64)).alias(target)
+            pl.when(evid.is_in(_DOSE_EVIDS))
+            .then(dose)
+            .otherwise(pl.lit(None).cast(pl.Float64))
+            .alias(target)
         )
 
     def cmt(
@@ -568,8 +613,11 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
     ) -> Self:
         """Derive CMT (compartment number) for PopPK datasets.
 
-        Assigns *dose_cmt* on dosing records and *conc_cmt* on observation
-        records, following NONMEM convention.
+        Assigns *dose_cmt* on dosing records (``EVID`` 1 or 4), *conc_cmt*
+        on observation records (``EVID`` 0) and null on other records
+        (EVID 2 and 3), following NONMEM convention.  *conc_cmt* applies
+        to all observation records, whatever the specimen.  For a
+        compartment by specimen (PCSPEC), use ``.derivation``.
 
         Args:
             target: Name of the output column (default ``"CMT"``).
@@ -591,9 +639,10 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
         """
         evid = pl.col(evid_col).cast(pl.Int64)
         return self._chain(
-            pl.when(evid == 1)
+            pl.when(evid.is_in(_DOSE_EVIDS))
             .then(pl.lit(dose_cmt))
-            .otherwise(pl.lit(conc_cmt))
+            .when(evid == 0)
+            .then(pl.lit(conc_cmt))
             .cast(pl.Int64)
             .alias(target)
         )
@@ -608,13 +657,15 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
         text_col: str | None = "PCSTRESC",
         blq_text: str = BLQ_TEXT,
         numeric_below_lloq: bool = True,
+        digits: int | None = None,
     ) -> Self:
-        """Derive a listing-ready categorised analysis value (AVALCAT1).
+        """Derive a categorised analysis value (AVALCAT1).
 
         A BLQ record (as :meth:`blq_flag`) gets *blq_label*.  Another record
         gets its number as text (15 significant digits, no ``.0`` end, so
         ``5.0`` gives ``"5"``), else the *text_col* text (``">1000"``,
-        ``"NQ"``), else null (a missed sample).
+        ``"NQ"``), else null (a missed sample). The precision of the text
+        comes from the SAP: give *digits* to round to significant digits.
 
         Args:
             target: Name of the output column.
@@ -625,6 +676,9 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
             text_col: Character result column; see :meth:`blq_flag`.
             blq_text: BLQ texts; see :meth:`blq_flag`.
             numeric_below_lloq: See :meth:`blq_flag`.
+            digits: Significant digits of the number text (default
+                ``None``, no rounding). ``3`` gives ``"10.3"`` for 10.27,
+                as admiral's ``signif(AVAL, 3)``.
 
         Returns:
             Self: The namespace with *target* appended.
@@ -644,7 +698,8 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
         """
         conc_num = pl.col(conc_col).cast(pl.Float64, strict=False)
         is_blq = self._is_blq("avalcat", conc_num, lloq_col, text_col, blq_text, numeric_below_lloq)
-        shown = to_char(conc_num, pl.Float64)
+        shown_num = conc_num.round_sig_figs(digits) if digits is not None else conc_num
+        shown = to_char(shown_num, pl.Float64)
         if text_col is not None:
             shown = pl.coalesce(shown, pl.col(text_col).cast(pl.String))
 

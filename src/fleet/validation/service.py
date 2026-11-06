@@ -7,10 +7,16 @@ import polars as pl
 
 from fleet.validation.models import ValidationResult
 from fleet.validation.providers import OfficialRulesEngineProvider, ValidationProvider
+from fleet.validation.run_setup import check_ig_version
 
 
 class ValidationService:
-    """Single entrypoint for SDTM/ADaM dataset validation."""
+    """Single entrypoint for SDTM/ADaM dataset validation.
+
+    Each method refuses an IG version that Fleet does not support with
+    :class:`~fleet.core.exceptions.ValidationSetupError`, before the engine
+    starts: the engine runs no rule for it and the result would read as valid.
+    """
 
     def __init__(
         self,
@@ -34,7 +40,11 @@ class ValidationService:
             df = df.collect()
         resolved = Path(custom_rules) if custom_rules is not None else None
         return self.provider.validate_sdtm(
-            df=df, domain=domain, version=version, custom_rules=resolved, timeout=timeout
+            df=df,
+            domain=domain,
+            version=check_ig_version("sdtm", version),
+            custom_rules=resolved,
+            timeout=timeout,
         )
 
     def validate_adam(
@@ -49,7 +59,11 @@ class ValidationService:
             df = df.collect()
         resolved = Path(custom_rules) if custom_rules is not None else None
         return self.provider.validate_adam(
-            df=df, dataset=dataset, version=version, custom_rules=resolved, timeout=timeout
+            df=df,
+            dataset=dataset,
+            version=check_ig_version("adam", version),
+            custom_rules=resolved,
+            timeout=timeout,
         )
 
     def validate_datasets(
@@ -88,7 +102,7 @@ class ValidationService:
         return self.provider.validate_datasets(
             datasets,
             standard=standard,
-            version=version,
+            version=check_ig_version(standard, version),  # type: ignore[arg-type]
             custom_rules=resolved,
             timeout=timeout,
             define_xml=define,

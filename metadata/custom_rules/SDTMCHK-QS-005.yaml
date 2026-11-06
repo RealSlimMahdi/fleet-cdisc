@@ -51,6 +51,9 @@ Authorities:
       - Cited Guidance: check_qs_qsstat_qsstresc
         Document: pharmaverse sdtmchecks
         Section: QS Domain
+  Category:
+    Purpose: Data quality check from sdtmchecks
+    Keywords: [QS]
 Operations:
 - operator: record_count
   domain: QS

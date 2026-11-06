@@ -7,7 +7,7 @@ Locks in the method/origin conformance contract:
 * every registry algorithm renders clean submission text (no unfilled
   placeholders, no API markup) — a new algorithm cannot ship without
   reviewer-safe text;
-* the committed example defines (``outputs/cdiscpilot01/define_*.xml``)
+* the golden example defines (``tests/fixtures/goldens/define/define_*.xml``)
   are reproducible from their specs — any change to submission-facing
   text lands as a reviewed diff on the real artifact, never as silent
   drift (same pattern as the JSON-schema sync test);
@@ -29,15 +29,17 @@ import fleet
 from fleet.core import spec_registry
 from fleet.core.lineage import latest_lineage_of
 from fleet.define_xml import DefineSpecGenerator, semantic_errors
+from fleet.define_xml.semantic_checks import REST_EMPHASIS
 from fleet.define_xml.xsd import missing_files
 
 ODM = "{http://www.cdisc.org/ns/odm/v1.3}"
 DEF = "{http://www.cdisc.org/ns/def/v2.1}"
 
 EXAMPLES = Path(__file__).parent.parent.parent / "examples" / "cdiscpilot01"
-OUTPUTS = Path(__file__).parent.parent.parent / "outputs" / "cdiscpilot01"
+GOLDENS = Path(__file__).parent.parent / "fixtures" / "goldens" / "define"
 
 schemas_present = pytest.mark.skipif(bool(missing_files()), reason="CDISC schema set not installed")
+examples_present = pytest.mark.skipif(not EXAMPLES.exists(), reason="examples/ is not shipped here")
 
 
 # ===================================================================== #
@@ -59,7 +61,7 @@ class TestRegistryRendering:
                 assert "{" not in text and "}" not in text, (
                     f"{standard}:{algo.name} left an unfilled placeholder: {text!r}"
                 )
-                assert "`" not in text and not re.search(r"\*\S[^*]*\*", text), (
+                assert "`" not in text and not REST_EMPHASIS.search(text), (
                     f"{standard}:{algo.name} rendered API markup: {text!r}"
                 )
 
@@ -69,9 +71,9 @@ class TestRegistryRendering:
             for shape_keys, template in algo.method_text:
                 keys = set(re.findall(r"{(\w+)}", template)) | set(shape_keys)
                 declared = {p.name for p in algo.params} | {"target"}
-            assert keys <= declared, (
-                f"{standard}:{algo.name} template names unknown params {keys - declared}"
-            )
+                assert keys <= declared, (
+                    f"{standard}:{algo.name} template names unknown params {keys - declared}"
+                )
 
     def test_comment_free_defaults_read_as_submission_text(self):
         assert (
@@ -87,9 +89,7 @@ class TestRegistryRendering:
         expr = spec_registry.render_formal_expression(
             "sdtm", "assign", {"source": "subject_id"}, target="USUBJID"
         )
-        assert expr == (
-            "fleet.core._verb_mixin.SharedVerbsMixin.assign('USUBJID', source='subject_id')"
-        )
+        assert expr == ("fleet.sdtm.namespace.SDTMNamespace.assign('USUBJID', source='subject_id')")
 
     def test_unknown_algorithm_returns_none(self):
         assert spec_registry.render_method_text("sdtm", "nope", {}) is None
@@ -131,15 +131,15 @@ def _method_def(oid: str) -> str:
 
 
 class TestSemanticLint:
-    def test_method_on_non_derived_is_flagged(self):
+    def test_method_on_non_derived_is_not_flagged(self):
+        """c1-779: the CDISC Define-XML 2.1 examples put a MethodOID on non-Derived items."""
         xml = _doc(
             '<ItemGroupDef OID="IG.DM" Name="DM" Repeating="No">'
             '<ItemRef ItemOID="IT.DM.SEX" MethodOID="MT.DM.SEX"/></ItemGroupDef>'
             + _item_def("IT.DM.SEX", "Collected")
             + _method_def("MT.DM.SEX")
         )
-        problems = semantic_errors(xml)
-        assert len(problems) == 1 and "Collected" in problems[0]
+        assert semantic_errors(xml) == []
 
     def test_method_on_derived_is_clean(self):
         xml = _doc(
@@ -472,17 +472,19 @@ class TestGeneratorSemantics:
 
 
 @schemas_present
+@examples_present
 @pytest.mark.parametrize("standard", ["sdtm", "adam"])
 def test_committed_define_outputs_are_reproducible(standard):
-    """The committed define.xml must match what the code generates from its spec.
+    """The golden define.xml must match what the code generates from its spec.
 
-    Same pattern as the JSON-schema sync test: ``outputs/cdiscpilot01`` is a
-    build artifact of ``examples/``.  A template, renderer, or spec change
-    fails here until the artifact is regenerated —
-    ``uv run python examples/cdiscpilot01_spec_driven.py`` — so every change
-    to submission-facing content is reviewed on the real define.xml diff.
+    Same pattern as the JSON-schema sync test.  A template, renderer, or
+    spec change fails here until the golden is regenerated: run
+    ``uv run python examples/cdiscpilot01_spec_driven.py`` and copy
+    ``outputs/cdiscpilot01/define_*.xml`` to ``tests/fixtures/goldens/define/``,
+    so every change to submission-facing content is reviewed on the real
+    define.xml diff.
     """
-    committed = (OUTPUTS / f"define_{standard}.xml").read_text(encoding="utf-8")
+    committed = (GOLDENS / f"define_{standard}.xml").read_text(encoding="utf-8")
     regenerated = DefineSpecGenerator(
         EXAMPLES / standard / "define.yaml", enrich_methods=True
     ).to_xml_string()
@@ -492,15 +494,19 @@ def test_committed_define_outputs_are_reproducible(standard):
         from lxml import etree
 
         stamped = re.sub(r'CreationDateTime="[^"]*"', 'CreationDateTime=""', xml)
+        # c1-572: the version of the Fleet that runs changes with every commit.
+        stamped = re.sub(r'SourceSystemVersion="[^"]*"', 'SourceSystemVersion=""', stamped)
         return etree.canonicalize(xml_data=stamped, strip_text=True)
 
     assert stamp_free(regenerated) == stamp_free(committed), (
-        f"outputs/cdiscpilot01/define_{standard}.xml is stale — regenerate with "
-        "`uv run python examples/cdiscpilot01_spec_driven.py` and review the diff"
+        f"tests/fixtures/goldens/define/define_{standard}.xml is stale — run "
+        "`uv run python examples/cdiscpilot01_spec_driven.py`, copy "
+        f"outputs/cdiscpilot01/define_{standard}.xml there and review the diff"
     )
 
 
 @schemas_present
+@examples_present
 @pytest.mark.parametrize("standard", ["sdtm", "adam"])
 def test_examples_pass_the_semantic_lint(standard):
     xml = DefineSpecGenerator(
@@ -515,6 +521,7 @@ def test_examples_pass_the_semantic_lint(standard):
 
 
 @schemas_present
+@examples_present
 def test_the_adam_example_define_names_no_sdtm_class():
     xml = DefineSpecGenerator(EXAMPLES / "adam" / "define.yaml", enrich_methods=True)
     expressions = [

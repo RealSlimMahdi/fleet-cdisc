@@ -148,7 +148,7 @@ class TestSDTMBaselineFlag:
             .assign("VSDTC", source="vs_date")
             .assign("VSORRES", source="vsresult")
             .pin("DM", dm_df)
-            .baseline_flag("VSBLFL", date_col="VSDTC", testcd_col="VSTESTCD")
+            .baseline_flag("VSBLFL", date_col="VSDTC", testcd_col="VSTESTCD", ref_col="RFSTDTC")
             .to_frame()
         )
         assert "VSBLFL" in result.columns
@@ -167,7 +167,7 @@ class TestSDTMBaselineFlag:
             .assign("VSDTC", source="vs_date")
             .assign("VSORRES", source="vsresult")
             .pin("DM", dm_df)
-            .baseline_flag("VSBLFL", date_col="VSDTC", testcd_col="VSTESTCD")
+            .baseline_flag("VSBLFL", date_col="VSDTC", testcd_col="VSTESTCD", ref_col="RFSTDTC")
             .to_frame()
         )
         temp_cols = [c for c in result.columns if c.startswith("__")]
@@ -179,7 +179,9 @@ class TestSDTMBaselineFlag:
             .assign("VSTESTCD", source="vstestcd")
             .assign("VSDTC", source="vs_date")
             .assign("VSORRES", source="vsresult")
-            .baseline_flag("VSBLFL", date_col="VSDTC", testcd_col="VSTESTCD", dm=dm_df)
+            .baseline_flag(
+                "VSBLFL", date_col="VSDTC", testcd_col="VSTESTCD", ref_col="RFSTDTC", dm=dm_df
+            )
             .to_frame()
         )
         assert "VSBLFL" in result.columns

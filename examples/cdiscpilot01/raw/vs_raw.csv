@@ -1,0 +1,6 @@
+patient_number,vstestcd,vstest,vs_result,vsorresu,vsstresn,vsstresu,visitnum,visit,vs_date
+01-701-1015,HEIGHT,Height,155.5,cm,155.5,cm,1,SCREENING 1,2014-01-01
+01-701-1023,HEIGHT,Height,168.1,cm,168.1,cm,1,SCREENING 1,2014-01-02
+01-701-1028,HEIGHT,Height,178.0,cm,178.0,cm,1,SCREENING 1,2014-01-03
+01-701-1034,HEIGHT,Height,170.2,cm,170.2,cm,1,SCREENING 1,2014-01-04
+01-701-1047,HEIGHT,Height,166.2,cm,166.2,cm,1,SCREENING 1,2014-01-05

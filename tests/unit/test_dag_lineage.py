@@ -4,8 +4,8 @@ Covers §4.3 items:
 
 * ``PipelineDAG.trace`` — real recursive provenance (multi-hop,
   cross-domain via pin sources, cycle-safe, deduped);
-* ``inject_lineage`` — declared ``inputs:`` reconciled against runtime
-  pin evidence in both directions (warnings), raw inputs exempt;
+* ``inject_lineage`` — a runtime pin missing from the declared
+  ``inputs:`` warns and adds the edge; an unknown node name raises;
 * ``build_dag`` — per-dataset ``output:`` and ``output_format:`` keys
   drive node paths, threaded through the JSON/Snakemake exports;
 * spec-dispatch attribution — a spec ``duration`` records the verb
@@ -151,7 +151,8 @@ class TestInjectLineageReconciliation:
             dag.inject_lineage(ae_ns, "AE")
         assert "DM" in dag.nodes["AE"].inputs
 
-    def test_declared_but_unused_dataset_input_warns(self, ae_ns):
+    def test_declared_but_unused_dataset_input_is_not_reported(self, ae_ns, recwarn):
+        """No pin evidence is no proof of no use (c1-735): no warning."""
         dag = PipelineDAG(
             nodes={
                 "DM": PipelineNode(name="DM", node_type="sdtm", path=None, inputs=[]),
@@ -159,8 +160,15 @@ class TestInjectLineageReconciliation:
                 "AE": PipelineNode(name="AE", node_type="sdtm", path=None, inputs=["DM", "VS"]),
             }
         )
-        with pytest.warns(UserWarning, match=r"input 'VS' is declared.*no runtime"):
-            dag.inject_lineage(ae_ns, "AE")
+        dag.inject_lineage(ae_ns, "AE")
+        assert not any("VS" in str(w.message) for w in recwarn.list)
+
+    def test_unknown_dataset_name_raises(self, ae_ns):
+        dag = PipelineDAG(
+            nodes={"AE": PipelineNode(name="AE", node_type="sdtm", path=None, inputs=[])}
+        )
+        with pytest.raises(KeyError, match=r"no DAG node named 'adae_typo'.*\['AE'\]"):
+            dag.inject_lineage(ae_ns, "adae_typo")
 
     def test_raw_inputs_exempt_from_unused_warning(self, ae_ns, recwarn):
         dag = PipelineDAG(
@@ -238,6 +246,14 @@ class TestBuildDagOutputs:
         dag = build_dag(p, output_dir=tmp_path / "out")
         assert dag.nodes["DM"].path == str(tmp_path / "out" / "dm.xpt")
         assert dag.nodes["AE"].path == str(tmp_path / "out" / "ae.json")
+
+    def test_unknown_output_format_is_refused(self, tmp_path):
+        """c1-647: ``output_format: json`` is not silently written as parquet."""
+        from fleet.core.exceptions import SpecError
+
+        p = self._write_spec(tmp_path, output_format="json")
+        with pytest.raises(SpecError, match="output_format"):
+            build_dag(p, output_dir=tmp_path / "out")
 
 
 class TestSpecDispatchAttribution:

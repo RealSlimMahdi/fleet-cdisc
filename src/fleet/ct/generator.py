@@ -45,11 +45,14 @@ import keyword
 import logging
 import re
 import textwrap
+import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import yaml
+
+from fleet.core.study_context import DEFAULT_SDTM_CT
 
 logger = logging.getLogger(__name__)
 
@@ -62,12 +65,13 @@ if TYPE_CHECKING:
 def _safe_identifier(name: str) -> str:
     """Convert an arbitrary string into a valid Python identifier.
 
-    Replaces non-alphanumeric characters with underscores, strips leading
-    digits, and appends a trailing underscore if the result is a reserved
-    keyword.
+    Replaces non-alphanumeric characters with underscores, puts ``T_``
+    before a leading digit (``2 TIMES PER WEEK`` gives ``T_2_TIMES_PER_WEEK``),
+    and appends a trailing underscore if the result is a reserved keyword.
     """
     ident = re.sub(r"[^0-9A-Za-z_]", "_", name)
-    ident = re.sub(r"^[0-9]+", "", ident)
+    if ident[:1].isdigit():
+        ident = f"T_{ident}"
     if not ident:
         ident = "_EMPTY"
     if keyword.iskeyword(ident) or keyword.issoftkeyword(ident):
@@ -76,6 +80,27 @@ def _safe_identifier(name: str) -> str:
 
 
 _NCI_ID = re.compile(r"^C\d+$")
+
+
+def _term_attributes(terms: list[dict[str, Any]]) -> list[str]:
+    """One class attribute name per term, in the order of *terms*.
+
+    A name with no letter or digit (``%``) is ``T_<term NCI code>``.  Two
+    terms that give one name (``/`` and ``%`` both give ``_``) each get
+    ``_<term NCI code>`` at the end, so no term overwrites another.
+    """
+    names = [_safe_identifier(t["submissionValue"]) for t in terms]
+    names = [
+        f"T_{t.get('conceptId', 'TERM')}" if not re.search(r"[0-9A-Za-z]", n) else n
+        for n, t in zip(names, terms, strict=True)
+    ]
+    seen: dict[str, int] = {}
+    for n in names:
+        seen[n] = seen.get(n, 0) + 1
+    result: list[str] = []
+    for i, (n, t) in enumerate(zip(names, terms, strict=True)):
+        result.append(n if seen[n] == 1 else f"{n}_{t.get('conceptId') or i}")
+    return result
 
 
 def extract_concept_ids(define_path: str | Path) -> set[str]:
@@ -148,7 +173,9 @@ def extract_ig_concept_ids(
     Returns:
         Set of NCI concept ID strings.
     """
-    ig = client._get(f"/mdr/sdtmig/{ig_version}/datasets")
+    from fleet.core.rules_scaffolder import normalise_ig_version
+
+    ig = client.get(f"/mdr/sdtmig/{normalise_ig_version(ig_version)}/datasets")
     ds_links = ig.get("_links", {}).get("datasets", [])
     domains_upper = {d.upper() for d in domains}
 
@@ -159,7 +186,7 @@ def extract_ig_concept_ids(
         if domain not in domains_upper:
             continue
         found.add(domain)
-        detail = client._get(ds["href"])
+        detail = client.get(ds["href"])
         for var in detail.get("datasetVariables", []):
             for cl in var.get("_links", {}).get("codelist", []):
                 m = re.search(r"codelists/(C\d+)", cl.get("href", ""))
@@ -169,12 +196,11 @@ def extract_ig_concept_ids(
     # Warn about non-standard domains that were not found in the IG
     missing = domains_upper - found
     for d in sorted(missing):
-        logger.warning(
-            "Domain '%s' not found in SDTM IG %s — no codelists extracted. "
-            "If this is a company-specific domain, add codelists manually.",
-            d,
-            ig_version,
+        message = (
+            f"Domain '{d}' not found in SDTM IG {ig_version} — no codelists extracted. "
+            "If this is a company-specific domain, add codelists manually."
         )
+        warnings.warn(message, stacklevel=2)
     return ids
 
 
@@ -258,7 +284,7 @@ class CodelistGenerator:
         client: CDISCClient,
         concept_ids: set[str],
         *,
-        package: str = "sdtmct-2023-12-15",
+        package: str = DEFAULT_SDTM_CT,
         adam_package: str | None = None,
         include_docs: bool = True,
     ) -> CodelistGenerator:
@@ -326,7 +352,7 @@ class CodelistGenerator:
         domains: list[str],
         *,
         ig_version: str = "3-4",
-        package: str = "sdtmct-2023-12-15",
+        package: str = DEFAULT_SDTM_CT,
         include_docs: bool = True,
     ) -> CodelistGenerator:
         """Build a generator from the SDTM IG — the authoritative source of truth.
@@ -480,7 +506,8 @@ class CodelistGenerator:
             doc_parts.append("")
             doc_parts.append(f"See: {cdisc_url}")
 
-        class_doc = "\n    ".join(doc_parts)
+        # Escape the text so a quote or a backslash in a definition cannot end the docstring.
+        class_doc = "\n    ".join(doc_parts).replace("\\", "\\\\").replace('"', '\\"')
         lines = [
             f"class {class_name}:",
             f'    """{class_doc}"""',
@@ -500,15 +527,14 @@ class CodelistGenerator:
             return lines
 
         submission_values = sorted({t.get("submissionValue", "") for t in terms} - {""})
-        # Two terms can share one attribute name (2 and 3 TIMES PER WEEK).
         lines.append(f"    _terms = {tuple(submission_values)!r}")
         lines.append("")
 
-        for term in sorted(terms, key=lambda t: t.get("submissionValue", "")):
-            sv: str = term.get("submissionValue", "")
-            if not sv:
-                continue
-            attr = _safe_identifier(sv)
+        ordered = sorted(
+            (t for t in terms if t.get("submissionValue")), key=lambda t: t["submissionValue"]
+        )
+        for term, attr in zip(ordered, _term_attributes(ordered), strict=True):
+            sv: str = term["submissionValue"]
             lines.append(f"    {attr} = {sv!r}")
 
             if self.include_docs:

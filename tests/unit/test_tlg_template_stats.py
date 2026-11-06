@@ -483,16 +483,77 @@ class TestReviewRoundTwo:
 """)
         spec = DSDeathsSpec(pools=[GroupPool(label="Both", arms=["Placebo", "Drug A"])])
         ard = adsl.tlg.ds.t_deaths(groupby="TRTA", spec=spec)
-        # Headline carries the pool; the cause block drops it (no deaths in
-        # Drug A) instead of crashing.
+        # Headline and cause block both carry the pool (c1-805): Drug A
+        # has no death, so the pool counts the Placebo death only.
         total = ard.filter(
             (pl.col("variable_level") == "Total Number of Deaths")
             & (pl.col("group1_level") == "Both")
             & (pl.col("stat_name") == "n")
         )
         assert total["stat"].to_list() == [1.0]
+        cause = ard.filter(
+            (pl.col("variable_level") == "ADVERSE EVENT") & (pl.col("group1_level") == "Both")
+        )
+        assert dict(zip(cause["stat_name"], cause["stat"])) == {"n": 1.0, "pct": 100.0}
 
     def test_abnormal_missing_group_column_raises_schema_error(self) -> None:
         adlb = TestLabAbnormal.ADLB
         with pytest.raises(SchemaError, match="TRT01A"):
             adlb.tlg.lb.t_abnormal(groupby="TRT01A", adsl=TestLabAbnormal.ADSL3)
+
+
+class TestLabRankAndParametersC1508:
+    """c1-508: two parameters, the rank, the extreme codes, case and nulls."""
+
+    ADLB = pl.from_repr("""\
+┌─────────┬──────┬─────────┬────────┬───────────┬───────┬─────────┐
+│ USUBJID ┆ TRTA ┆ PARAMCD ┆ BNRIND ┆ ANRIND    ┆ ABLFL ┆ ONTRTFL │
+│ ---     ┆ ---  ┆ ---     ┆ ---    ┆ ---       ┆ ---   ┆ ---     │
+│ str     ┆ str  ┆ str     ┆ str    ┆ str       ┆ str   ┆ str     │
+╞═════════╪══════╪═════════╪════════╪═══════════╪═══════╪═════════╡
+│ P1      ┆ A    ┆ ALT     ┆ NORMAL ┆ NORMAL    ┆ Y     ┆ null    │
+│ P1      ┆ A    ┆ ALT     ┆ NORMAL ┆ LOW       ┆ null  ┆ Y       │
+│ P1      ┆ A    ┆ ALT     ┆ NORMAL ┆ HIGH      ┆ null  ┆ Y       │
+│ P1      ┆ A    ┆ AST     ┆ NORMAL ┆ HIGH      ┆ null  ┆ Y       │
+│ P1      ┆ A    ┆ AST     ┆ NORMAL ┆ HIGH HIGH ┆ null  ┆ Y       │
+│ P2      ┆ A    ┆ ALT     ┆ NORMAL ┆ high      ┆ null  ┆ Y       │
+│ P3      ┆ A    ┆ ALT     ┆ NORMAL ┆ null      ┆ null  ┆ Y       │
+└─────────┴──────┴─────────┴────────┴───────────┴───────┴─────────┘
+""")
+
+    @staticmethod
+    def _cell(ard: pl.DataFrame, param: str, level: str) -> dict[str, float | None]:
+        rows = ard.filter((pl.col("group2_level") == param) & (pl.col("variable_level") == level))
+        return dict(zip(rows["stat_name"], rows["stat"]))
+
+    def test_shift_ranks_high_over_low_and_keeps_high_high_per_parameter(self) -> None:
+        adlb = self.ADLB.filter(pl.col("USUBJID") == "P1")
+        ard = adlb.tlg.lb.t_shift(groupby="TRTA")
+        shifts = set(zip(ard["group2_level"], ard["variable_level"]))
+        assert ("ALT", "NORMAL to HIGH") in shifts
+        assert ("AST", "NORMAL to HIGH HIGH") in shifts
+        assert ("ALT", "NORMAL to LOW") not in shifts
+
+    def test_abnormal_per_parameter_with_case_and_null_anrind(self) -> None:
+        ard = self.ADLB.tlg.lb.t_abnormal(groupby="TRTA")
+        # P2's "high" counts; P3 (null ANRIND only) is not in N.
+        assert self._cell(ard, "ALT", "High") == {"n": 2.0, "N": 2.0, "pct": 100.0}
+        assert self._cell(ard, "ALT", "Low") == {"n": 1.0, "N": 2.0, "pct": 50.0}
+        # HIGH HIGH is a High value.
+        assert self._cell(ard, "AST", "High") == {"n": 1.0, "N": 1.0, "pct": 100.0}
+
+    def test_listing_keeps_abnormal_records_sorted(self) -> None:
+        adlb = pl.from_repr("""\
+┌─────────┬──────┬─────────┬───────┬────────┬──────┬────────┐
+│ USUBJID ┆ TRTA ┆ PARAMCD ┆ PARAM ┆ AVISIT ┆ AVAL ┆ ANRIND │
+│ ---     ┆ ---  ┆ ---     ┆ ---   ┆ ---    ┆ ---  ┆ ---    │
+│ str     ┆ str  ┆ str     ┆ str   ┆ str    ┆ f64  ┆ str    │
+╞═════════╪══════╪═════════╪═══════╪════════╪══════╪════════╡
+│ P2      ┆ A    ┆ ALT     ┆ ALT   ┆ WEEK 4 ┆ 9.0  ┆ HIGH   │
+│ P1      ┆ A    ┆ AST     ┆ AST   ┆ WEEK 2 ┆ 8.0  ┆ HIGH   │
+│ P1      ┆ A    ┆ ALT     ┆ ALT   ┆ WEEK 4 ┆ 7.0  ┆ normal │
+│ P1      ┆ A    ┆ ALT     ┆ ALT   ┆ WEEK 2 ┆ 6.0  ┆ LOW    │
+└─────────┴──────┴─────────┴───────┴────────┴──────┴────────┘
+""")
+        listing = adlb.tlg.lb.l_listing()
+        assert listing["Result"].to_list() == [6.0, 8.0, 9.0]

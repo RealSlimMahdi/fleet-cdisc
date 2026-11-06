@@ -26,9 +26,6 @@ If your contribution doesn't make the library simpler for the end user, reconsid
 git clone https://github.com/RealSlimMahdi/fleet-cdisc.git
 cd fleet-cdisc
 uv sync --extra docs --extra all --extra dev
-
-# Add project root to the Python path (makes specs/ importable for examples)
-uv run python -c "import sysconfig; from pathlib import Path; (Path(sysconfig.get_path('purelib')) / 'fleet-dev.pth').write_text(str(Path.cwd()))"
 ```
 
 > **Never** use `pip`, `poetry`, `conda`, or `pipenv`.
@@ -57,7 +54,7 @@ result = (
 )
 ```
 
-- **Namespaces:** `sdtm`, `adam`, `adam.adsl`, `adam.occds`, `adam.onco`, `adam.ophtha`, `adam.peds`, `adam.vaccine`, `adam.metabolic`, `adam.neuro`, `adam.pk`.
+- **Namespaces:** `sdtm`, `adam`, `adam.adsl`, `adam.occds`, `adam.onco`, `adam.ophtha`, `adam.peds`, `adam.vaccine`, `adam.metabolic`, `adam.neuro`, `adam.pk`, `adam.tte`.
 - **Verbs** are keyword-only after `target` to enforce explicit declarations.
 - **Return type** is always `Self` — enabling chaining and IDE autocomplete on the concrete subclass.
 - **Chaining infrastructure:** use `self._chain(*exprs)` to append expressions and `self._materialise_then(df)` when materialisation is required (e.g. filters, joins).
@@ -88,6 +85,28 @@ Always use generated codelist classes (`SEX`, `RACE`, …) — never raw NCI con
 ### Polars Only
 
 Fleet uses **Polars exclusively**. Never introduce Pandas as a dependency or use it in implementation code.
+
+### Add a verb
+
+A verb that a `define.yaml` can call (`algorithm: <verb>`) needs five edits.
+The test in brackets fails until the step is done.
+
+1. **Method.** Add the verb to its namespace class or mixin. It returns `Self` and uses
+   `self._chain(...)` or `self._materialise_then(df)`. Add unit tests with `pl.from_repr` data.
+2. **Registry.** Declare it with `spec_verb("<verb>", standard="sdtm" | "adam", ...)` in
+   `src/fleet/core/spec_registry.py`. A verb that cannot run from a spec goes into
+   `SPEC_UNSUPPORTED` instead, with a reason
+   (`test_every_public_verb_is_registered_or_allowlisted`).
+3. **Enum.** Add the verb name to `SDTMAlgorithm` (`src/fleet/sdtm/models.py`) or
+   `ADAMAlgorithm` (`src/fleet/adam/models.py`) (`test_enum_matches_registry`).
+4. **JSON schema.** Run `uv run python -m fleet.define_xml.schema_builder` and commit
+   `define_spec_schema.json` (`test_json_schema_in_sync`).
+5. **Round trip.** Add a `Case(...)` to `SDTM_CASES` or `ADAM_CASES` in
+   `tests/unit/test_spec_parity.py` (`test_round_trip_cases_cover_every_algorithm`).
+
+All four tests are in `tests/unit/test_spec_parity.py`. Then regenerate `llms.txt`
+(see the PR checklist). A verb that encodes a clinical rule must also pass the admission
+bar of `docs/adr/0009-an-admission-bar-for-clinical-verbs.md`.
 
 ---
 
@@ -234,22 +253,26 @@ We welcome thoughtful contributions regardless of whether you used AI tools to h
 ### Release steps
 
 1. Merge all release changes to `main`. CI must be green.
-2. Add a `## [X.Y.ZaN]` section to `docs/changelog.md`, under `[Unreleased]`.
-3. Check the build on your machine:
+2. Refresh the lock file with `uv lock --upgrade`, then run the Verification Order of `AGENTS.md`. Commit the new `uv.lock`.
+3. Add a `## [X.Y.ZaN]` section to `docs/changelog.md`, under `[Unreleased]`.
+4. Check the build on your machine:
 
    ```bash
    uv build && uvx twine check --strict dist/*
    ```
 
-4. Tag `main` and push the tag:
+   Before the first tag only, run `uv run mike delete --push latest` once. A push to `main` deploys the docs as `dev`; only a release tag writes `latest`.
+
+5. Tag `main` and push the tag:
 
    ```bash
    git tag -a v0.2.0a1 -m "Fleet 0.2.0a1 (pre-alpha)"
    git push origin v0.2.0a1
    ```
 
-5. If the `pypi` environment has required reviewers, approve the deployment in the GitHub Actions run.
-6. Check the project page on pypi.org, then run `pip install --pre fleet-cdisc` in a clean environment.
+6. If the `pypi` environment has required reviewers, approve the deployment in the GitHub Actions run.
+7. Check the project page on pypi.org, then run `pip install --pre fleet-cdisc` in a clean environment.
+8. Open each docs-site link and image of the PyPI page. A link to the docs site must contain `/latest/`, or it gives 404.
 
 A bad release cannot be replaced. PyPI refuses to take the same version number twice. Yank the bad version on pypi.org and tag the next number.
 
@@ -262,7 +285,7 @@ A bad release cannot be replaced. PyPI refuses to take the same version number t
 | `test`     | every run              | `ruff check`, `ruff format --check`, `pytest`                        |
 | `build`    | after `test`           | `uv build`, `twine check --strict`, install the wheel and smoke-test |
 | `testpypi` | push to `devel`        | upload to TestPyPI with the `TEST_PYPI_API_TOKEN` secret             |
-| `pypi`     | push of a `v*` tag     | upload to PyPI with Trusted Publishing                               |
+| `pypi`     | push of a `vX.Y.Z*` tag | upload to PyPI with Trusted Publishing                              |
 
 ### Configuration outside this repository
 
@@ -273,7 +296,7 @@ A bad release cannot be replaced. PyPI refuses to take the same version number t
 ### What goes into the package
 
 - The wheel holds `src/fleet` only, with its JSON, YAML and XSD data files.
-- The sdist holds `src/fleet`, `tests`, `README.md`, `LICENSE` and `pyproject.toml`. The include list is in `[tool.hatch.build.targets.sdist]`. Do not widen it.
+- The sdist holds `src/fleet`, `README.md`, `LICENSE` and `pyproject.toml`. The include list is in `[tool.hatch.build.targets.sdist]`. Do not widen it. Run the tests from the git tag, not from the sdist.
 - The README is the PyPI project page. Use absolute URLs for links and images. Relative links break on pypi.org.
 - The Define-XML and ODM schemas in `src/fleet/define_xml/schemas/xsd/` come from `cdisc-org/data-definition-engine` under the MIT licence. Keep `LICENSE-CDISC` and `SOURCES.txt` next to them when you update the schemas.
 

@@ -78,6 +78,8 @@ main { max-width: 1100px; margin: 0 auto; padding: 16px 20px; }
 .fleet-default-badge { display: inline-block; background: #eaf3ea; color: #1e6b1e;
                        border: 1px solid #bcd9bc; border-radius: 4px;
                        font-size: 11px; padding: 1px 6px; margin-left: 8px; }
+.fleet-exploratory { margin: 0 0 8px; padding: 4px 8px; font-size: 12px;
+                     background: #fff4e5; border: 1px solid #e0b070; color: #6b4200; }
 @media print { .fleet-explorer-header, .fleet-axes, .fleet-variant-tools { display: none; } }
 </style>"""
 
@@ -199,12 +201,26 @@ def _variant_section(
         if variant.is_default and variant.axis_labels
         else ""
     )
+    # A printout of a non-default variant must not pass for the batch table.
+    exploratory = (
+        []
+        if variant.is_default
+        else [
+            '<p class="fleet-exploratory">Exploratory view, not the batch output. '
+            + " ".join(
+                f"{_esc(_AXIS_LEGENDS.get(axis, axis))}: {_esc(label)}."
+                for axis, label in variant.axis_labels.items()
+            )
+            + "</p>"
+        ]
+    )
     # `</` must not terminate the embedding <script>; < is a legal
     # JSON escape and JSON text carries "<" only inside strings.
     safe_json = ard_json.replace("<", "\\u003c")
     return "\n".join(
         [
             f'<div class="fleet-variant" data-entry="{entry_id}"{sel_attrs} id="var-{vid}"{hidden}>',
+            *exploratory,
             fragment,
             '<div class="fleet-variant-tools">',
             f'<button class="fleet-dl" data-target="ard-{vid}" '

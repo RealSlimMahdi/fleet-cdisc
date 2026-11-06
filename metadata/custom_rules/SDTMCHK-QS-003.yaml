@@ -70,3 +70,6 @@ Authorities:
       - Cited Guidance: check_qs_qsdtc_after_dd
         Document: pharmaverse sdtmchecks
         Section: QS Domain
+  Category:
+    Purpose: Data quality check from sdtmchecks
+    Keywords: [QS]

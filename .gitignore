@@ -20,6 +20,9 @@ coverage.xml
 .coverage
 
 
+# Example and pipeline outputs: build artifacts, never committed
+outputs/
+
 # MacOS files
 .DS_Store
 outputs/.DS_Store

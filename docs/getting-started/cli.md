@@ -23,8 +23,18 @@ CDISC_API_KEY=your-api-key-here
 - **Exit codes** — `0` success, `1` on a Fleet error (a single clean message
   on stderr), `2` on a usage error (missing/unknown command or flag).
   `fleet compare` turns its verdict into the exit code: `0` equal, `1`
-  different, `2` the comparison could not run.
-- **Errors** go to **stderr**; results go to stdout.
+  different, `2` the comparison could not run. `fleet doctor` exits `1`
+  when the study config or the rules engine has a cross.
+- **Errors** go to **stderr**; results go to stdout. A bad YAML file, a
+  corrupt input file or a folder that cannot be written gives one line. Set
+  `FLEET_DEBUG=1` to see the Python traceback.
+- **Comments** — `fleet add-acrf` and `fleet tdd ctgov --write` edit the
+  YAML file as text, so its comments stay. When no parameter is new,
+  `fleet tdd ctgov --write` does not write the file. A layout that the text
+  edit does not handle (a flow-style block) is written again through YAML,
+  with a warning that counts the comment lines that are lost.
+- **Run log** — keep the output of a run in a file:
+  `fleet run > run.log 2>&1`.
 - `fleet --version` prints the installed version.
 
 Run `fleet <command> --help` for the authoritative, always-current usage.
@@ -57,6 +67,8 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 ---
 
 ## `fleet init`
+
+Run one step of the study bootstrap: cfg, then define, then ct, then rules. Use it to continue a study that fleet new started, to run a step again with --force, or to build a study one step at a time. For a new study in one command, use fleet new.
 
 ### `fleet init cfg`
 
@@ -110,6 +122,8 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 | `--out` / `--output` / `-o` | _(none)_ | Output directory for every dataset. Default: the configured data/sdtm and data/adam directories. Fleet only writes here: inputs are read from the run, a declared path:, the raw directory (type: raw) or the data directory of the input's standard (type: dataset). |
 | `--format` | _(none)_ | Output format of every dataset. Default: the output_format of the dataset, else of define.yaml, else parquet (the rule of the Define-XML leaf). Choices: `parquet`, `xpt`, `dataset-json`. |
 | `--strict` / `--no-strict` | _(on)_ | Raise on unknown spec algorithms (default). --no-strict warns and skips. |
+| `--overwrite` | _(none)_ | Let a spec derivation replace a column that the input already has. Default off, so a QC run keeps the guard. |
+| `--check` | _(none)_ | Stop before the write when a variable's values do not match its define type (for CI). Without it the mismatch is a warning on stderr. |
 
 ---
 
@@ -123,7 +137,7 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 | ------ | ------- | ----------- |
 | `--config` / `-c` | _(none)_ | Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style). |
 | `--standard` | _(none)_ | Force the standard. Default: the configured data directory that holds the dataset, else AD* datasets → adam, others → sdtm. Choices: `sdtm`, `adam`. |
-| `--version` | _(none)_ | IG version. Default: the sdtm/adam ig_version declared in the discovered study_config.yaml (3.4 / 1.3 outside a study). |
+| `--version` | _(none)_ | IG version. It applies to every dataset of the run, SDTM and ADaM. Default: the sdtm/adam ig_version declared in the discovered study_config.yaml (3.4 / 1.3 outside a study). |
 | `--define` | _(none)_ | Define-XML file that CORE checks with the datasets (CORE -dxp). Opt-in: Fleet never passes a define by default. |
 | `--custom-rules` | _(none)_ | Directory of custom validation rule YAML files, relative to the working directory. Default: validation.custom_rules from the discovered study_config.yaml. |
 | `--timeout` | _(none)_ | Seconds before an engine run is stopped. Default: validation.timeout from the discovered study_config.yaml, else 300. |
@@ -144,7 +158,7 @@ CI gate: parse the study config, check each define.yaml against its schema, chec
 
 ## `fleet compare`
 
-PROC COMPARE analogue: pair the two datasets on --keys, match variables by name and print the comparison report. --pairs compares variables named differently on each side and --variables restricts the comparison to the ones that matter. Equality is exact unless --abs-tol, --rel-tol or --ignore-trailing-whitespace widens it. --by sections the report per group and --allow-duplicates pairs duplicate keys by position. Exit 0 when the datasets are equal, 1 when they differ, 2 when the comparison could not run (unreadable file, missing keys, duplicate keys without --allow-duplicates, a negative tolerance, a --variables list of keys only, --out or --report not writable).
+PROC COMPARE analogue: pair the two datasets on --keys, match variables by name and print the comparison report. --pairs compares variables named differently on each side and --variables restricts the comparison to the ones that matter. Equality is exact unless --abs-tol, --rel-tol or --ignore-trailing-whitespace widens it. --by sections the report per group and --allow-duplicates pairs duplicate keys by position. Exit 0 when the datasets are equal, 1 when they differ, 2 when the comparison could not run (unreadable file, missing keys, duplicate keys without --allow-duplicates, a negative tolerance, a --variables list of keys only, --out or --report not writable or naming an input file, an internal error; FLEET_DEBUG=1 prints its traceback).
 
 | Argument | Description |
 | -------- | ----------- |
@@ -173,6 +187,8 @@ PROC COMPARE analogue: pair the two datasets on --keys, match variables by name 
 
 ## `fleet new`
 
+Create a new study in the folder ./STUDY_ID: the study_config.yaml and the folders, then the define.yaml files, codelists.py and the cached rules from the CDISC Library. Use it once, at the start of a study. To run one step again, or to continue after a missing CDISC_API_KEY, use fleet init.
+
 | Argument | Description |
 | -------- | ----------- |
 | `study_id` | Study identifier (e.g. STUDY01). |
@@ -187,7 +203,7 @@ PROC COMPARE analogue: pair the two datasets on --keys, match variables by name 
 | `--adam-ig` | `1-3` | ADaM IG version (default: 1-3). |
 | `--package` | `sdtmct-2023-12-15` | SDTM CT package version (default: sdtmct-2023-12-15). |
 | `--adam-package` | _(none)_ | ADaM CT package, for the codelists only ADaM CT holds (DTYPE). Default with ADaM datasets: adamct-2023-06-30, the latest on or before the default SDTM package; required with another --package. |
-| `--root` / `-r` | `.` | Study root directory (default: current directory). |
+| `--root` / `-r` | _(none)_ | Study root directory (default: ./STUDY_ID). Pass --root . to use the current one. |
 | `--yes` / `-y` | _(none)_ | Skip the confirmation prompt. |
 
 ---
@@ -201,7 +217,7 @@ PROC COMPARE analogue: pair the two datasets on --keys, match variables by name 
 | Option | Default | Description |
 | ------ | ------- | ----------- |
 | `--spec` | _(none)_ | Migrate define.yaml files to the verb vocabulary (fleet_spec_version 2). |
-| `--write` | _(none)_ | Rewrite files in place (default: print a unified diff). |
+| `--write` | _(none)_ | Rewrite files in place (default: print a unified diff). No backup file is kept: commit the files to git first. |
 
 ---
 
@@ -256,6 +272,7 @@ PROC COMPARE analogue: pair the two datasets on --keys, match variables by name 
 
 | Option | Default | Description |
 | ------ | ------- | ----------- |
+| `--config` / `-c` | _(none)_ | Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style). |
 | `--data` | _(none)_ | Analysis dataset path, repeatable. Plain PATH applies to every spec; NAME=PATH (e.g. ADAE=adae.parquet) targets the template's analysis domain. |
 | `--adsl` | _(none)_ | ADSL dataset path (population denominators for tables). |
 | `--output` / `-o` | _(none)_ | Output directory. Default: the configured outputs directory (current directory outside a study workspace). |
@@ -266,7 +283,7 @@ PROC COMPARE analogue: pair the two datasets on --keys, match variables by name 
 | `--subtitle` | `""` | Output subtitle. |
 | `--footnote` | _(none)_ | Footnote (repeatable). |
 | `--rows-per-page` | _(none)_ | Maximum body rows per page (model-layer pagination). |
-| `--page-by` | _(none)_ | ARD variable to page-break on (e.g. PARAMCD). |
+| `--page-by` | _(none)_ | ARD row variable to page-break on (e.g. PARAMCD). Tables only. |
 | `--watch` | _(none)_ | Re-run whenever a spec file changes (requires the 'watch' extra). |
 
 ### `fleet tlg explore`
@@ -277,6 +294,7 @@ PROC COMPARE analogue: pair the two datasets on --keys, match variables by name 
 
 | Option | Default | Description |
 | ------ | ------- | ----------- |
+| `--config` / `-c` | _(none)_ | Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style). |
 | `--data` | _(none)_ | Analysis dataset path, repeatable. Plain PATH applies to every spec; NAME=PATH (e.g. ADAE=adae.parquet) targets the template's analysis domain. |
 | `--adsl` | _(none)_ | ADSL dataset path (population denominators for tables). |
 | `--output` / `-o` | _(none)_ | Output HTML file. Default: explorer.html in the configured outputs directory (current directory outside a study workspace). |
@@ -291,6 +309,7 @@ PROC COMPARE analogue: pair the two datasets on --keys, match variables by name 
 
 | Option | Default | Description |
 | ------ | ------- | ----------- |
+| `--config` / `-c` | _(none)_ | Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style). |
 | `--domain` | _(required)_ | TLG sub-namespace to summarise. Choices: `ae`, `cm`, `dm`, `ds`, `eg`, `ex`, `lb`, `mh`, `vs`. |
 | `--format` | `html` | Output format (default: html). Choices: `html`, `rtf`, `pdf`, `pptx`. |
 | `--data` | _(none)_ | Path to the primary analysis dataset. Default: the analysis dataset the domain's t_summary template declares (e.g. ADAE for ae, ADSL for dm/ds), found in the configured data directories. |
@@ -304,7 +323,7 @@ PROC COMPARE analogue: pair the two datasets on --keys, match variables by name 
 | `--footnote` | _(none)_ | Footnote (repeatable). |
 | `--rows-per-page` | _(none)_ | Maximum body rows per page (model-layer pagination). |
 | `--page-by` | _(none)_ | ARD variable to page-break on (e.g. PARAMCD). |
-| `--wrap` | _(none)_ | Path to an HTML wrapper template with {table} placeholder. |
+| `--wrap` | _(none)_ | Path to an HTML wrapper template with a {table} placeholder (html and pdf only; refused for rtf and pptx). A PDF loads no external resource: a logo or style sheet the wrapper links is left out, with a warning. |
 
 ---
 
@@ -341,9 +360,10 @@ Generate Define-XML 2.1 from a define.yaml specification. This imports the spec'
 
 | Option | Default | Description |
 | ------ | ------- | ----------- |
+| `--config` / `-c` | _(none)_ | Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style). |
 | `--domains` | _(required)_ | Comma-separated SDTM domain abbreviations to add. |
 | `--ig` | _(none)_ | SDTM IG version. Default: sdtm.ig_version from the discovered study_config.yaml (3-4 outside a study). |
-| `--package` | _(none)_ | CT package version. Default: ct.package from the discovered study_config.yaml (sdtmct-2023-12-15 outside a study). Refused when it differs from the package an existing codelists.py was generated from. |
+| `--package` | _(none)_ | CT package version. Default: ct.package from the discovered study_config.yaml, else the package of the existing codelists.py, else sdtmct-2023-12-15. Refused when it differs from the package an existing codelists.py was generated from. |
 | `--output` / `-o` | _(none)_ | Path to the existing codelists.py. Default: <metadata_sdtm>/codelists.py from the discovered study_config.yaml (./codelists.py outside a study). |
 | `--no-docs` | _(none)_ | Omit definitions and preferred terms from generated code. |
 
@@ -384,6 +404,8 @@ Generate Define-XML 2.1 from a define.yaml specification. This imports the spec'
 ---
 
 ## `fleet doctor`
+
+Check the Fleet setup: the study config, codelists.py, the rules engine, CDISC_API_KEY and the optional extras. Exit 1 when the study config or the rules engine has a cross; the API key and the extras are information only.
 
 | Option | Default | Description |
 | ------ | ------- | ----------- |

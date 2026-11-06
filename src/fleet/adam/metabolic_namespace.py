@@ -24,11 +24,14 @@ Usage
 
 from __future__ import annotations
 
+from itertools import pairwise
 from typing import Self
 
 import polars as pl
 
 from fleet.adam._mixins import SharedADaMVerbsMixin
+from fleet.adam.utils import sas_round
+from fleet.core.exceptions import DerivationError
 
 
 class MetabolicNamespace(SharedADaMVerbsMixin):
@@ -59,7 +62,8 @@ class MetabolicNamespace(SharedADaMVerbsMixin):
             target: Name of the output column.
             waist_col: Column containing waist circumference.
             hip_col: Column containing hip circumference.
-            round_digits: Decimal places to round to (default ``3``).
+            round_digits: Decimal places to round to (default ``3``), half
+                away from zero (SAS ``ROUND``, ADR-0025).
 
         Returns:
             Self: The namespace with *target* appended.
@@ -75,8 +79,7 @@ class MetabolicNamespace(SharedADaMVerbsMixin):
                 )
         """
         expr = pl.when(pl.col(hip_col) != 0).then(pl.col(waist_col) / pl.col(hip_col))
-        if round_digits is not None:
-            expr = expr.round(round_digits)
+        expr = sas_round(expr, round_digits)
         return self._chain(expr.alias(target))
 
     # ------------------------------------------------------------------ #
@@ -99,7 +102,8 @@ class MetabolicNamespace(SharedADaMVerbsMixin):
             target: Name of the output column.
             waist_col: Column containing waist circumference.
             height_col: Column containing height.
-            round_digits: Decimal places to round to (default ``3``).
+            round_digits: Decimal places to round to (default ``3``), half
+                away from zero (SAS ``ROUND``, ADR-0025).
 
         Returns:
             Self: The namespace with *target* appended.
@@ -115,8 +119,7 @@ class MetabolicNamespace(SharedADaMVerbsMixin):
                 )
         """
         expr = pl.when(pl.col(height_col) != 0).then(pl.col(waist_col) / pl.col(height_col))
-        if round_digits is not None:
-            expr = expr.round(round_digits)
+        expr = sas_round(expr, round_digits)
         return self._chain(expr.alias(target))
 
     # ------------------------------------------------------------------ #
@@ -148,7 +151,8 @@ class MetabolicNamespace(SharedADaMVerbsMixin):
             sex_col: Column containing sex code.
             sex_male_value: Value indicating male (default ``"M"``).
             sex_female_value: Value indicating female (default ``"F"``).
-            round_digits: Decimal places to round to (default ``1``).
+            round_digits: Decimal places to round to (default ``1``), half
+                away from zero (SAS ``ROUND``, ADR-0025).
 
         Returns:
             Self: The namespace with *target* appended.
@@ -178,8 +182,7 @@ class MetabolicNamespace(SharedADaMVerbsMixin):
             .then(pl.lit(0.0))
         )
         expr = 1.2 * pl.col(bmi_col) + 0.23 * pl.col(age_col) - 10.8 * sex_num - 5.4
-        if round_digits is not None:
-            expr = expr.round(round_digits)
+        expr = sas_round(expr, round_digits)
         return self._chain(expr.alias(target))
 
     # ------------------------------------------------------------------ #
@@ -235,7 +238,7 @@ class MetabolicNamespace(SharedADaMVerbsMixin):
         """
         is_male = pl.col(sex_col) == sex_male_value
         is_female = pl.col(sex_col) == sex_female_value
-        waist = pl.col(waist_col)
+        waist = pl.col(waist_col).cast(pl.Float64).fill_nan(None)
         return self._chain(
             pl.when(
                 (is_male & (waist >= male_threshold)) | (is_female & (waist >= female_threshold))
@@ -272,6 +275,9 @@ class MetabolicNamespace(SharedADaMVerbsMixin):
         Returns:
             Self: The namespace with *target* appended.
 
+        Raises:
+            DerivationError: If the bounds of *labels* do not strictly ascend.
+
         References:
             WHO. Obesity: preventing and managing the global epidemic. WHO Technical
             Report Series 894 (2000): adult classes at 18.5, 25.0 and 30.0 kg/m2.
@@ -297,6 +303,12 @@ class MetabolicNamespace(SharedADaMVerbsMixin):
                 ("Obese", float("inf")),
             ]
         )
+        bounds = [upper for _, upper in thresholds]
+        if any(lo >= hi for lo, hi in pairwise(bounds)):
+            raise DerivationError(
+                f"bmi_category_adult('{target}'): the label bounds {bounds} do not strictly "
+                "ascend. Give the labels in increasing order of their upper bound."
+            )
         bmi = pl.col(bmi_col).cast(pl.Float64).fill_nan(None)
         chain = pl.when(bmi.is_null()).then(pl.lit(None, dtype=pl.String))
         for label, upper in thresholds:

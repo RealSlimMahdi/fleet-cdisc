@@ -1,5 +1,10 @@
 """
-Admiral-inspired ADPC / ADNCA and ADPPK pipeline for CDISCPILOT01.
+Admiral-inspired ADPC / ADNCA and ADPPK pipeline: a verb demo on synthetic data.
+
+The data below is synthetic, in the CDISCPILOT01 shape: it is not the CDISC
+pilot data. Only active-arm subjects have PK samples, and TRTSDT is the date
+of the first dose (EXSTDTC). Step 15 sets DTYPE = "HALFLLOQ" in place on the
+BLQ records; admiral adds a new derived record instead.
 
 Reproduces the admiral "Creating a PK NCA or Population PK ADaM" programming
 flow in Python / Fleet:
@@ -88,14 +93,14 @@ pc_raw = fleet.frame(
 │ ---         ┆ ---   ┆ ---      ┆ ---    ┆ ---      ┆ ---    ┆ ---                 ┆ ---      ┆ ---              ┆ ---     ┆ ---      ┆ ---      ┆ ---      ┆ ---    ┆ ---    ┆ ---    ┆ ---                 │
 │ str         ┆ i64   ┆ i64      ┆ str    ┆ str      ┆ str    ┆ str                 ┆ f64      ┆ str              ┆ str     ┆ str      ┆ str      ┆ str      ┆ str    ┆ str    ┆ f64    ┆ str                 │
 ╞═════════════╪═══════╪══════════╪════════╪══════════╪════════╪═════════════════════╪══════════╪══════════════════╪═════════╪══════════╪══════════╪══════════╪════════╪════════╪════════╪═════════════════════╡
-│ 01-701-1015 ┆ 1     ┆ 2        ┆ Week 1 ┆ DRUG     ┆ Drug A ┆ 2014-01-17T08:00:00 ┆ 0.0      ┆ PRE-DOSE         ┆ BLQ     ┆ BLQ      ┆ .        ┆ ng/mL    ┆ PLASMA ┆ Y      ┆ 1.0    ┆ 2014-01-17T08:00:00 │
-│ 01-701-1015 ┆ 2     ┆ 2        ┆ Week 1 ┆ DRUG     ┆ Drug A ┆ 2014-01-17T08:30:00 ┆ 0.5      ┆ 30 MIN POST-DOSE ┆ 5.43    ┆ 5.43     ┆ 5.43     ┆ ng/mL    ┆ PLASMA ┆ null   ┆ 1.0    ┆ 2014-01-17T08:00:00 │
-│ 01-701-1015 ┆ 3     ┆ 2        ┆ Week 1 ┆ DRUG     ┆ Drug A ┆ 2014-01-17T09:00:00 ┆ 1.0      ┆ 1 HR POST-DOSE   ┆ 10.27   ┆ 10.27    ┆ 10.27    ┆ ng/mL    ┆ PLASMA ┆ null   ┆ 1.0    ┆ 2014-01-17T08:00:00 │
-│ 01-701-1015 ┆ 4     ┆ 2        ┆ Week 1 ┆ DRUG     ┆ Drug A ┆ 2014-01-17T10:00:00 ┆ 2.0      ┆ 2 HR POST-DOSE   ┆ 18.64   ┆ 18.64    ┆ 18.64    ┆ ng/mL    ┆ PLASMA ┆ null   ┆ 1.0    ┆ 2014-01-17T08:00:00 │
-│ 01-701-1015 ┆ 5     ┆ 2        ┆ Week 1 ┆ DRUG     ┆ Drug A ┆ 2014-01-17T12:00:00 ┆ 4.0      ┆ 4 HR POST-DOSE   ┆ 22.31   ┆ 22.31    ┆ 22.31    ┆ ng/mL    ┆ PLASMA ┆ null   ┆ 1.0    ┆ 2014-01-17T08:00:00 │
-│ 01-701-1015 ┆ 6     ┆ 2        ┆ Week 1 ┆ DRUG     ┆ Drug A ┆ 2014-01-17T16:00:00 ┆ 8.0      ┆ 8 HR POST-DOSE   ┆ 14.88   ┆ 14.88    ┆ 14.88    ┆ ng/mL    ┆ PLASMA ┆ null   ┆ 1.0    ┆ 2014-01-17T08:00:00 │
-│ 01-701-1015 ┆ 7     ┆ 2        ┆ Week 1 ┆ DRUG     ┆ Drug A ┆ 2014-01-17T20:00:00 ┆ 12.0     ┆ 12 HR POST-DOSE  ┆ 8.12    ┆ 8.12     ┆ 8.12     ┆ ng/mL    ┆ PLASMA ┆ null   ┆ 1.0    ┆ 2014-01-17T08:00:00 │
-│ 01-701-1015 ┆ 8     ┆ 2        ┆ Week 1 ┆ DRUG     ┆ Drug A ┆ 2014-01-18T08:00:00 ┆ 24.0     ┆ 24 HR POST-DOSE  ┆ 0.73    ┆ 0.73     ┆ 0.73     ┆ ng/mL    ┆ PLASMA ┆ null   ┆ 1.0    ┆ 2014-01-17T08:00:00 │
+│ 01-701-1047 ┆ 1     ┆ 2        ┆ Week 1 ┆ DRUG     ┆ Drug A ┆ 2014-01-17T08:00:00 ┆ 0.0      ┆ PRE-DOSE         ┆ BLQ     ┆ BLQ      ┆ .        ┆ ng/mL    ┆ PLASMA ┆ Y      ┆ 1.0    ┆ 2014-01-17T08:00:00 │
+│ 01-701-1047 ┆ 2     ┆ 2        ┆ Week 1 ┆ DRUG     ┆ Drug A ┆ 2014-01-17T08:30:00 ┆ 0.5      ┆ 30 MIN POST-DOSE ┆ 5.43    ┆ 5.43     ┆ 5.43     ┆ ng/mL    ┆ PLASMA ┆ null   ┆ 1.0    ┆ 2014-01-17T08:00:00 │
+│ 01-701-1047 ┆ 3     ┆ 2        ┆ Week 1 ┆ DRUG     ┆ Drug A ┆ 2014-01-17T09:00:00 ┆ 1.0      ┆ 1 HR POST-DOSE   ┆ 10.27   ┆ 10.27    ┆ 10.27    ┆ ng/mL    ┆ PLASMA ┆ null   ┆ 1.0    ┆ 2014-01-17T08:00:00 │
+│ 01-701-1047 ┆ 4     ┆ 2        ┆ Week 1 ┆ DRUG     ┆ Drug A ┆ 2014-01-17T10:00:00 ┆ 2.0      ┆ 2 HR POST-DOSE   ┆ 18.64   ┆ 18.64    ┆ 18.64    ┆ ng/mL    ┆ PLASMA ┆ null   ┆ 1.0    ┆ 2014-01-17T08:00:00 │
+│ 01-701-1047 ┆ 5     ┆ 2        ┆ Week 1 ┆ DRUG     ┆ Drug A ┆ 2014-01-17T12:00:00 ┆ 4.0      ┆ 4 HR POST-DOSE   ┆ 22.31   ┆ 22.31    ┆ 22.31    ┆ ng/mL    ┆ PLASMA ┆ null   ┆ 1.0    ┆ 2014-01-17T08:00:00 │
+│ 01-701-1047 ┆ 6     ┆ 2        ┆ Week 1 ┆ DRUG     ┆ Drug A ┆ 2014-01-17T16:00:00 ┆ 8.0      ┆ 8 HR POST-DOSE   ┆ 14.88   ┆ 14.88    ┆ 14.88    ┆ ng/mL    ┆ PLASMA ┆ null   ┆ 1.0    ┆ 2014-01-17T08:00:00 │
+│ 01-701-1047 ┆ 7     ┆ 2        ┆ Week 1 ┆ DRUG     ┆ Drug A ┆ 2014-01-17T20:00:00 ┆ 12.0     ┆ 12 HR POST-DOSE  ┆ 8.12    ┆ 8.12     ┆ 8.12     ┆ ng/mL    ┆ PLASMA ┆ null   ┆ 1.0    ┆ 2014-01-17T08:00:00 │
+│ 01-701-1047 ┆ 8     ┆ 2        ┆ Week 1 ┆ DRUG     ┆ Drug A ┆ 2014-01-18T08:00:00 ┆ 24.0     ┆ 24 HR POST-DOSE  ┆ 0.73    ┆ 0.73     ┆ 0.73     ┆ ng/mL    ┆ PLASMA ┆ null   ┆ 1.0    ┆ 2014-01-17T08:00:00 │
 │ 01-701-1023 ┆ 1     ┆ 2        ┆ Week 1 ┆ DRUG     ┆ Drug A ┆ 2014-02-10T08:00:00 ┆ 0.0      ┆ PRE-DOSE         ┆ BLQ     ┆ BLQ      ┆ .        ┆ ng/mL    ┆ PLASMA ┆ Y      ┆ 1.0    ┆ 2014-02-10T08:00:00 │
 │ 01-701-1023 ┆ 2     ┆ 2        ┆ Week 1 ┆ DRUG     ┆ Drug A ┆ 2014-02-10T08:30:00 ┆ 0.5      ┆ 30 MIN POST-DOSE ┆ 4.89    ┆ 4.89     ┆ 4.89     ┆ ng/mL    ┆ PLASMA ┆ null   ┆ 1.0    ┆ 2014-02-10T08:00:00 │
 │ 01-701-1023 ┆ 3     ┆ 2        ┆ Week 1 ┆ DRUG     ┆ Drug A ┆ 2014-02-10T09:00:00 ┆ 1.0      ┆ 1 HR POST-DOSE   ┆ 9.56    ┆ 9.56     ┆ 9.56     ┆ ng/mL    ┆ PLASMA ┆ null   ┆ 1.0    ┆ 2014-02-10T08:00:00 │
@@ -124,10 +129,10 @@ dm_raw = fleet.frame(
 │ str            ┆ i64     ┆ i64 ┆ str ┆ str                       ┆ str                    ┆ str      ┆ str                  ┆ str             ┆ str            ┆ str                   │
 ╞════════════════╪═════════╪═════╪═════╪═══════════════════════════╪════════════════════════╪══════════╪══════════════════════╪═════════════════╪════════════════╪═══════════════════════╡
 │ 01-701-1015    ┆ 701     ┆ 63  ┆ F   ┆ WHITE                     ┆ NOT HISPANIC OR LATINO ┆ Pbo      ┆ Placebo              ┆ 2014-01-02      ┆ 2014-07-02     ┆ 2014-01-01            │
-│ 01-701-1023    ┆ 701     ┆ 64  ┆ F   ┆ WHITE                     ┆ NOT HISPANIC OR LATINO ┆ Xan_Lo   ┆ Xanomeline Low Dose  ┆ 2014-01-03      ┆ 2014-07-04     ┆ 2014-01-02            │
-│ 01-701-1028    ┆ 701     ┆ 71  ┆ M   ┆ WHITE                     ┆ NOT HISPANIC OR LATINO ┆ Xan_Hi   ┆ Xanomeline High Dose ┆ 2014-01-04      ┆ 2014-07-05     ┆ 2014-01-03            │
+│ 01-701-1023    ┆ 701     ┆ 64  ┆ F   ┆ WHITE                     ┆ NOT HISPANIC OR LATINO ┆ Xan_Lo   ┆ Xanomeline Low Dose  ┆ 2014-02-10      ┆ 2014-07-04     ┆ 2014-01-02            │
+│ 01-701-1028    ┆ 701     ┆ 71  ┆ M   ┆ WHITE                     ┆ NOT HISPANIC OR LATINO ┆ Xan_Hi   ┆ Xanomeline High Dose ┆ 2014-03-05      ┆ 2014-07-05     ┆ 2014-01-03            │
 │ 01-701-1034    ┆ 701     ┆ 74  ┆ M   ┆ BLACK OR AFRICAN AMERICAN ┆ NOT HISPANIC OR LATINO ┆ Pbo      ┆ Placebo              ┆ 2014-01-05      ┆ 2014-07-06     ┆ 2014-01-04            │
-│ 01-701-1047    ┆ 701     ┆ 56  ┆ F   ┆ WHITE                     ┆ NOT HISPANIC OR LATINO ┆ Xan_Lo   ┆ Xanomeline Low Dose  ┆ 2014-01-06      ┆ 2014-07-07     ┆ 2014-01-05            │
+│ 01-701-1047    ┆ 701     ┆ 56  ┆ F   ┆ WHITE                     ┆ NOT HISPANIC OR LATINO ┆ Xan_Lo   ┆ Xanomeline Low Dose  ┆ 2014-01-17      ┆ 2014-07-07     ┆ 2014-01-05            │
 └────────────────┴─────────┴─────┴─────┴───────────────────────────┴────────────────────────┴──────────┴──────────────────────┴─────────────────┴────────────────┴───────────────────────┘
 """)
 )
@@ -232,6 +237,11 @@ adpc = (
     # admiral: derive_vars_merged(dataset_add = adsl, new_vars = adsl_vars,
     #           by_vars = exprs(STUDYID, USUBJID))
     .merge_adsl(adsl, keep=["TRT01P", "TRTSDT", "DOSEP", "SEX", "SEXN", "RACE", "AGE", "ARMN"])
+    # ── BDS identifiers (ADaMIG 1.3: STUDYID, PARAMCD, PARAM are required) ──
+    .assign("STUDYID", value="CDISCPILOT01")
+    .assign("PARAMCD", source="PCTESTCD")
+    .derivation("PARAM", expression=pl.concat_str([pl.col("PCTEST"), pl.lit(" (ng/mL)")]))
+    .assign("AVALU", source="PCSTRESU")
     # ── Step 6. EVID = 0 for all concentration records ──────────────────────
     # admiral: mutate(EVID = 0)
     .evid("EVID")
@@ -322,7 +332,10 @@ assert (_blq_text["BLQFL"] == "Y").all(), "every PCSTRESC 'BLQ' record is BLQ"
 
 print("\n── ADPC preview ─────────────────────────────────────────────────────────")
 preview_cols = [
+    "STUDYID",
     "USUBJID",
+    "PARAMCD",
+    "PARAM",
     "PCTPT",
     "NFRLT",
     "AFRLT",
@@ -418,6 +431,7 @@ adppk = (
     .amt("AMT", dose_col="DOSEP", evid_col="EVID")
     # ── CMT — Compartment number ─────────────────────────────────────────────
     # admiral: mutate(CMT = case_when(EVID == 1 ~ 1, PCSPEC == "PLASMA" ~ 2, TRUE ~ 3))
+    # The data hold plasma records only, so the admiral rule reduces to this call.
     .cmt("CMT", evid_col="EVID", dose_cmt=1, conc_cmt=2)
     # ── BLQ flags ─────────────────────────────────────────────────────────────
     # admiral: mutate(BLQFL = …, BLQFN = …)

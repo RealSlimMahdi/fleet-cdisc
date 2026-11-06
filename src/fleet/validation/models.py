@@ -44,13 +44,17 @@ class ValidationIssue:
     is available.  They turn a bare "variable failed rule" message into a
     direct cross-link back to the exact Python verb that produced the
     column.
+
+    ``row``, ``usubjid``, ``seq`` and ``values`` locate the record, as the
+    engine reports it: the row number, the subject, the ``--SEQ`` value and
+    the values of the variables the rule checked.
     """
 
     severity: Severity
     rule_id: str
     message: str
     variable: str | None = None
-    rows_affected: int | None = None
+    row: int | None = None
     suggested_fix: str | None = None
     producing_verb: str | None = None
     verb_method: str | None = None
@@ -58,6 +62,22 @@ class ValidationIssue:
     source: RuleSource = "official"
     #: The reason from ``validation.accepted`` when the study accepts this finding.
     accepted: str | None = None
+    #: The subject of the record (``USUBJID``), when the engine gives it.
+    usubjid: str | None = None
+    #: The ``--SEQ`` value of the record, when the engine gives it.
+    seq: int | None = None
+    #: The values of the checked variables on the record, when the engine gives them.
+    values: list[str] | None = None
+
+    def record(self) -> str:
+        """The record of the finding in one line (``"S1-002 seq 1: YES"``), or ``""``."""
+        where = " ".join(
+            part
+            for part in (self.usubjid or "", f"seq {self.seq}" if self.seq is not None else "")
+            if part
+        )
+        values = ", ".join(self.values or [])
+        return f"{where}: {values}" if where and values else where or values
 
     def __str__(self) -> str:
         parts = [f"[{self.severity.value}] {self.rule_id} ({self.source}): {self.message}"]
@@ -65,8 +85,14 @@ class ValidationIssue:
             parts.append(f"Accepted: {self.accepted}")
         if self.variable:
             parts.append(f"Variable: {self.variable}")
-        if self.rows_affected is not None:
-            parts.append(f"Rows: {self.rows_affected}")
+        if self.row is not None:
+            parts.append(f"Row: {self.row}")
+        if self.usubjid:
+            parts.append(f"USUBJID: {self.usubjid}")
+        if self.seq is not None:
+            parts.append(f"Seq: {self.seq}")
+        if self.values:
+            parts.append(f"Values: {', '.join(self.values)}")
         if self.producing_verb:
             parts.append(f"Producing verb: {self.producing_verb} ({self.verb_method})")
         if self.spec_ref:
@@ -286,38 +312,6 @@ class ValidationResult:
     def _print_smart(self) -> None:
         """Deduplicated view: groups identical findings and shows row ranges."""
 
-        def _group_issues(issues: list[ValidationIssue]) -> list[dict]:
-            """Group issues by (rule_id, message, variable) and consolidate rows."""
-            groups: dict[tuple, dict] = {}
-            for issue in issues:
-                key = (issue.rule_id, issue.message, issue.variable or "", issue.source)
-                if key not in groups:
-                    groups[key] = {
-                        "issue": issue,
-                        "rows": [],
-                        "count": 0,
-                    }
-                groups[key]["count"] += 1
-                if issue.rows_affected is not None:
-                    groups[key]["rows"].append(issue.rows_affected)
-            return list(groups.values())
-
-        def _format_rows(rows: list[int]) -> str:
-            """Format row numbers into compact ranges (e.g. '1-5, 8, 10-12')."""
-            if not rows:
-                return ""
-            sorted_rows = sorted(set(rows))
-            ranges: list[str] = []
-            start = prev = sorted_rows[0]
-            for r in sorted_rows[1:]:
-                if r == prev + 1:
-                    prev = r
-                else:
-                    ranges.append(f"{start}" if start == prev else f"{start}-{prev}")
-                    start = prev = r
-            ranges.append(f"{start}" if start == prev else f"{start}-{prev}")
-            return ", ".join(ranges)
-
         def _print_grouped(label: str, issues: list[ValidationIssue]) -> None:
             if not issues:
                 return
@@ -333,7 +327,10 @@ class ValidationResult:
                 if issue.variable:
                     _logger.info(f"   Variable: {issue.variable}")
                 if rows:
-                    _logger.info(f"   Rows affected: {_format_rows(rows)} ({count} occurrences)")
+                    label = "Row" if len(set(rows)) == 1 else "Rows"
+                    _logger.info(
+                        f"   {label}: {_format_rows(rows)} ({count} occurrence{'s' if count != 1 else ''})"
+                    )
                 elif count > 1:
                     _logger.info(f"   Occurrences: {count}")
                 if issue.producing_verb:
@@ -372,6 +369,74 @@ class ValidationResult:
         return write_html_report([self], output_path)
 
 
+#: Records listed per group of identical findings in the HTML page; the rest are counted.
+_RECORDS_SHOWN = 20
+
+
+def _group_issues(issues: Sequence[ValidationIssue]) -> list[dict]:
+    """Group issues by (rule_id, message, variable, source) and consolidate rows."""
+    groups: dict[tuple, dict] = {}
+    for issue in issues:
+        key = (issue.rule_id, issue.message, issue.variable or "", issue.source)
+        if key not in groups:
+            groups[key] = {"issue": issue, "rows": [], "count": 0, "records": []}
+        groups[key]["count"] += 1
+        if issue.row is not None:
+            groups[key]["rows"].append(issue.row)
+        record = issue.record()
+        if record:
+            groups[key]["records"].append(record)
+    return list(groups.values())
+
+
+def _format_rows(rows: list[int]) -> str:
+    """Format row numbers into compact ranges (e.g. '1-5, 8, 10-12')."""
+    if not rows:
+        return ""
+    sorted_rows = sorted(set(rows))
+    ranges: list[str] = []
+    start = prev = sorted_rows[0]
+    for r in sorted_rows[1:]:
+        if r == prev + 1:
+            prev = r
+        else:
+            ranges.append(f"{start}" if start == prev else f"{start}-{prev}")
+            start = prev = r
+    ranges.append(f"{start}" if start == prev else f"{start}-{prev}")
+    return ", ".join(ranges)
+
+
+def _group_cells(group: dict) -> tuple[str, str]:
+    """The Rows and Records cells of one group of identical findings."""
+    rows, count, records = group["rows"], group["count"], group["records"]
+    rows_cell = _format_rows(rows)
+    if count > 1:
+        rows_cell = f"{rows_cell} ({count})".strip()
+    shown = "; ".join(records[:_RECORDS_SHOWN])
+    if len(records) > _RECORDS_SHOWN:
+        shown += f"; and {len(records) - _RECORDS_SHOWN} more"
+    return rows_cell, shown
+
+
+def _finding_row(dataset: str, group: dict) -> str:
+    """One HTML table row for one group of identical findings."""
+    issue: ValidationIssue = group["issue"]
+    rows_cell, records_cell = _group_cells(group)
+    return _row(
+        dataset,
+        issue.severity.value,
+        issue.rule_id,
+        issue.source,
+        issue.variable or "",
+        rows_cell,
+        issue.message,
+        records_cell,
+        f"Accepted: {issue.accepted}" if issue.accepted else (issue.suggested_fix or ""),
+        f"{issue.producing_verb} ({issue.verb_method})" if issue.producing_verb else "",
+        issue.spec_ref or "",
+    )
+
+
 def write_html_report(
     results: Sequence[ValidationResult],
     output_path: str | Path,
@@ -380,8 +445,10 @@ def write_html_report(
 ) -> str:
     """Write validation results as one self-contained HTML page; return its absolute path.
 
-    A status row per dataset, then one row per error, warning and info
-    finding, and per dataset that could not run.  Every cell is escaped:
+    A status row per dataset, then one row per group of identical findings
+    (rule, message, variable and source) with its row ranges, its count and
+    the first 20 records, and one row per dataset that could not run.
+    Every cell is escaped:
     messages carry data values and the text of custom rules.
     Both ``fleet validate --report`` and
     :meth:`ValidationResult.save_html_report` write this page.
@@ -415,26 +482,16 @@ def write_html_report(
         for r in results
     ]
     findings = [
-        _row(
-            r.dataset_name,
-            i.severity.value,
-            i.rule_id,
-            i.source,
-            i.variable or "",
-            "" if i.rows_affected is None else i.rows_affected,
-            i.message,
-            f"Accepted: {i.accepted}" if i.accepted else (i.suggested_fix or ""),
-            f"{i.producing_verb} ({i.verb_method})" if i.producing_verb else "",
-            i.spec_ref or "",
-        )
+        _finding_row(r.dataset_name, group)
         for r in results
-        for i in (*r.errors, *r.warnings, *r.infos)
+        for bucket in (r.errors, r.warnings, r.infos)
+        for group in _group_issues(bucket)
     ]
     findings += [
-        _row(d.name, "Could not run", "", "", "", "", d.reason or "", "", "", "")
+        _row(d.name, "Could not run", "", "", "", "", d.reason or "", "", "", "", "")
         for d in could_not_run
     ] + [
-        _row(r.dataset_name, "Could not run", "", "", "", "", r.could_not_run, "", "", "")
+        _row(r.dataset_name, "Could not run", "", "", "", "", r.could_not_run, "", "", "", "")
         for r in results
         if r.could_not_run is not None
     ]
@@ -467,12 +524,13 @@ def write_html_report(
             "Variable",
             "Rows",
             "Message",
+            "Records",
             "Suggested fix",
             "Producing verb",
             "Spec reference",
             tag="th",
         )
-        + ("".join(findings) or "<tr><td colspan=10>No findings.</td></tr>")
+        + ("".join(findings) or "<tr><td colspan=11>No findings.</td></tr>")
         + "</table></body></html>"
     )
     path = Path(output_path)

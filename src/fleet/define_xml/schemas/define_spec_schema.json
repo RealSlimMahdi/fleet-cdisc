@@ -141,8 +141,7 @@
         },
         "source_system_version": {
           "type": "string",
-          "description": "Version of the generating software.",
-          "default": "0.1.0"
+          "description": "Version of the generating software. Default: the version of Fleet that writes the Define-XML."
         },
         "standard": {
           "type": "string",
@@ -308,6 +307,22 @@
           "type": "string",
           "description": "CDISC dataset class (e.g. SPECIAL PURPOSE, FINDINGS, EVENTS)."
         },
+        "subclass": {
+          "type": "string",
+          "description": "Define-XML 2.1 def:SubClass of the class (e.g. ADVERSE EVENT for an ADaM OCCDS adverse event dataset).",
+          "enum": [
+            "ADVERSE EVENT",
+            "MEDICAL DEVICE TIME-TO-EVENT",
+            "NON-COMPARTMENTAL ANALYSIS",
+            "POPULATION PHARMACOKINETIC ANALYSIS",
+            "TIME-TO-EVENT"
+          ]
+        },
+        "domain": {
+          "type": "string",
+          "description": "SDTM domain of a split dataset (QSPH: QS). Default: the dataset name, or the parent domain for SUPP--. An ADaM dataset has no Domain.",
+          "pattern": "^[A-Z][A-Z0-9]{1,3}$"
+        },
         "keys": {
           "type": "array",
           "description": "Ordered list of key variable names that uniquely identify a record.",
@@ -386,7 +401,7 @@
                 },
                 "description": "nodup: the key of a duplicate."
               },
-              "sort_by": {
+              "order_by": {
                 "type": "array",
                 "items": {
                   "type": "string"
@@ -525,8 +540,8 @@
         },
         "predecessor": {
           "type": "string",
-          "description": "DATASET.VARIABLE the value is carried from (e.g. 'DM.COUNTRY') \u2014 becomes the Origin description so the define renders 'Predecessor: DM.COUNTRY'. Required when origin is 'Predecessor'.",
-          "pattern": "^[A-Z_][A-Z0-9_]{0,7}\\.[A-Z_][A-Z0-9_]{0,7}$"
+          "description": "DATASET.VARIABLE the value is carried from (e.g. 'DM.COUNTRY'), with an optional condition (e.g. \"DS.DSDECOD where DS.DSCAT='DISPOSITION EVENT'\"). It becomes the Origin description. Required when origin is 'Predecessor'.",
+          "pattern": "^[A-Z_][A-Z0-9_]{0,7}\\.[A-Z_][A-Z0-9_]{0,7}( where .+)?$"
         },
         "codelist": {
           "type": "string",
@@ -649,7 +664,8 @@
           "properties": {
             "href": {
               "type": "string",
-              "description": "Relative path to the annotated CRF PDF file (e.g. 'blankcrf.pdf')."
+              "description": "Relative path to the annotated CRF PDF file (e.g. 'blankcrf.pdf'), or an https link.",
+              "pattern": "^(https://[^\\x00-\\x20]+$|(?![^/?#]*:)(?![\\x00-\\x20])[^\\x00-\\x1f]+$)"
             },
             "title": {
               "type": "string",
@@ -680,7 +696,8 @@
               },
               "href": {
                 "type": "string",
-                "description": "Relative path to the document file."
+                "description": "Relative path to the document file, or an https link.",
+                "pattern": "^(https://[^\\x00-\\x20]+$|(?![^/?#]*:)(?![\\x00-\\x20])[^\\x00-\\x1f]+$)"
               },
               "title": {
                 "type": "string",
@@ -750,7 +767,19 @@
           "description": "Shorthand: this entry applies where PARAMCD equals the given value."
         },
         "where": {
-          "$ref": "#/$defs/where_clause"
+          "description": "One condition, or a list of conditions that all apply (one WhereClauseDef, one RangeCheck per condition).",
+          "oneOf": [
+            {
+              "$ref": "#/$defs/where_clause"
+            },
+            {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/where_clause"
+              }
+            }
+          ]
         },
         "variables": {
           "type": "array",
@@ -789,6 +818,20 @@
               },
               "minItems": 1
             }
+          ]
+        },
+        "comparator": {
+          "type": "string",
+          "description": "Define-XML RangeCheck Comparator. Default: EQ for one value, IN for two or more.",
+          "enum": [
+            "EQ",
+            "NE",
+            "LT",
+            "LE",
+            "GT",
+            "GE",
+            "IN",
+            "NOTIN"
           ]
         }
       }
@@ -1033,7 +1076,7 @@
             }
           ],
           "default": null,
-          "description": "CDISC CT codelist for validation \u2014 a generated codelist class (e.g.",
+          "description": "CDISC CT codelist for validation \u2014 a generated codelist class (e.g. ``SEX``) or an NCI concept ID string (e.g. ``\"C66731\"``).",
           "title": "Ct"
         },
         "ct_map": {
@@ -1051,21 +1094,6 @@
           "default": null,
           "description": "Explicit ``{raw_value: ct_value}`` mapping applied to *source* (raw codes that need remapping).",
           "title": "Ct Map"
-        },
-        "depends_on": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Depends On"
         }
       },
       "required": [
@@ -1085,7 +1113,7 @@
         },
         "system": {
           "default": "ctcae_v5",
-          "description": "Grading system name (e.g.",
+          "description": "Grading system name (e.g. ``\"ctcae_v5\"``, ``\"daids\"``) or path to a custom JSON criteria file (schema version 2).",
           "title": "System",
           "type": "string"
         },
@@ -1104,7 +1132,7 @@
           "type": "string"
         },
         "unit_var": {
-          "description": "Column holding the unit of measure (e.g.",
+          "description": "Column holding the unit of measure (e.g. ``\"AVALU\"``).",
           "title": "Unit Var",
           "type": "string"
         },
@@ -1132,21 +1160,6 @@
           "default": null,
           "description": "Values of the indicator params of the criteria (default ``{\"high_indicator\": [\"HIGH\", \"H\"], \"low_indicator\": [\"LOW\", \"L\"]}``).",
           "title": "Indicators"
-        },
-        "depends_on": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Depends On"
         }
       },
       "required": [
@@ -1182,6 +1195,9 @@
         "by": {
           "anyOf": [
             {
+              "type": "string"
+            },
+            {
               "items": {
                 "type": "string"
               },
@@ -1200,21 +1216,6 @@
           "description": "Raise when a group has multiple baseline-flagged records (default ``True``).",
           "title": "Strict",
           "type": "boolean"
-        },
-        "depends_on": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Depends On"
         }
       },
       "required": [
@@ -1254,21 +1255,6 @@
           "default": null,
           "description": "Decimal places, rounded as SAS ``ROUND`` (half away from zero).",
           "title": "Round Digits"
-        },
-        "depends_on": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Depends On"
         }
       },
       "required": [
@@ -1300,7 +1286,7 @@
         },
         "method": {
           "default": "Mosteller",
-          "description": "Formula to use \u2014 ``\"Mosteller\"`` (default), ``\"DuBois\"``, ``\"Haycock\"``, or ``\"Gehan-George\"``.",
+          "description": "Formula to use \u2014 ``\"Mosteller\"`` (default), ``\"DuBois\"`` (admiral's ``\"DuBois-DuBois\"`` also works), ``\"Haycock\"``, or ``\"Gehan-George\"``.",
           "title": "Method",
           "type": "string"
         },
@@ -1316,21 +1302,6 @@
           "default": null,
           "description": "Decimal places, rounded as SAS ``ROUND`` (half away from zero).",
           "title": "Round Digits"
-        },
-        "depends_on": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Depends On"
         }
       },
       "required": [
@@ -1351,10 +1322,9 @@
           "type": "string"
         },
         "when": {
-          "description": "Ordered list of ``{\"condition\": expr, \"value\": any}`` dicts.",
+          "description": "Ordered list of ``{\"condition\": expr, \"value\": any}`` dicts, with no other key.",
           "items": {
-            "additionalProperties": true,
-            "type": "object"
+            "$ref": "#/$defs/CaseWhenBranch"
           },
           "title": "When",
           "type": "array"
@@ -1363,21 +1333,6 @@
           "default": null,
           "description": "Fallback value when no branch matches.",
           "title": "Else"
-        },
-        "depends_on": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Depends On"
         }
       },
       "required": [
@@ -1407,21 +1362,6 @@
           "description": "Baseline value column.",
           "title": "Base",
           "type": "string"
-        },
-        "depends_on": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Depends On"
         }
       },
       "required": [
@@ -1462,21 +1402,6 @@
           "description": "High-grade term description column (default ``\"ATOXDSCH\"``).",
           "title": "High Desc Var",
           "type": "string"
-        },
-        "depends_on": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Depends On"
         }
       },
       "required": [
@@ -1527,21 +1452,6 @@
           "default": null,
           "description": "Join key columns (default ``[\"USUBJID\"]``).",
           "title": "By"
-        },
-        "depends_on": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Depends On"
         }
       },
       "required": [
@@ -1641,7 +1551,7 @@
             }
           ],
           "default": null,
-          "description": "Maximum imputation ceiling (``\"D\"``, ``\"M\"``, ``\"Y\"``, ``\"h\"``, ``\"m\"``, ``\"s\"``).",
+          "description": "Maximum imputation ceiling (``\"n\"`` for none, ``\"D\"``, ``\"M\"``, ``\"h\"``, ``\"m\"``, ``\"s\"``).",
           "title": "Highest"
         },
         "flag": {
@@ -1682,21 +1592,6 @@
           "default": null,
           "description": "Upper bound for an imputed date, with the same rule.",
           "title": "Max Date"
-        },
-        "depends_on": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Depends On"
         }
       },
       "required": [
@@ -1738,21 +1633,6 @@
           ],
           "default": null,
           "title": "Callable"
-        },
-        "depends_on": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Depends On"
         }
       },
       "required": [
@@ -1817,21 +1697,6 @@
           ],
           "title": "Out",
           "type": "string"
-        },
-        "depends_on": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Depends On"
         }
       },
       "required": [
@@ -1902,21 +1767,6 @@
           "default": null,
           "description": "Impute a partial ``--DTC`` value (``\"first\"``, ``\"mid\"``, ``\"last\"``) for a ``*DT`` target, write the ``*DTF`` flag of the earliest record, and warn with the count.",
           "title": "Impute"
-        },
-        "depends_on": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Depends On"
         }
       },
       "required": [
@@ -1954,7 +1804,7 @@
             }
           ],
           "default": null,
-          "description": "Partition columns (default ``[\"USUBJID\"]``).",
+          "description": "Partition columns (default ``[\"USUBJID\"]``) for ``\"first\"``/``\"last\"``, ``\"max\"``/``\"min\"`` and ``\"before\"``/``\"after\"``.",
           "title": "By"
         },
         "order_by": {
@@ -2047,7 +1897,7 @@
             }
           ],
           "default": null,
-          "description": "Filter applied to *from_dataset* before key extraction or join.",
+          "description": "Filter applied to *from_dataset* before key extraction or join; an expression string is parsed as *where* is.",
           "title": "Source Filter"
         },
         "condition": {
@@ -2060,7 +1910,7 @@
             }
           ],
           "default": null,
-          "description": "Boolean expression identifying landmark rows for ``\"before\"``/``\"after\"`` or the current-row condition for ``\"exists_after\"``/``\"exists_before\"``.",
+          "description": "Boolean expression (or expression string) identifying landmark rows for ``\"before\"``/``\"after\"`` or the current-row condition for ``\"exists_after\"``/``\"exists_before\"``.",
           "title": "Condition"
         },
         "inclusive": {
@@ -2099,21 +1949,6 @@
           "default": null,
           "description": "Value to assign when condition is not met.",
           "title": "False Value"
-        },
-        "depends_on": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Depends On"
         }
       },
       "required": [
@@ -2183,21 +2018,6 @@
           "default": null,
           "description": "Impute a partial ``--DTC`` value for a ``*DT`` target, write the ``*DTF`` flag of the latest record, and warn.",
           "title": "Impute"
-        },
-        "depends_on": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Depends On"
         }
       },
       "required": [
@@ -2241,21 +2061,6 @@
           "default": null,
           "description": "Decimal places, rounded as SAS ``ROUND`` (half away from zero).",
           "title": "Round Digits"
-        },
-        "depends_on": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Depends On"
         }
       },
       "required": [
@@ -2337,21 +2142,6 @@
           "default": null,
           "description": "Optional filter expression applied to *dataset* before the join; it may use a column that *keep* leaves out.",
           "title": "Where"
-        },
-        "depends_on": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Depends On"
         }
       },
       "required": [
@@ -2391,21 +2181,6 @@
           "description": "Significant digits for the comparison (default 15).",
           "title": "Signif Dig",
           "type": "integer"
-        },
-        "depends_on": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Depends On"
         }
       },
       "required": [
@@ -2479,21 +2254,6 @@
           "description": "Days added to *trtsdt* before the start-date comparison of case 4 (a Fleet extension; admiral has none).",
           "title": "Offset Days",
           "type": "integer"
-        },
-        "depends_on": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Depends On"
         }
       },
       "required": [
@@ -2534,21 +2294,6 @@
           "description": "Treat null *trtedt* as open-ended (default ``True``).",
           "title": "Open Ended",
           "type": "boolean"
-        },
-        "depends_on": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Depends On"
         }
       },
       "required": [
@@ -2580,21 +2325,6 @@
           "description": "Baseline value column.",
           "title": "Base",
           "type": "string"
-        },
-        "depends_on": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Depends On"
         }
       },
       "required": [
@@ -2624,6 +2354,9 @@
         "by": {
           "anyOf": [
             {
+              "type": "string"
+            },
+            {
               "items": {
                 "type": "string"
               },
@@ -2637,7 +2370,7 @@
           "description": "Grouping columns (default ``[\"USUBJID\"]``).",
           "title": "By"
         },
-        "order": {
+        "order_by": {
           "anyOf": [
             {
               "type": "string"
@@ -2654,11 +2387,11 @@
           ],
           "default": null,
           "description": "Sort column(s).",
-          "title": "Order"
+          "title": "Order By"
         },
         "mode": {
           "default": "first",
-          "description": "``\"first\"`` or ``\"last\"`` \u2014 which record to select after sorting by *order* (default ``\"first\"``).",
+          "description": "``\"first\"`` or ``\"last\"`` \u2014 which record to select after sorting by *order_by* (default ``\"first\"``).",
           "title": "Mode",
           "type": "string"
         },
@@ -2676,21 +2409,6 @@
           ],
           "default": null,
           "title": "Targets"
-        },
-        "depends_on": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Depends On"
         }
       },
       "required": [
@@ -2745,21 +2463,6 @@
           "default": null,
           "description": "Decimal places, rounded as SAS ``ROUND`` (half away from zero).",
           "title": "Round Digits"
-        },
-        "depends_on": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Depends On"
         }
       },
       "required": [
@@ -2800,21 +2503,6 @@
           "default": null,
           "description": "Value for entries not present in *recode_map*.",
           "title": "Default"
-        },
-        "depends_on": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Depends On"
         }
       },
       "required": [
@@ -2836,6 +2524,9 @@
         "order_by": {
           "anyOf": [
             {
+              "type": "string"
+            },
+            {
               "items": {
                 "type": "string"
               },
@@ -2851,6 +2542,9 @@
         },
         "by": {
           "anyOf": [
+            {
+              "type": "string"
+            },
             {
               "items": {
                 "type": "string"
@@ -2870,21 +2564,6 @@
           "description": "First sequence value (default ``1``).",
           "title": "Start At",
           "type": "integer"
-        },
-        "depends_on": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Depends On"
         }
       },
       "required": [
@@ -2903,12 +2582,12 @@
           "type": "string"
         },
         "baseline_cat": {
-          "description": "Column with baseline category (e.g.",
+          "description": "Column with baseline category (e.g. ``\"BNRIND\"``).",
           "title": "Baseline Cat",
           "type": "string"
         },
         "post_cat": {
-          "description": "Column with post-baseline category (e.g.",
+          "description": "Column with post-baseline category (e.g. ``\"NRIND\"``).",
           "title": "Post Cat",
           "type": "string"
         },
@@ -2917,21 +2596,6 @@
           "description": "Separator string (default ``\" to \"``).",
           "title": "Sep",
           "type": "string"
-        },
-        "depends_on": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Depends On"
         }
       },
       "required": [
@@ -2955,21 +2619,6 @@
           "description": "A Polars expression (or string) that evaluates to a boolean mask.",
           "title": "Where",
           "type": "string"
-        },
-        "depends_on": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Depends On"
         }
       },
       "required": [
@@ -2977,6 +2626,24 @@
         "where"
       ],
       "title": "ADAMWhereclausesSpec",
+      "type": "object"
+    },
+    "CaseWhenBranch": {
+      "additionalProperties": false,
+      "properties": {
+        "condition": {
+          "title": "Condition",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value"
+        }
+      },
+      "required": [
+        "condition",
+        "value"
+      ],
+      "title": "CaseWhenBranch",
       "type": "object"
     },
     "SDTMAeAerelSpec": {
@@ -3060,7 +2727,7 @@
             }
           ],
           "default": null,
-          "description": "CDISC CT codelist for validation \u2014 a generated codelist class (e.g.",
+          "description": "CDISC CT codelist for validation \u2014 a generated codelist class (e.g. ``SEX``) or an NCI concept ID string (e.g. ``\"C66731\"``).",
           "title": "Ct"
         },
         "ct_map": {
@@ -3096,10 +2763,9 @@
           "type": "string"
         },
         "when": {
-          "description": "Ordered list of ``{\"condition\": expr, \"value\": any}`` dicts.",
+          "description": "Ordered list of ``{\"condition\": expr, \"value\": any}`` dicts, with no other key.",
           "items": {
-            "additionalProperties": true,
-            "type": "object"
+            "$ref": "#/$defs/CaseWhenBranch"
           },
           "title": "When",
           "type": "array"
@@ -3286,7 +2952,7 @@
             }
           ],
           "default": null,
-          "description": "``strptime`` layout of the raw text (DTC only), e.g.",
+          "description": "``strptime`` layout of the raw text (DTC only), e.g. ``\"%m/%d/%Y\"``.",
           "title": "Format"
         }
       },

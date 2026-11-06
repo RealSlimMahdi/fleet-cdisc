@@ -51,3 +51,6 @@ Authorities:
       - Cited Guidance: check_ae_aeout_aeendtc_nonfatal
         Document: pharmaverse sdtmchecks
         Section: AE Domain
+  Category:
+    Purpose: Data quality check from sdtmchecks
+    Keywords: [AE]

@@ -117,9 +117,15 @@ def _esc(text: str) -> str:
             out.append(r"\line ")
         elif ord(ch) > 127:
             code = ord(ch)
-            if code > 32767:  # RTF \u takes a signed 16-bit value
-                code -= 65536
-            out.append(rf"\u{code}?")
+            # Above U+FFFF the RTF spec takes the UTF-16 surrogate pair.
+            units = (
+                [0xD800 + ((code - 0x10000) >> 10), 0xDC00 + ((code - 0x10000) & 0x3FF)]
+                if code > 0xFFFF
+                else [code]
+            )
+            for unit in units:
+                # RTF \u takes a signed 16-bit value
+                out.append(rf"\u{unit - 65536 if unit > 32767 else unit}?")
         else:
             out.append(ch)
     return "".join(out)

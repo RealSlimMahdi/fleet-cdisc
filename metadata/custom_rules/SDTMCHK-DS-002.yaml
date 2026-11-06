@@ -49,3 +49,6 @@ Authorities:
               - Cited Guidance: check_ds_dsterm_death_due_to
                 Document: pharmaverse sdtmchecks
                 Section: DS Domain
+    Category:
+      Purpose: Data quality check from sdtmchecks
+      Keywords: [DS]

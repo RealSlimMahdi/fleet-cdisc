@@ -82,7 +82,7 @@ So Fleet is AI-native by consequence, not by bolt-on. Every property below start
 
 ### 6. Native CDISC Library Integration
 
-Fleet is the first open-source clinical toolkit with **built-in CDISC Library API support**. Instead of manually downloading PDF terminology files or maintaining hand-curated codelist dictionaries, Fleet connects directly to the authoritative source.
+Fleet has **built-in CDISC Library API support**. Instead of manually downloading PDF terminology files or maintaining hand-curated codelist dictionaries, Fleet connects directly to the authoritative source.
 
 ```bash
 # Full bootstrapping pipeline: config → define.yaml → codelists.py
@@ -109,4 +109,4 @@ dm = (
 )
 ```
 
-No NCI codes to memorise. No CSV lookups at runtime. Just import the codelist and use it — the `_concept_id` is carried through for Define-XML generation and P21 validation automatically.
+No NCI codes to memorise. No CSV lookups at runtime. Just import the codelist and use it — the `_concept_id` is carried through for Define-XML generation.

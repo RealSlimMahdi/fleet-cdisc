@@ -2,7 +2,8 @@
 
 Trial Design is the one corner of a study you can build **before any data
 exists** — and in Fleet it needs no API key either: SDTMIG 3.4 structures
-for all nine TDD domains ship with the package. This walkthrough goes from
+for the seven Trial Design domains, plus the subject-level SV and SE, ship
+with the package. This walkthrough goes from
 a design definition to audited, submission-shaped datasets in five steps.
 The runnable script is `examples/tdd_example.py`.
 

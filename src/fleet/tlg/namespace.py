@@ -99,6 +99,20 @@ class TLGNamespace:
 
         return MHTLGNamespace(self._df)
 
+    def verbs(self) -> pl.DataFrame:
+        """List the public verbs of ``df.tlg`` (call it on a sub-namespace for its own).
+
+        Returns:
+            pl.DataFrame: Columns ``verb``, ``summary`` and ``origin``,
+                sorted by verb name.
+
+        Examples:
+            ``adae.tlg.verbs()``; ``adae.tlg.ae.verbs()``
+        """
+        from fleet.core._verb_mixin import list_verbs
+
+        return list_verbs(type(self))
+
     def catalog(self) -> pl.DataFrame:
         """Return the TLG template catalog (built-ins + user templates).
 

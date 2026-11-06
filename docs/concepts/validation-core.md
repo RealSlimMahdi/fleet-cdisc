@@ -5,7 +5,7 @@ Fleet's conformance validation is built on **CORE** — the open-source
 official executable implementation of CDISC's conformance rules. Fleet
 manages the engine lifecycle (download, discovery, health check) and wraps
 execution behind one CLI command and one namespace verb, so validation runs
-with the same rules a regulator's reviewer tooling references.
+with the same rules that CDISC publishes for the engine.
 
 ## One-time setup
 
@@ -27,6 +27,12 @@ Teams can pin a shared engine instead via `validation.engine_path` in
 `study_config.yaml`. Inside a study, `validation.engine_path` beats the
 `FLEET_RULES_ENGINE` environment variable, so that every programmer runs the
 same engine build. Outside a study, `FLEET_RULES_ENGINE` still applies.
+
+When `validation.engine_path` names a file that does not exist, validation
+could not run, and the message names the pinned path. Fleet does not fall
+back to `FLEET_RULES_ENGINE` or the managed install, because that engine can
+run another rule build. `fleet check` and `fleet doctor` show a warning with
+the pinned path.
 
 `validation.engine_path` names a program, so treat a received study config
 like code. `fleet validate`, the `.validate()` verb and `fleet doctor` start
@@ -80,7 +86,8 @@ uv run fleet validate --report findings.html   # HTML findings report
   `ValidationResult.save_html_report()` writes the same page for one
   dataset. Every cell is HTML-escaped.
 - **Could not run**: a dataset whose directory and file name disagree
-  (`data/sdtm/adsl.parquet`), or an unsupported IG version, is not validated.
+  (`data/sdtm/adsl.parquet`), an unsupported IG version, or no rules engine
+  (none installed, or a pinned engine path that does not exist), is not validated.
   The reason is printed, and the other datasets still run. An engine that
   crashes, writes no report, or does not finish within the timeout also
   gives "could not run", not a data failure.
@@ -190,6 +197,17 @@ Some setups are refused before the engine starts. The verb then raises
   or `ae.sdtm.validate("ADAE")`,
 - the IG version is not supported, for example SDTMIG 3.1.3,
 - the custom rules directory does not exist.
+
+## What a PASS does not cover: labels
+
+Fleet gives CORE each dataset as a Dataset-JSON file that it writes from the
+data frame alone. So the variable labels and the dataset label that CORE
+checks come from Fleet, not from the file: each variable label is the
+variable name. A label rule (for example CORE-000594, a label that is not in
+title case) does not fire through `fleet validate`, even when the XPT file
+holds a wrong label. `fleet validate` prints this note in each engine run.
+Check the labels of a submission file against the define with
+`DatasetChecker`, or in the Define-XML.
 
 ## What a PASS does not cover: controlled terminology
 

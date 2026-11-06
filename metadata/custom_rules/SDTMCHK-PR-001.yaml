@@ -55,3 +55,6 @@ Authorities:
       - Cited Guidance: check_pr_missing_month
         Document: pharmaverse sdtmchecks
         Section: PR Domain
+  Category:
+    Purpose: Data quality check from sdtmchecks
+    Keywords: [PR]

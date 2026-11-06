@@ -78,3 +78,6 @@ Authorities:
       - Cited Guidance: check_ex_infusion_exstdtc_exendtc
         Document: pharmaverse sdtmchecks
         Section: EX Domain
+  Category:
+    Purpose: Data quality check from sdtmchecks
+    Keywords: [EX]

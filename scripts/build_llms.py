@@ -28,10 +28,8 @@ Editing guide
 * README namespace catalog→ auto-synced between
                             ``<!-- AUTO:NAMESPACES:BEGIN -->`` and
                             ``<!-- AUTO:NAMESPACES:END -->`` in README.md.
-                            Edit the ``_README_*_VERBS`` lists below to
-                            change what verbs appear; counts and the
-                            "(N verbs: …)" labels are derived from list
-                            length.
+                            The verb lists come from ``.verbs()`` of the
+                            live namespaces (``_readme_catalog``).
 * Never edit llms.txt or the README namespace block by hand — both are
   overwritten on every run.
 """
@@ -331,7 +329,7 @@ dates, sequence number)
 - `df.adam.vaccine` — Vaccine: fever flag, seroconversion, ADIS AVAL
 - `df.adam.metabolic` — Metabolic: waist-to-hip ratio, body fat %
 - `df.adam.neuro` — Neuroscience: Centiloid, MMSE, CDR-SoB
-- `df.adam.tte` — Time-to-event (ADTTE): param from plain event/censor frames, stop_at window, AVAL/AVALU, KM inputs\
+- `df.adam.tte` — Time-to-event (ADTTE): param from plain event/censor frames, stop_at={column: (CNSR, EVNTDESC)} window, keep_reason, AVAL/AVALU, KM inputs\
 """
 
 
@@ -470,6 +468,7 @@ def _adam_verbs_section() -> str:
         "derive_locf_records",
         "derive_param",
         "atoxgr",
+        "combine_grades",
         "transform",
         "from_spec",
     ]
@@ -846,10 +845,11 @@ variable), `listing` (`columns`, `rows`, `shown`, `total`, `truncated` — trunc
 limits, unlike the parquet), `settings` (every option in effect), `version`. Strict JSON: \
 non-finite numbers are null, temporal keys are ISO 8601 strings.
 
-### Pipeline verb (every namespace: `df.sdtm`, `df.adam`, `df.adam.adsl`, `df.adam.occds`, …)
+### Pipeline verb (`df.sdtm`, `df.adam`, `df.adam.adsl`, `df.adam.occds`, …; not `df.tlg`)
 
 The chain is the candidate, the argument is the base. `on_fail` is `"warn"` (default, \
-`UserWarning`), `"raise"` (`ComparisonError`) or `"ignore"`, exactly as for `.validate()`; the \
+`UserWarning`), `"raise"` (`ComparisonFailed`, a `ComparisonError`) or `"ignore"`, exactly as \
+for `.validate()`; the \
 report stays on the namespace as `.last_comparison` and the chain continues.
 
 {verb}
@@ -985,7 +985,7 @@ ae = (
 # Via ValidationService
 from fleet.validation.service import ValidationService
 svc = ValidationService()
-result = svc.validate_sdtm(ae, domain="AE", custom_rules="metadata/custom_rules")
+result = svc.validate_sdtm(ae, domain="AE", version="3.4", custom_rules="metadata/custom_rules")
 result.print_report()
 ```
 
@@ -1010,295 +1010,76 @@ README_PATH = REPO_ROOT / "README.md"
 README_BEGIN = "<!-- AUTO:NAMESPACES:BEGIN -->"
 README_END = "<!-- AUTO:NAMESPACES:END -->"
 
-# Curated verb lists per README namespace block. Edit these to control what
-# the README advertises; counts and the "(N verbs: …)" summary line are
-# derived automatically.
-_SHARED_ADAM_VERBS = [
-    "source",
-    "assign",
-    "case_when",
-    "derivation",
-    "recode",
-    "merge",
-    "keep",
-    "whereclauses",
-    "merge_adsl",
-    "date",
-    "duration",
-    "flag",
-    "pick",
-    "pin",
-    "repin",
-    "join_adsl",
-    "study_day",
-    "nodup",
-    "fk_policy",
-    "pins",
-]
-
-_README_SDTM_VERBS = [
-    "assign",
-    "case_when",
-    "date",
-    "duration",
-    "condition_add",
-    "ae_aerel",
-    "merge",
-    "keep",
-    "nodup",
-    "group_by",
-    "notsubmitted",
-    "multiple_responses",
-    "nsv",
-    "export_supp",
-    "flag",
-    "pin",
-    "repin",
-    "study_day",
-    "baseline_flag",
-    "fk_policy",
-    "pins",
-]
-
-_README_ADAM_SPECIFIC = [
-    "baseline",
-    "chg",
-    "pchg",
-    "bmi",
-    "nrind",
-    "on_treatment",
-    "shift",
-    "bsa",
-    "map",
-    "qtc",
-    "derive_summary_records",
-    "derive_locf_records",
-    "derive_param",
-    "atoxgr",
-    "combine_grades",
-    "transform",
-]
-
-_README_ADSL_SPECIFIC = [
-    "first_date",
-    "last_date",
-    "count_events",
-    "age_years",
-    "age_from_dates",
-    "derive_period",
-]
-
-_README_OCCDS_SPECIFIC = ["treatment_emergent", "onset_recovery"]
-_README_OCCDS_MULTI = ["seq"]
-
-_README_ONCO_SPECIFIC = [
-    "aval_resp",
-    "tumor_response_flag",
-    "best_overall_response",
-    "confirmed_response_flag",
-    "filter_pd",
-]
-
-_README_OPHTHA_SPECIFIC = [
-    "etdrs_to_logmar",
-    "logmar_to_etdrs",
-    "study_eye",
-    "affected_eye",
-    "bcva_criterion",
-]
-
-_README_PEDS_SPECIFIC = [
-    "age_days",
-    "age_months",
-    "age_years",
-    "corrected_age",
-    "prematurity_flag",
-    "bmi_percentile_category",
-]
-
-_README_VACCINE_SPECIFIC = [
-    "fever_flag",
-    "seroconversion_flag",
-    "seroresponse_flag",
-    "aval_adis",
-    "event_flag",
-]
-
-_README_METABOLIC_SPECIFIC = [
-    "waist_hip_ratio",
-    "waist_height_ratio",
-    "body_fat_pct",
-    "visceral_fat_flag",
-    "bmi_category_adult",
-]
-
-_README_NEURO_SPECIFIC = [
-    "centiloid",
-    "mmse_category",
-    "cdrsob_total",
-    "moca_category",
-    "panss_total",
-]
-
-_README_PK_SPECIFIC = [
-    "blq_flag",
-    "blq_impute",
-    "nominal_time",
-    "predose_flag",
-    "dose_normalized",
-    "evid",
-    "mrrlt",
-    "blqfn",
-    "log_conc",
-    "mdv",
-    "amt",
-    "cmt",
-    "avalcat",
-    "anl_flag",
-]
-_README_PK_MULTI = ["seq"]
-
-_README_TTE_SPECIFIC = [
-    "param",
-    "aval",
-    "km_data",
+# README namespace catalog: (accessor, attribute path, title). The verb lists
+# are read from the live classes with ``.verbs()``, so they cannot drift.
+_README_ADAM_NAMESPACES = [
+    ("df.adam", (), "ADaM BDS"),
+    ("df.adam.adsl", ("adsl",), "ADSL"),
+    ("df.adam.occds", ("occds",), "OCCDS / ADAE, ADCM…"),
+    ("df.adam.onco", ("onco",), "Oncology"),
+    ("df.adam.ophtha", ("ophtha",), "Ophthalmology"),
+    ("df.adam.peds", ("peds",), "Pediatrics"),
+    ("df.adam.vaccine", ("vaccine",), "Vaccine"),
+    ("df.adam.metabolic", ("metabolic",), "Metabolic"),
+    ("df.adam.neuro", ("neuro",), "Neuroscience"),
+    ("df.adam.pk", ("pk",), "Pharmacokinetics"),
+    ("df.adam.tte", ("tte",), "Time-to-event (ADTTE)"),
 ]
 
 
-def _render_namespace_details(
-    *,
-    namespace: str,
-    title: str,
-    specific: list[str],
-    with_shared: bool,
-    multi_row: list[str] | None = None,
-) -> str:
-    """Render one ``<details>`` block for the README namespace catalog.
+def _live_verbs(root: str, path: tuple[str, ...] = ()) -> list[str]:
+    """Return ``.verbs()`` of ``pl.DataFrame().<root>.<path...>``."""
+    import polars as pl
 
-    Counts in the summary line and the body breakdown are computed from
-    the verb lists, so adding/removing a curated verb updates both
-    automatically.
+    import fleet  # noqa: F401  (registers the namespaces)
+
+    ns = getattr(pl.DataFrame(), root)
+    for attr in path:
+        ns = getattr(ns, attr)
+    return ns.verbs()["verb"].to_list()
+
+
+def _readme_catalog() -> tuple[list[str], list[str], list[tuple[str, str, list[str]]]]:
+    """Return the shared ADaM verbs, the SDTM verbs and the specific verbs per namespace.
+
+    Shared verbs are the verbs of every ADaM namespace. A namespace's
+    specific verbs are its other verbs. The SDTM list leaves out the
+    Trial Design verbs of ``TrialDesignMixin``; the TDD docs list them.
     """
-    n_specific = len(specific)
-    n_multi = len(multi_row) if multi_row else 0
-    n_shared = len(_SHARED_ADAM_VERBS) if with_shared else 0
-    total = n_specific + n_shared + n_multi
+    from fleet.sdtm._tdd_mixin import TrialDesignMixin
 
-    if with_shared or n_multi:
-        breakdown_parts = [f"{n_specific} specific"]
-        if n_shared:
-            breakdown_parts.append(f"{n_shared} shared")
-        if n_multi:
-            breakdown_parts.append(f"{n_multi} multi-row")
-        count_label = f"{total} verbs: " + " + ".join(breakdown_parts)
-    else:
-        count_label = f"{total} verbs"
+    adam = [(acc, title, _live_verbs("adam", path)) for acc, path, title in _README_ADAM_NAMESPACES]
+    shared_set = set.intersection(*(set(verbs) for _, _, verbs in adam))
+    shared = [v for v in adam[0][2] if v in shared_set]
+    specific = [
+        (acc, title, [v for v in verbs if v not in shared_set]) for acc, title, verbs in adam
+    ]
+    sdtm = [v for v in _live_verbs("sdtm") if v not in vars(TrialDesignMixin)]
+    return shared, sdtm, specific
 
-    summary = f"<summary><b><code>{namespace}</code></b> — {title} ({count_label})</summary>"
 
-    def _join(verbs: list[str]) -> str:
-        return " · ".join(f"`{v}`" for v in verbs)
-
-    if with_shared or n_multi:
-        body_parts = [f"**Specific:** {_join(specific)}"]
-        if multi_row:
-            body_parts.append(f"**Multi-row:** {_join(multi_row)}")
-        if with_shared:
-            body_parts.append(f"**Shared:** {_join(_SHARED_ADAM_VERBS)}")
-        body = "\n\n".join(body_parts)
-    else:
-        body = _join(specific)
-
+def _render_namespace_details(*, namespace: str, title: str, verbs: list[str]) -> str:
+    """Render one ``<details>`` block for the README namespace catalog."""
+    body = " · ".join(f"`{v}`" for v in verbs)
+    summary = f"<summary><b><code>{namespace}</code></b> — {title}</summary>"
     return f"<details>\n{summary}\n\n{body}\n\n</details>"
 
 
 def _readme_namespaces_block() -> str:
     """Build the auto-synced README namespace catalog (between sentinels)."""
+    shared, sdtm, specific = _readme_catalog()
     intro = (
         "Importing `fleet` registers chainable namespaces on **every** "
-        "Polars DataFrame. All ADaM namespaces also inherit "
-        f"**{len(_SHARED_ADAM_VERBS)} shared verbs** from the common mixin: "
-        + ", ".join(f"`{v}`" for v in _SHARED_ADAM_VERBS)
-        + "."
+        "Polars DataFrame. Every ADaM namespace has these **shared verbs**: "
+        + ", ".join(f"`{v}`" for v in shared)
+        + ". Each block below lists the verbs that only that namespace has. "
+        "Call `.verbs()` on a namespace for the live list with summaries."
     )
-
-    blocks: list[str] = [
-        _render_namespace_details(
-            namespace="df.sdtm",
-            title="SDTM domains",
-            specific=_README_SDTM_VERBS,
-            with_shared=False,
-        ),
-        _render_namespace_details(
-            namespace="df.adam",
-            title="ADaM BDS",
-            specific=_README_ADAM_SPECIFIC,
-            with_shared=True,
-        ),
-        _render_namespace_details(
-            namespace="df.adam.adsl",
-            title="ADSL",
-            specific=_README_ADSL_SPECIFIC,
-            with_shared=True,
-        ),
-        _render_namespace_details(
-            namespace="df.adam.occds",
-            title="OCCDS / ADAE, ADCM…",
-            specific=_README_OCCDS_SPECIFIC,
-            with_shared=True,
-            multi_row=_README_OCCDS_MULTI,
-        ),
-        _render_namespace_details(
-            namespace="df.adam.onco",
-            title="Oncology",
-            specific=_README_ONCO_SPECIFIC,
-            with_shared=True,
-        ),
-        _render_namespace_details(
-            namespace="df.adam.ophtha",
-            title="Ophthalmology",
-            specific=_README_OPHTHA_SPECIFIC,
-            with_shared=True,
-        ),
-        _render_namespace_details(
-            namespace="df.adam.peds",
-            title="Pediatrics",
-            specific=_README_PEDS_SPECIFIC,
-            with_shared=True,
-        ),
-        _render_namespace_details(
-            namespace="df.adam.vaccine",
-            title="Vaccine",
-            specific=_README_VACCINE_SPECIFIC,
-            with_shared=True,
-        ),
-        _render_namespace_details(
-            namespace="df.adam.metabolic",
-            title="Metabolic",
-            specific=_README_METABOLIC_SPECIFIC,
-            with_shared=True,
-        ),
-        _render_namespace_details(
-            namespace="df.adam.neuro",
-            title="Neuroscience",
-            specific=_README_NEURO_SPECIFIC,
-            with_shared=True,
-        ),
-        _render_namespace_details(
-            namespace="df.adam.pk",
-            title="Pharmacokinetics",
-            specific=_README_PK_SPECIFIC,
-            with_shared=True,
-            multi_row=_README_PK_MULTI,
-        ),
-        _render_namespace_details(
-            namespace="df.adam.tte",
-            title="Time-to-event (ADTTE)",
-            specific=_README_TTE_SPECIFIC,
-            with_shared=True,
-        ),
+    blocks = [_render_namespace_details(namespace="df.sdtm", title="SDTM domains", verbs=sdtm)]
+    blocks += [
+        _render_namespace_details(namespace=acc, title=f"{title}, specific verbs", verbs=verbs)
+        for acc, title, verbs in specific
     ]
-
     return intro + "\n\n" + "\n\n".join(blocks)
 
 

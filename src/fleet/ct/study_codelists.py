@@ -50,6 +50,9 @@ _URL_PACKAGE = re.compile(r"/packages/([^/]+)/")
 #: Problems already reported in this process; each one warns once.
 _WARNED: set[str] = set()
 
+#: An NCI codelist concept ID (C66731).
+_NCI_CODE = re.compile(r"^C\d+$")
+
 
 def load_codelists(path: Path) -> tuple[tuple[str, ...], dict[str, type]]:
     """Read a generated ``codelists.py``: the CT packages it came from, and its classes.
@@ -197,6 +200,10 @@ def check_codelists(ctx: StudyContext, *, references: bool = False) -> list[str]
         if define.is_file()
     }
     versions = ct_version_problems(ctx) if references else []
+    if references:
+        for define in defines.values():
+            for message in ct_codelist_conflicts(define):
+                warnings.warn(message, stacklevel=2)
     if not path.is_file():
         referenced = set().union(*(extract_concept_ids(d) for d in defines.values()))
         if not referenced:
@@ -229,6 +236,48 @@ def check_codelists(ctx: StudyContext, *, references: bool = False) -> list[str]
                     f"which is not in codelists.py{_missing_fix(ctx, standard, dataset)}"
                 )
     return list(dict.fromkeys(problems))
+
+
+def ct_codelist_conflicts(define: Path) -> list[str]:
+    """Return each variable whose derivation ``ct:`` and ``codelist:`` name two NCI codelists.
+
+    The values are checked against ``ct:``, while the Define-XML states
+    ``codelist:``.  Only two NCI C-codes are compared: a local ID such as
+    ``CL.VSTEST`` next to a C-code stays allowed.
+
+    Args:
+        define: A ``define.yaml`` file.
+
+    Returns:
+        list[str]: One message per variable, for example
+            ``DM.SEX: ct C74457 differs from codelist C66731``.
+
+    Examples:
+        Report the conflicts of one define::
+
+            for message in ct_codelist_conflicts(Path("metadata/sdtm/define.yaml")):
+                print(message)
+    """
+    import yaml
+
+    spec = yaml.safe_load(define.read_text(encoding="utf-8")) or {}
+    out: list[str] = []
+    for ds in spec.get("datasets") or []:
+        for var in ds.get("variables") or []:
+            codelist = var.get("codelist")
+            ct = (var.get("derivation") or {}).get("ct")
+            if (
+                isinstance(codelist, str)
+                and isinstance(ct, str)
+                and _NCI_CODE.match(codelist)
+                and _NCI_CODE.match(ct)
+                and codelist != ct
+            ):
+                out.append(
+                    f"{ds.get('name')}.{var.get('name')}: ct {ct} differs from codelist "
+                    f"{codelist}; the values are checked against {ct}."
+                )
+    return out
 
 
 def ct_version_problems(ctx: StudyContext) -> list[str]:

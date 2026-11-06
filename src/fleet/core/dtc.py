@@ -16,6 +16,7 @@ import polars as pl
 from fleet.core.exceptions import DerivationError
 
 __all__ = [
+    "cdisc_day",
     "date_part",
     "datetime_part",
     "has_time",
@@ -199,6 +200,30 @@ def refuse_number(name: str, dtype: pl.DataType | None, *, verb: str | None = No
         f"pl.date(1960, 1, 1) + pl.duration(days=pl.col('{name}')). A SAS date-time counts "
         f"seconds: use pl.datetime(1960, 1, 1) + pl.duration(seconds=pl.col('{name}'))."
     )
+
+
+def cdisc_day(diff: pl.Expr) -> pl.Expr:
+    """Turn a day difference into a study day: no day 0.
+
+    A difference of 0 or more gains 1 (the reference date is day 1); a
+    negative difference stays (the day before is day -1).
+
+    Args:
+        diff: Whole days from the reference date to the event date.
+
+    Returns:
+        pl.Expr: The study day.
+
+    References:
+        SDTMIG 3.4 section 4.4.4: --DY = date - RFSTDTC + 1 on or after the
+        reference date, date - RFSTDTC before it.
+
+    Examples:
+        AESTDY from two dates::
+
+            aestdy = cdisc_day((pl.col("ASTDT") - pl.col("TRTSDT")).dt.total_days())
+    """
+    return pl.when(diff >= 0).then(diff + 1).otherwise(diff)
 
 
 def to_day(expr: pl.Expr, dtype: pl.DataType | None, *, verb: str | None = None) -> pl.Expr:

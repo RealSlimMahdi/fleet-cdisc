@@ -1,7 +1,7 @@
 # Trial Design Domains
 
-Fleet provides first-class support for all nine CDISC Trial Design Model (TDD)
-domains through two complementary paths:
+Fleet provides first-class support for the seven CDISC Trial Design Model (TDD)
+domains, plus the subject-level SV and SE, through two complementary paths:
 
 1. **`fleet.StudyDesign`** — a typed aggregate: define the design once,
    derive every domain, audit it, round-trip it through YAML, import it from
@@ -78,13 +78,16 @@ frames = design.domains()  # or every populated domain: {"TE": df, "TA": df, ...
 
 Referential integrity is validated at construction: arm paths must reference
 defined elements, visit `armcd` values must reference defined arms, and
-element codes must be unique. A key that the model does not read raises, in
+element codes must be unique. Each arm needs its protocol name in
+`arm_names` (TA.ARM). A key that the model does not read raises, in
 Python and in `trial_design.yaml`, and so does a repeated YAML key.
 
 ### Arm paths: steps, branches and epochs
 
 A path entry is an ETCD, or a step that gives the TA values of one position
 ([ADR 0036](../adr/0036-an-arm-path-entry-is-an-element-or-a-step.md)):
+
+<!-- docs:no-run: a sketch with elided arguments -->
 
 ```python
 design = fleet.StudyDesign(
@@ -99,6 +102,7 @@ design = fleet.StudyDesign(
             {"etcd": "A", "epoch": "TREATMENT 2"},
         ],
     },
+    arm_names={"AB": "Drug A then Drug B", "BA": "Drug B then Drug A"},
     randomized_at="SCRN",  # TABRANCH "Randomized to <arm>" on SCRN
 )
 ```
@@ -130,9 +134,11 @@ uv run fleet tdd audit
 ```
 
 The same audit from Python — `design.audit()`, or the standalone
-`fleet.sdtm.trial_design_audit(te=..., ta=..., tv=..., ts=..., ti=..., dm=...)` —
+`fleet.sdtm.trial_design_audit(te=..., ta=..., tv=..., ts=..., ti=..., dm=..., td=..., tm=...)` —
 checks the domains against published P21/FDA rule IDs and returns a findings
 DataFrame (`rule_id`, `severity`, `domain`, `message`):
+
+<!-- docs:no-run: needs a study design and DM -->
 
 ```python
 findings = design.audit(dm=dm)
@@ -143,13 +149,19 @@ Encoded checks include:
 
 | Area | Rules |
 | ---- | ----- |
+| All  | A Req variable of the SDTMIG 3.4 structure that is absent, null or blank (FLEETTD08), for TE, TA, TV, TI, TD and TM |
 | TE   | ETCD length (SD1009), TEENRL/TEDUR presence (SD0089), duplicates (SD1271) |
 | TA   | TAETORD unique per arm (SD1052), ARM↔ARMCD one-to-one (SD1033/SD1034), reserved ARMCDs (SD1053), ARMCD length (SD1004) |
-| TA↔TE | ETCD/ELEMENT consistency, UNPLAN-aware (SD0067); unused elements (SD1378) |
-| TV   | VISITNUM uniqueness (SD1064), ARMCD FK vs TA |
+| TA↔TE | ETCD not in TE, and ELEMENT consistency when both have ELEMENT, UNPLAN-aware (SD0067); unused elements (SD1378) |
+| TV   | VISITNUM unique per ARMCD, no VISITNUM with both a blank-ARMCD row and an arm row (FLEETTD06), ARMCD FK vs TA |
 | TI   | IETESTCD format (SD0018), uniqueness within TIVERS (SD1286) |
-| DM↔TA | Undefined arms, arms without subjects (SD1354) |
+| DM↔TA | Undefined arms, arms without subjects (SD1354), a DM (ARMCD, ARM) pair that TA does not hold (FLEETTD07, warning) |
 | TS   | The FDA Technical Conformance Guide required-parameter profile (SD22xx — a missing `SSTDTC` is flagged as **rejection-level** TRC 1734) and conditional rules (e.g. INTMODEL/INTTYPE/PCLAS when STYPE=INTERVENTIONAL — SD1310/11/12) |
+| Design | `design.audit()` only: an empty elements or arms section (error) or visits or criteria section (warning) (FLEETTD09) |
+
+TS coded values are **not** checked: a TSVAL outside its codelist (for
+example SEXPOP `ALL`, which C66732 does not hold) and a TSPARM that does not
+match its TSPARMCD give no finding. Check them against the CT package by hand.
 
 The audit is a curated high-signal subset; run `fleet validate` (CDISC Rules
 Engine) for exhaustive coverage.
@@ -248,6 +260,8 @@ reported as `UserWarning` (schema reconciliation).
 Subject-level domains (SV, SE) use derivation verbs that **freely mix** with
 existing SDTM verbs:
 
+<!-- docs:no-run: needs raw visit data -->
+
 ```python
 sv = (
     raw_visits.sdtm.assign("DOMAIN", value="SV")
@@ -285,9 +299,25 @@ collect the visit, and never to replace a collected VISITNUM. Its rules:
   in SV.
 
 For SE, derive boundaries with `element_boundaries()` and the sequence
-number with the standard `seq()` verb:
+number with the standard `seq()` verb. The input has one row per subject
+and element: `STUDYID` (for `seq`), `ETCD`, `EPOCH` and the milestone dates:
 
 ```python
+import polars as pl
+
+import fleet
+
+disposition_df = pl.from_repr("""
+┌─────────┬────────────┬──────┬───────────┬────────────────┬─────────────────┐
+│ STUDYID ┆ subject_id ┆ ETCD ┆ EPOCH     ┆ screening_date ┆ first_dose_date │
+│ ---     ┆ ---        ┆ ---  ┆ ---       ┆ ---            ┆ ---             │
+│ str     ┆ str        ┆ str  ┆ str       ┆ str            ┆ str             │
+╞═════════╪════════════╪══════╪═══════════╪════════════════╪═════════════════╡
+│ STUDY01 ┆ 01-001     ┆ SCRN ┆ SCREENING ┆ 2024-01-01     ┆ 2024-01-15      │
+│ STUDY01 ┆ 01-001     ┆ TRT  ┆ TREATMENT ┆ 2024-01-01     ┆ 2024-01-15      │
+└─────────┴────────────┴──────┴───────────┴────────────────┴─────────────────┘
+""")
+
 se = (
     disposition_df.sdtm.assign("DOMAIN", value="SE")
     .assign("USUBJID", source="subject_id")
@@ -304,8 +334,20 @@ se = (
 `epoch_assign(se=...)` derives EPOCH for **any** domain from the subject's
 own element intervals — the cross-domain consistency that P21 checks
 against SE. (The study-level `epoch_ranges=` form remains available.)
+The SE frame must hold `EPOCH`:
 
 ```python
+ae_raw = pl.from_repr("""
+┌────────────┬───────────────┐
+│ subject_id ┆ ae_start_date │
+│ ---        ┆ ---           │
+│ str        ┆ str           │
+╞════════════╪═══════════════╡
+│ 01-001     ┆ 2024-01-05    │
+│ 01-001     ┆ 2024-02-01    │
+└────────────┴───────────────┘
+""")
+
 ae = (
     ae_raw.sdtm.assign("USUBJID", source="subject_id")
     .date("AESTDTC", source="ae_start_date")
@@ -321,15 +363,17 @@ Collections enforce integrity at construction time:
 
 | Collection                | Checks                                        |
 | ------------------------- | --------------------------------------------- |
-| `TrialElements`           | Unique ETCD, epoch consistency                |
-| `TrialArms`               | Sequential TAETORD per arm, FK to TE (opt.)   |
-| `TrialVisits`             | Unique VISITNUM, VISITDY ordering, FK to TA (opt.) |
+| `TrialElements`           | Unique ETCD                                   |
+| `TrialArms`               | Unique TAETORD per arm, FK to TE (opt.)       |
+| `TrialVisits`             | Unique VISITNUM per arm, FK to TA (opt.)      |
 | `TrialParameters`         | Unique (TSPARMCD, TSSEQ)                      |
-| `TrialCriteria`           | Unique IETESTCD                               |
+| `TrialCriteria`           | Unique IETESTCD per TIVERS                    |
 | `TrialDiseaseAssessments` | Unique TDORDER                                |
 | `TrialMilestones`         | Unique MIDSTYPE                               |
 
 ### Cross-domain FK validation
+
+<!-- docs:no-run: needs the TA rows of a study -->
 
 ```python
 ta = (
@@ -357,6 +401,8 @@ Omit `te=` / `ta=` to skip the FK check during iterative development.
 repeating parameters (one row per country for `FCNTRY`, per primary outcome
 for `OUTMSPRI`, ...) plus `TSGRPID`, `TSVCDREF`, `TSVCDVER` for
 dictionary-bound values (SNOMED, UNII, MED-RT):
+
+<!-- docs:no-run: a fragment of a parameter list -->
 
 ```python
 TrialParameter(
@@ -392,7 +438,7 @@ uv run fleet tdd build                       # → ts.parquet in <sdtm_data>/
 
 ## Epoch values
 
-The `Epoch` enum is bound to NCI C99079 with all 14 standard values.
+The `Epoch` enum is bound to NCI C99079 with the 13 terms of the default CT package.
 C99079 is **extensible**: sponsor-defined terms are accepted as plain
 upper-case strings anywhere an epoch is expected:
 
@@ -404,8 +450,9 @@ TrialElement(etcd="ESC", element="Escalation", epoch="DOSE ESCALATION")  # spons
 ```
 
 Note: `TrialElement.epoch` is a **design-time attribute** — it drives the
-element→epoch mapping when deriving TA and SE, but is not written to the TE
-dataset (SDTMIG 3.4 has no EPOCH variable in TE).
+element→epoch mapping when deriving TA, but is not written to the TE
+dataset (SDTMIG 3.4 has no EPOCH variable in TE). SE is not derived from it:
+`epoch_assign(se=)` needs an EPOCH column in SE.
 
 ## Mermaid parser
 

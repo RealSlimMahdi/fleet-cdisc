@@ -263,3 +263,38 @@ class TestEdgeBattery:
                 & (pl.col("stat_name") == "n")
             )["stat"].sum()
             assert sev_total == soc_any
+
+
+def test_plain_row_names_keep_the_template_labels():
+    """c1-498: .rows() with plain names dropped the stub header labels."""
+    adsl = pl.from_repr("""\
+┌─────────┬────────┬───────┐
+│ USUBJID ┆ TRT01A ┆ SAFFL │
+│ ---     ┆ ---    ┆ ---   │
+│ str     ┆ str    ┆ str   │
+╞═════════╪════════╪═══════╡
+│ 1       ┆ P      ┆ Y     │
+│ 2       ┆ P      ┆ Y     │
+│ 3       ┆ X      ┆ Y     │
+│ 4       ┆ X      ┆ Y     │
+└─────────┴────────┴───────┘
+""")
+    adae = pl.from_repr("""\
+┌─────────┬──────┬──────────┬─────────┐
+│ USUBJID ┆ TRTA ┆ AEBODSYS ┆ AEDECOD │
+│ ---     ┆ ---  ┆ ---      ┆ ---     │
+│ str     ┆ str  ┆ str      ┆ str     │
+╞═════════╪══════╪══════════╪═════════╡
+│ 1       ┆ P    ┆ GI       ┆ Nausea  │
+│ 3       ┆ X    ┆ GI       ┆ Nausea  │
+└─────────┴──────┴──────────┴─────────┘
+""")
+    shortcut = adae.tlg.ae.t_summary(spec=AESummarySpec(adsl_group_col="TRT01A"), adsl=adsl)
+    built = (
+        adae.tlg.ae.population(adsl, group_col="TRT01A")
+        .by("TRTA")
+        .rows(["AEBODSYS", "AEDECOD"])
+        .to_ard()
+    )
+    assert built.equals(shortcut)
+    assert "System Organ Class" in built["variable_label"].to_list()

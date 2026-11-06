@@ -96,6 +96,7 @@ class TLGBuilder:
         self._prefilter: pl.Expr | str | None = _UNSET
         self._listing_columns: list[str | Column] | None = None
         self._sort_by: list[str] | None = None
+        self._continuous_vars: dict[str, str] | None = None
         self._template_id: str | None = None
         self._template_fn: Callable[..., pl.DataFrame] | None = None
         self._interactive: InteractiveBlock | None = None
@@ -124,6 +125,7 @@ class TLGBuilder:
             or self._prefilter is not _UNSET
             or self._listing_columns is not None
             or self._sort_by is not None
+            or self._continuous_vars is not None
         )
 
     def _require_consumed_field(self, field: str, verb: str) -> None:
@@ -199,12 +201,19 @@ class TLGBuilder:
     def filter(self, expr: pl.Expr | str) -> TLGBuilder:
         """Set the dataset filter (applied to the primary dataset only).
 
+        Call it once.  A second call raises: Polars chaining would mean
+        AND, a plain SAS WHERE means replace, and the two conflict.
+        Combine the conditions in one expression with ``&``.
+
         Args:
             expr: Polars expression (or string expression — the
                 YAML-serializable form) filtering the primary dataset.
 
         Returns:
             TLGBuilder: Builder with dataset filter set.
+
+        Raises:
+            SchemaError: If the filter is already set.
 
         Examples:
             Restrict the table to treatment-emergent events::
@@ -217,6 +226,12 @@ class TLGBuilder:
                     .to_ard()
                 )
         """
+        if self._dataset_filter is not None:
+            raise SchemaError(
+                "filter is already set; combine the conditions with &, e.g. "
+                '\'(pl.col("TRTEMFL") == "Y") & (pl.col("AESER") == "Y")\'. '
+                f"Current filter: {self._dataset_filter}"
+            )
         new = self._clone()
         new._dataset_filter = expr
         return new
@@ -366,10 +381,15 @@ class TLGBuilder:
     def rows(self, fields: list[str | Row]) -> TLGBuilder:
         """Set the row hierarchy fields.
 
-        A single field maps to ``variable``.  Two fields drive two-level
-        nesting: the first maps to ``variable``, the second to ``group2``.
+        A single field maps to ``variable``.  On a nested template two
+        fields drive two-level nesting: the second field is the
+        ``variable`` and the first is its parent in ``group2``.  On a
+        flat template each field is its own breakdown.
         Entries may be plain column names or full ``Row`` objects
-        carrying ``label`` / ``filter_value`` / ``decimals``.
+        carrying ``label`` / ``filter_value`` / ``order_by`` / ``decimals``.  A plain
+        name takes the label of the template's default row for the same
+        field, so the stub header matches the shortcut.  Pass
+        ``Row(field=..., label="")`` for no label.
 
         Args:
             fields: One or two field names (or ``Row`` objects) for the
@@ -391,6 +411,32 @@ class TLGBuilder:
         """
         new = self._clone()
         new._rows_fields = list(fields)
+        return new
+
+    def continuous(self, variables: dict[str, str]) -> TLGBuilder:
+        """Set the continuous blocks of a demographics table.
+
+        Maps to the spec's ``continuous_vars``: column to block label.
+        Each block shows n, Mean, SD, Median, Min and Max.
+
+        Args:
+            variables: Column name to block label, in display order.
+
+        Returns:
+            TLGBuilder: Builder with the continuous blocks set.
+
+        Examples:
+            Age, height and weight in one table::
+
+                ard = (
+                    adsl.tlg.dm
+                    .by("TRT01A")
+                    .continuous({"AGE": "Age (yr)", "HEIGHTBL": "Height (cm)"})
+                    .to_ard()
+                )
+        """
+        new = self._clone()
+        new._continuous_vars = dict(variables)
         return new
 
     def value(self, col: str) -> TLGBuilder:
@@ -863,6 +909,9 @@ class TLGBuilder:
         if self._sort_by is not None:
             self._require_consumed_field("sort_by", "sort_by()")
             kwargs["sort_by"] = list(self._sort_by)
+        if self._continuous_vars is not None:
+            self._require_consumed_field("continuous_vars", "continuous()")
+            kwargs["continuous_vars"] = self._continuous_vars
         if self._interactive is not None:
             kwargs["interactive"] = self._interactive
 
@@ -878,6 +927,21 @@ class TLGBuilder:
         row_objs = [f if isinstance(f, Row) else Row(field=f) for f in self._rows_fields]
         if "categorical_vars" not in self._spec_cls.model_fields:
             self._require_consumed_field("rows", "rows()")
+            # A plain name takes the label of the template's default Row for that field.
+            default_rows = self._spec_cls.model_fields["rows"].get_default(
+                call_default_factory=True
+            )
+            default_labels = {
+                r.field: r.label
+                for r in (default_rows if isinstance(default_rows, list) else [])
+                if isinstance(r, Row) and r.label
+            }
+            row_objs = [
+                Row(field=f, label=default_labels[f])
+                if isinstance(f, str) and f in default_labels
+                else r
+                for f, r in zip(self._rows_fields, row_objs, strict=True)
+            ]
             return {"rows": row_objs}
         unsupported = [
             r.field for r in row_objs if r.filter_value is not None or r.decimals is not None
@@ -995,6 +1059,7 @@ class TLGBuilder:
         *,
         metadata: RenderMetadata | None = None,
         html_wrapper: str | None = None,
+        rows_per_page: int | None = None,
     ) -> str:
         """Render the builder result as a pharma-style HTML table.
 
@@ -1002,14 +1067,18 @@ class TLGBuilder:
         ``TableModel``, and renders to HTML.
 
         Args:
-            path: Optional file path.  If given, HTML is written to disk.
+            path: Optional file path.  If given, the HTML is written to
+                disk as a complete UTF-8 document (or into
+                *html_wrapper*).
             metadata: Optional ``RenderMetadata`` for title, subtitle,
                 footnotes, etc.
             html_wrapper: Optional HTML template with ``{table}``
                 placeholder for injection.
+            rows_per_page: Maximum body rows per page; ``None`` gives
+                one page.
 
         Returns:
-            str: The rendered HTML string.
+            str: The rendered HTML fragment.
 
         Examples:
             Inline AE summary to HTML::
@@ -1027,17 +1096,18 @@ class TLGBuilder:
 
         from .render._models import RenderMetadata as _RM
         from .render._models import ard_to_table_model
-        from .render.html import render_html
+        from .render.html import html_document, render_html
 
         ard = self.to_ard()
         meta = metadata or _RM()
         model = ard_to_table_model(ard, meta)
-        html = render_html(model, html_wrapper=html_wrapper)
+        html = render_html(model, html_wrapper=html_wrapper, rows_per_page=rows_per_page)
 
         if path is not None:
             p = _Path(path)
             p.parent.mkdir(parents=True, exist_ok=True)
-            p.write_text(html, encoding="utf-8")
+            doc = html if html_wrapper is not None else html_document(html, meta.title)
+            p.write_text(doc, encoding="utf-8")
 
         return html
 
@@ -1046,6 +1116,7 @@ class TLGBuilder:
         path: str | Path | None = None,
         *,
         metadata: RenderMetadata | None = None,
+        rows_per_page: int | None = 40,
     ) -> str:
         """Render the builder result as a pharma-style RTF table.
 
@@ -1058,6 +1129,8 @@ class TLGBuilder:
             path: Optional file path.  If given, RTF is written to disk.
             metadata: Optional ``RenderMetadata`` for title, subtitle,
                 footnotes, etc.
+            rows_per_page: Maximum body rows per page (default 40, as
+                ``render_rtf``).
 
         Returns:
             str: The rendered RTF document.
@@ -1082,13 +1155,14 @@ class TLGBuilder:
         ard = self.to_ard()
         meta = metadata or _RM()
         model = ard_to_table_model(ard, meta)
-        return render_rtf(model, path)
+        return render_rtf(model, path, rows_per_page=rows_per_page)
 
     def to_pdf(
         self,
         path: str | Path,
         *,
         metadata: RenderMetadata | None = None,
+        rows_per_page: int | None = 40,
     ) -> Path:
         """Render the builder result as a PDF file via WeasyPrint.
 
@@ -1096,6 +1170,9 @@ class TLGBuilder:
             path: Output PDF file path.
             metadata: Optional ``RenderMetadata`` for title, subtitle,
                 footnotes, etc.
+            rows_per_page: Maximum body rows per page (default 40, as
+                ``render_pdf``).  Each physical page shows
+                ``Page X of Y``.
 
         Returns:
             Path: The written PDF path.
@@ -1124,7 +1201,7 @@ class TLGBuilder:
         ard = self.to_ard()
         meta = metadata or _RM()
         model = ard_to_table_model(ard, meta)
-        return render_pdf(model, path)
+        return render_pdf(model, path, rows_per_page=rows_per_page)
 
     def to_pptx(
         self,
@@ -1132,6 +1209,7 @@ class TLGBuilder:
         *,
         metadata: RenderMetadata | None = None,
         theme: dict[str, Any] | None = None,
+        rows_per_page: int | None = None,
     ) -> Path:
         """Render the builder result as an editable PPTX slide deck.
 
@@ -1140,6 +1218,8 @@ class TLGBuilder:
             metadata: Optional ``RenderMetadata`` for title, subtitle,
                 footnotes, etc.
             theme: Optional dict of style overrides (font, colours, sizes).
+            rows_per_page: Body rows per slide (``None``: 15, as
+                ``render_pptx``).
 
         Returns:
             Path: The written ``.pptx`` path.
@@ -1168,7 +1248,7 @@ class TLGBuilder:
         ard = self.to_ard()
         meta = metadata or _RM()
         model = ard_to_table_model(ard, meta)
-        return render_pptx(model, path, theme=theme)
+        return render_pptx(model, path, theme=theme, rows_per_page=rows_per_page)
 
 
 class BuilderVerbsMixin:
@@ -1182,6 +1262,21 @@ class BuilderVerbsMixin:
 
     _df: pl.DataFrame
     _builder_specs: dict[str, type[TLGSpec]]
+
+    def verbs(self) -> pl.DataFrame:
+        """List the public verbs available on this namespace.
+
+        Returns:
+            pl.DataFrame: Columns ``verb``, ``summary`` and ``origin``
+                (``"tlg.ae"`` for the AE verbs, ``"tlg"`` for the builder
+                entry verbs every sub-namespace shares), sorted by verb.
+
+        Examples:
+            ``adae.tlg.ae.verbs()``
+        """
+        from fleet.core._verb_mixin import list_verbs
+
+        return list_verbs(type(self))
 
     def _builder(self) -> TLGBuilder:
         """Return a ``TLGBuilder`` pre-configured for this namespace."""

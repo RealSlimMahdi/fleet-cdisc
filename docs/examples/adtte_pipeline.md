@@ -16,9 +16,10 @@ below is real.
   (`CNSR = 0`, `EVNTDESC` = its key in `events=`); no event gives the
   **last censor record** (`CNSR` = its key in `censors=`). `STARTDT` comes
   from ADSL; a date before it is set to it.
-- **`stop_at=`** names ADSL date columns. The earliest one ends the
-  observation: event and censor records after it are dropped (admiral 1.5
-  `end_dates`, ADR-0043).
+- **`stop_at=`** maps ADSL date columns to `(CNSR, EVNTDESC)`. The earliest
+  one ends the observation: event and censor records after it are dropped
+  (admiral 1.5 `end_dates`, ADR-0043). A censored subject takes the date
+  from the censor frame and the reason from the stop.
 - **`.aval()`** turns `ADT − STARTDT + 1` into `AVAL` (+`AVALU`) afterwards.
 
 !!! note "Choosing the time origin (`start=`)"
@@ -156,20 +157,20 @@ Worth noticing:
 
 ## 4. Why did subject 03 get censored? The decision trace
 
-`explain=True` logs every candidate per subject with the selected one and
-the reason:
+`explain=True` logs every candidate per subject with the selected one, the
+reason and `cnsr_from`, the rule that gave the CNSR:
 
 ```text
 TTE decision trace — TTAE (Time to First Adverse Event):
-┌─────────┬────────┬───────────────┬────────────┬──────────┬────────────────────────┐
-│ USUBJID ┆ kind   ┆ source        ┆ date       ┆ selected ┆ reason                 │
-╞═════════╪════════╪═══════════════╪════════════╪══════════╪════════════════════════╡
-│ 01      ┆ event  ┆ ADVERSE EVENT ┆ 2023-01-10 ┆ true     ┆ earliest event         │
-│ 02      ┆ event  ┆ ADVERSE EVENT ┆ 2023-02-05 ┆ true     ┆ earliest event         │
-│ 01      ┆ censor ┆ CNSR 1        ┆ 2023-03-01 ┆ false    ┆ not selected           │
-│ 02      ┆ censor ┆ CNSR 1        ┆ 2023-06-30 ┆ false    ┆ not selected           │
-│ 03      ┆ censor ┆ CNSR 1        ┆ 2023-02-01 ┆ true     ┆ last censor (no event) │
-└─────────┴────────┴───────────────┴────────────┴──────────┴────────────────────────┘
+┌─────────┬────────┬───────────────┬────────────┬──────────┬────────────────────────┬─────────────┐
+│ USUBJID ┆ kind   ┆ source        ┆ date       ┆ selected ┆ reason                 ┆ cnsr_from   │
+╞═════════╪════════╪═══════════════╪════════════╪══════════╪════════════════════════╪═════════════╡
+│ 01      ┆ event  ┆ ADVERSE EVENT ┆ 2023-01-10 ┆ true     ┆ earliest event         ┆ event       │
+│ 02      ┆ event  ┆ ADVERSE EVENT ┆ 2023-02-05 ┆ true     ┆ earliest event         ┆ event       │
+│ 01      ┆ censor ┆ CNSR 1        ┆ 2023-03-01 ┆ false    ┆ not selected           ┆ null        │
+│ 02      ┆ censor ┆ CNSR 1        ┆ 2023-06-30 ┆ false    ┆ not selected           ┆ null        │
+│ 03      ┆ censor ┆ CNSR 1        ┆ 2023-02-01 ┆ true     ┆ last censor (no event) ┆ censors key │
+└─────────┴────────┴───────────────┴────────────┴──────────┴────────────────────────┴─────────────┘
 ```
 
 A frame without `ADT` fails before a single row is computed, and the error
@@ -194,7 +195,7 @@ km = adtte_ns.km_data("OS", by=["TRT01P"])
 └─────────┴──────────┴───────┴─────────┘
 ```
 
-<!-- docs:no-run -->
+<!-- docs:no-run: needs lifelines, not a Fleet dependency -->
 
 ```python
 from lifelines import KaplanMeierFitter  # optional — not a Fleet dependency
@@ -204,25 +205,35 @@ for (arm,), grp in km.group_by("TRT01P"):
     kmf.fit(grp["duration"], grp["event"], label=arm)
 ```
 
-## 6. PFS: stop the observation at new therapy
+## 6. PFS: stop the observation at new therapy or data cut-off
 
 `stop_at=` follows admiral 1.5 `derive_param_tte` with `end_dates` and
-`event_type = "negative"` (ADR-0043). The earliest non-null `stop_at` date
-of a subject ends the observation. Events and censor records after it are
-dropped, so a subject without progression is censored at the **last
-assessment before new therapy**, not at the new-therapy date.
+`event_type = "negative"` (ADR-0043). It maps an ADSL date column to a
+`(CNSR, EVNTDESC)` pair. The earliest non-null `stop_at` date of a subject
+ends the observation. Events and censor records after it are dropped, so a
+subject without progression is censored at the **last assessment before
+the stop**, not at the stop date.
+
+A censored row holds two facts (FDA 2018 oncology endpoints guidance, EMA
+PFS appendix, ADaM BDS-TTE):
+
+- The **date**: the last adequate assessment. It comes from the censor
+  frame, with `CNSDTDSC`.
+- The **reason**: why the observation stopped. It comes from the stop:
+  `CNSR` and `EVNTDESC`.
 
 ```python
 adsl_pfs = pl.from_repr("""
-┌─────────┬────────────┬────────────┬────────────┐
-│ USUBJID ┆ TRTSDT     ┆ EOSDT      ┆ NACTDT     │
-│ ---     ┆ ---        ┆ ---        ┆ ---        │
-│ str     ┆ date       ┆ date       ┆ date       │
-╞═════════╪════════════╪════════════╪════════════╡
-│ A       ┆ 2024-01-01 ┆ 2024-06-30 ┆ 2024-04-01 │
-│ B       ┆ 2024-01-01 ┆ 2024-06-30 ┆ 2024-02-15 │
-│ C       ┆ 2024-01-01 ┆ 2024-06-30 ┆ null       │
-└─────────┴────────────┴────────────┴────────────┘
+┌─────────┬────────────┬────────────┬────────────┬────────────┐
+│ USUBJID ┆ TRTSDT     ┆ EOSDT      ┆ NACTDT     ┆ DCUTDT     │
+│ ---     ┆ ---        ┆ ---        ┆ ---        ┆ ---        │
+│ str     ┆ date       ┆ date       ┆ date       ┆ date       │
+╞═════════╪════════════╪════════════╪════════════╪════════════╡
+│ A       ┆ 2024-01-01 ┆ 2024-06-30 ┆ 2024-04-01 ┆ 2024-05-31 │
+│ B       ┆ 2024-01-01 ┆ 2024-06-30 ┆ 2024-02-15 ┆ 2024-05-31 │
+│ C       ┆ 2024-01-01 ┆ null       ┆ null       ┆ 2024-05-31 │
+│ D       ┆ 2024-01-01 ┆ null       ┆ null       ┆ 2024-05-31 │
+└─────────┴────────────┴────────────┴────────────┴────────────┘
 """)
 adrs = pl.from_repr("""
 ┌─────────┬────────────┬───────┐
@@ -234,21 +245,34 @@ adrs = pl.from_repr("""
 │ A       ┆ 2024-03-01 ┆ SD    │
 │ B       ┆ 2024-02-01 ┆ SD    │
 │ B       ┆ 2024-03-10 ┆ PD    │
+│ C       ┆ 2024-02-01 ┆ SD    │
+│ C       ┆ 2024-04-15 ┆ SD    │
+│ C       ┆ 2024-06-10 ┆ PD    │
 └─────────┴────────────┴───────┘
 """)
 last_assessment = adrs.select(
-    "USUBJID", "ADT", EVNTDESC=pl.lit("NO PROGRESSION"), CNSDTDSC=pl.lit("LAST ASSESSMENT")
+    "USUBJID",
+    "ADT",
+    EVNTDESC=pl.lit("NO PROGRESSION"),
+    CNSDTDSC=pl.lit("LAST ADEQUATE TUMOR ASSESSMENT"),
 )
-no_assessment = adsl_pfs.select("USUBJID", ADT="TRTSDT", EVNTDESC=pl.lit("NO ASSESSMENT"))
+no_baseline = adsl_pfs.join(adrs, on="USUBJID", how="anti").select(
+    "USUBJID", ADT="TRTSDT", EVNTDESC=pl.lit("NO BASELINE ASSESSMENT")
+)
 
 pfs = (
     adsl_pfs.adam.tte.param(
         "PFS",
         "Progression-Free Survival",
         start="TRTSDT",
-        events={"PD": adrs.filter(pl.col("AVALC") == "PD")},
-        censors={2: last_assessment, 3: no_assessment},  # key = CNSR
-        stop_at=["EOSDT", "NACTDT"],
+        events={"PROGRESSIVE DISEASE": adrs.filter(pl.col("AVALC") == "PD")},
+        censors={1: last_assessment, 3: no_baseline},  # key = CNSR
+        stop_at={  # column: (CNSR, EVNTDESC)
+            "EOSDT": (4, "END OF STUDY"),
+            "NACTDT": (2, "NEW ANTICANCER THERAPY"),
+            "DCUTDT": (5, "DATA CUT-OFF"),
+        },
+        keep_reason=[3],
     )
     .aval()
     .to_frame()
@@ -256,25 +280,43 @@ pfs = (
 ```
 
 ```text
-┌─────────┬────────────┬────────────┬──────┬────────────────┬─────────────────┬──────┐
-│ USUBJID ┆ STARTDT    ┆ ADT        ┆ CNSR ┆ EVNTDESC       ┆ CNSDTDSC        ┆ AVAL │
-╞═════════╪════════════╪════════════╪══════╪════════════════╪═════════════════╪══════╡
-│ A       ┆ 2024-01-01 ┆ 2024-03-01 ┆ 2    ┆ NO PROGRESSION ┆ LAST ASSESSMENT ┆ 61.0 │
-│ B       ┆ 2024-01-01 ┆ 2024-02-01 ┆ 2    ┆ NO PROGRESSION ┆ LAST ASSESSMENT ┆ 32.0 │
-│ C       ┆ 2024-01-01 ┆ 2024-01-01 ┆ 3    ┆ NO ASSESSMENT  ┆ null            ┆ 1.0  │
-└─────────┴────────────┴────────────┴──────┴────────────────┴─────────────────┴──────┘
+┌─────────┬────────────┬────────────┬──────┬────────────────────────┬────────────────────────────────┬───────┐
+│ USUBJID ┆ STARTDT    ┆ ADT        ┆ CNSR ┆ EVNTDESC               ┆ CNSDTDSC                       ┆ AVAL  │
+╞═════════╪════════════╪════════════╪══════╪════════════════════════╪════════════════════════════════╪═══════╡
+│ A       ┆ 2024-01-01 ┆ 2024-03-01 ┆ 2    ┆ NEW ANTICANCER THERAPY ┆ LAST ADEQUATE TUMOR ASSESSMENT ┆ 61.0  │
+│ B       ┆ 2024-01-01 ┆ 2024-02-01 ┆ 2    ┆ NEW ANTICANCER THERAPY ┆ LAST ADEQUATE TUMOR ASSESSMENT ┆ 32.0  │
+│ C       ┆ 2024-01-01 ┆ 2024-04-15 ┆ 5    ┆ DATA CUT-OFF           ┆ LAST ADEQUATE TUMOR ASSESSMENT ┆ 106.0 │
+│ D       ┆ 2024-01-01 ┆ 2024-01-01 ┆ 3    ┆ NO BASELINE ASSESSMENT ┆ null                           ┆ 1.0   │
+└─────────┴────────────┴────────────┴──────┴────────────────────────┴────────────────────────────────┴───────┘
 ```
 
 - Subject A has no progression: ADT is the last assessment (2024-03-01),
-  not the new-therapy date (2024-04-01).
+  not the new-therapy date (2024-04-01). The reason is the new therapy:
+  CNSR 2.
 - Subject B progressed on 2024-03-10, after new therapy on 2024-02-15: the
-  PD does not count, and B is censored at the last assessment before it.
-- Subject C has no assessment: the censor frame on `TRTSDT` keeps C. Without
-  such a frame, C is dropped with a warning.
-- For a favorable event (time to response, admiral `event_type =
-  "positive"`), censor at the stop date: add
-  `{1: adsl.select("USUBJID", ADT=pl.min_horizontal("EOSDT", "NACTDT"))}` to
-  `censors=`.
+  PD does not count. B is censored at the last assessment before it.
+- Subject C progressed on 2024-06-10, after the data cut-off: the PD does
+  not count. C is censored at 2024-04-15 with CNSR 5, DATA CUT-OFF.
+- Subject D has no assessment. `keep_reason=[3]` keeps CNSR 3 and the text
+  of its frame, although the data cut-off applies to D too (admiral
+  `consider_end_dates = FALSE`). Without such a frame, D is dropped with a
+  warning.
+
+CNSR and EVNTDESC of a censored subject come from, in this order:
+
+1. A censor frame whose key is in `keep_reason=`.
+2. The stop of the subject. On a tie of two stop dates, the first column
+   in `stop_at=` wins.
+3. The censor frame (CNSR = its key), when the subject has no stop date.
+
+The stop codes must differ from each other and from the `censors=` keys,
+so that one CNSR value names one reason. `explain=True` adds a
+`cnsr_from` column to the trace, with the rule per subject.
+
+For a favorable event (time to response, admiral `event_type =
+"positive"`), censor at the stop date: add
+`{1: adsl.select("USUBJID", ADT=pl.min_horizontal("EOSDT", "NACTDT"))}` to
+`censors=`.
 
 ## Going further
 
@@ -284,4 +326,4 @@ pfs = (
   frame carries the `by` columns.
 - The full verb reference lives in the
   [cheat sheet](../api/cheat_sheet.md#time-to-event-dfadamtte) and the
-  [TA API page](../api/ta.md#time-to-event--dfadamtte).
+  [TA API page](../api/ta.md#time-to-event-dfadamtte).

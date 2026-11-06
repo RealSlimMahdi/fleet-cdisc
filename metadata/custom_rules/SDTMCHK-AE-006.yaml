@@ -62,3 +62,6 @@ Authorities:
               - Cited Guidance: check_ae_death
                 Document: pharmaverse sdtmchecks
                 Section: AE Domain
+    Category:
+      Purpose: Data quality check from sdtmchecks
+      Keywords: [AE]

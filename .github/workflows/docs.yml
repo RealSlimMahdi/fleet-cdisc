@@ -2,16 +2,15 @@ name: Docs
 
 on:
   push:
-    branches: [main, devel]
+    branches: [main]
     tags:
-      - "v*"
+      - "v[0-9]+.[0-9]+.[0-9]+*"
     paths:
       - "docs/**"
       - "mkdocs.yml"
       - "pyproject.toml"
       - ".github/workflows/docs.yml"
       - "examples/**"
-      - "specs/**"
       - "src/**"
       - "README.md"
       - "GUIDE.md"
@@ -24,15 +23,10 @@ on:
       - "mkdocs.yml"
       - "pyproject.toml"
       - "src/**"
-  workflow_dispatch:
-    inputs:
-      version:
-        description: "Version alias to deploy (e.g. 0.2.0, dev)"
-        required: false
-        default: "dev"
+  workflow_dispatch: # redeploy main by hand
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   # Build-only job for PRs (no deploy)
@@ -43,6 +37,7 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
@@ -58,10 +53,19 @@ jobs:
       - name: Build docs (validation only)
         run: uv run mkdocs build
 
-  # Deploy job for pushes to main, devel, and tags
+      - name: Check mkdocstrings option blocks are parsed
+        run: |
+          if grep -rl "<p>options:" site; then
+            echo "An options: block printed as text: indent it under its ::: line."
+            exit 1
+          fi
+
+  # Deploy job for pushes to main and release tags
   deploy:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     # Serialize gh-pages pushes: concurrent runs (e.g. rapid successive
     # pushes) otherwise race mike and get non-fast-forward rejections.
     concurrency:
@@ -89,33 +93,14 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Derive version alias
-        id: version
-        run: |
-          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
-            echo "version=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
-          elif [[ "${GITHUB_REF}" == refs/heads/devel ]]; then
-            echo "version=dev" >> "$GITHUB_OUTPUT"
-          elif [[ "${GITHUB_REF}" == refs/heads/main ]]; then
-            echo "version=latest" >> "$GITHUB_OUTPUT"
-          else
-            INPUT_VERSION="${{ github.event.inputs.version }}"
-            echo "version=${INPUT_VERSION:-dev}" >> "$GITHUB_OUTPUT"
-          fi
-
+      # Only a release tag writes "latest"; main writes "dev" (c1-625).
       - name: Deploy docs (release tag)
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
+          VERSION="${GITHUB_REF#refs/tags/v}"
           uv run mike deploy --push --update-aliases "$VERSION" latest
           uv run mike set-default --push latest
 
       - name: Deploy docs (main branch)
         if: github.ref == 'refs/heads/main'
-        run: |
-          uv run mike deploy --push --update-aliases latest
-          uv run mike set-default --push latest
-
-      - name: Deploy docs (devel branch)
-        if: github.ref == 'refs/heads/devel'
-        run: uv run mike deploy --push dev
+        run: uv run mike deploy --push --update-aliases dev

@@ -62,7 +62,6 @@
 </div>
 
 [![Build Status](https://img.shields.io/badge/build-passing-success?style=for-the-badge)](https://github.com/RealSlimMahdi/fleet-cdisc/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/badge/coverage-100%25-success?style=for-the-badge)](https://github.com/RealSlimMahdi/fleet-cdisc)
 [![GitHub](https://img.shields.io/badge/GitHub-fleet--cdisc-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/RealSlimMahdi/fleet-cdisc)
 [![Docs](https://img.shields.io/badge/docs-passing-success?style=for-the-badge)](https://realslimmahdi.github.io/fleet-cdisc/)
 [![PyPI](https://img.shields.io/pypi/v/fleet-cdisc?style=for-the-badge&logo=pypi&logoColor=white)](https://pypi.org/project/fleet-cdisc/)
@@ -97,7 +96,7 @@ dm = (
 advs = (
     vs_sdtm.adam.source("USUBJID", "PARAMCD", "AVAL")
     .study_day("ADY", date_col="ADT", ref_col="TRTSDT")
-    .flag("ABLFL", criteria='pl.col("VISITNUM") == 1', by=["USUBJID", "PARAMCD"])
+    .flag("ABLFL", criteria='pl.col("VISITNUM") == 1')
     .baseline("BASE", aval="AVAL", baseline_flag="ABLFL", by=["USUBJID", "PARAMCD"])
     .chg("CHG", aval="AVAL", base="BASE")
     .to_frame()
@@ -169,6 +168,6 @@ flowchart TD
 - [Trial Design, fully offline](examples/tdd_pipeline.md) — no API key needed
 - [ADTTE in one chain](examples/adtte_pipeline.md) — event/censor frames, stop_at window, decision trace, KM inputs
 - [TLG from a Spec](examples/tlg_pipeline.md) — one YAML → table, explorer, QC trail
-- [ADSL pipeline walkthrough (notebook)](examples/02_spec_driven_pipeline.ipynb)
+- [Code-driven pipeline (notebook)](examples/01_code_driven_pipeline.ipynb)
 - [API Reference](api/index.md)
 - [Test Status](test-status.md)

@@ -58,3 +58,6 @@ Authorities:
       - Cited Guidance: check_tr_trstresn_ldiam
         Document: pharmaverse sdtmchecks
         Section: TR Domain (ONC)
+  Category:
+    Purpose: Data quality check from sdtmchecks
+    Keywords: [TR]

@@ -122,6 +122,43 @@ def resolve_groupby(
     return detected, "detected" if detected is not None else "none"
 
 
+def resolve_population(
+    meta: TemplateMeta, data: pl.DataFrame, adsl: pl.DataFrame | None
+) -> pl.DataFrame | None:
+    """Return the population frame a template run uses, or refuse the run.
+
+    An ADSL template is its own population.  A table that lists ADSL in its
+    domains needs ADSL for the big N and for an arm with no records, so it
+    is refused without one: the table would print no N and drop that arm.
+    ``fleet tlg run``, ``fleet tlg explore`` and the MCP tool share this
+    rule.
+
+    Args:
+        meta: The template of the spec.
+        data: The analysis dataset.
+        adsl: The ADSL frame, or ``None``.
+
+    Returns:
+        pl.DataFrame | None: The population frame; ``None`` for a listing
+            or a table that does not use ADSL.
+
+    Raises:
+        SchemaError: The table needs ADSL and none was given.
+
+    Examples:
+        Refuse a vital-signs table run without ADSL::
+
+            population = resolve_population(TEMPLATES["vst01"], advs, None)  # SchemaError
+    """
+    if adsl is not None:
+        return adsl
+    if meta.domains and meta.domains[-1] == "ADSL":
+        return data
+    if meta.output_type is OutputType.LISTING or "ADSL" not in meta.domains:
+        return None
+    raise SchemaError(f"template '{meta.id}' needs ADSL for population denominators.")
+
+
 def resolve_spec_cls(meta: TemplateMeta) -> type[TLGSpec]:
     """Return the spec model class validating YAML for *meta*.
 

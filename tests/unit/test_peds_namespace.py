@@ -103,12 +103,9 @@ class TestAgeDays:
         result = df.adam.peds.age_days(
             "AGEDAYS", birth_date="BRTHDT", analysis_date="RFSTDTC"
         ).to_frame()
-        # Subject 01: 4 years (2 leap years in range: 2020, 2024 — only 2020 applies here)
-        # 365+365+366+365 = 1461. Not checking exact value; just a positive integer.
-        assert result["AGEDAYS"][0] > 0
-        assert result["AGEDAYS"][1] > 0
-        # Second subject was born later, so should have fewer days
-        assert result["AGEDAYS"][1] < result["AGEDAYS"][0]
+        # 2018-01-01 to 2022-01-01: 365 + 365 + 366 (2020) + 365 = 1461 days.
+        # 2019-06-01 to 2022-06-01: 366 (Feb 2020) + 365 + 365 = 1096 days.
+        assert result["AGEDAYS"].to_list() == [1461, 1096]
 
 
 class TestAgeMonths:
@@ -119,6 +116,17 @@ class TestAgeMonths:
             "AGEMOS", birth_date="BRTHDT", analysis_date="RFSTDTC"
         ).to_frame()
         assert result["AGEMOS"][0] == 24
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason="c1-855: days / 30.4375 gives 23 on the 24-month anniversary; rule not decided",
+    )
+    def test_the_anniversary_completes_the_month(self, age_frame):
+        # 2020-06-15 to 2022-06-15 is 730 days: 730 / 30.4375 = 23.98.
+        result = age_frame.adam.peds.age_months(
+            "AGEMOS", birth_date="BRTHDT", analysis_date="RFSTDTC"
+        ).to_frame()
+        assert result["AGEMOS"].to_list() == [24, 24]
 
     def test_same_day_zero_months(self):
         df = pl.from_repr("""\
@@ -189,7 +197,7 @@ class TestCorrectedAge:
     """Test 4: Gestational-age-corrected age."""
 
     def test_preterm_correction(self):
-        # Born at 32 weeks → 8 weeks premature → correction ≈ 8/52.18 ≈ 0.153 years
+        # Born at 32 weeks → 8 weeks premature → correction = 56 days / 365.25
         df = pl.from_repr("""\
 ┌─────────┬────────┐
 │ AGEDAYS ┆ GESTAG │
@@ -202,8 +210,8 @@ class TestCorrectedAge:
         result = df.adam.peds.corrected_age(
             "CORAGE", age_days_col="AGEDAYS", gestational_weeks_col="GESTAG"
         ).to_frame()
-        expected = 365 / 365.25 - (40 - 32) / 52.18
-        assert result["CORAGE"][0] == pytest.approx(expected, abs=0.001)
+        expected = (365 - 7 * (40 - 32)) / 365.25
+        assert result["CORAGE"][0] == pytest.approx(expected, rel=1e-12)
 
     def test_term_infant_no_correction(self):
         """Infant born at exactly 40 weeks → no correction applied."""

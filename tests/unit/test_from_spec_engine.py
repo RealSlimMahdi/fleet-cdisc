@@ -433,12 +433,12 @@ class TestDuplicateTransformWarning:
 
 
 # ──────────────────────────────────────────────────────────────────────
-# depends_on auto-flush still honoured by the shared engine
+# depends_on is removed: the key is refused (c1-54)
 # ──────────────────────────────────────────────────────────────────────
 
 
 class TestDependsOn:
-    def test_depends_on_key_accepted_and_executes(self, write_spec):
+    def test_depends_on_key_is_refused(self, write_spec):
         df = pl.from_repr("""\
 ┌─────────┬────────────┐
 │ USUBJID ┆ vsdtc      │
@@ -465,8 +465,8 @@ class TestDependsOn:
                 dataset="ADVS",
             )
         )
-        result = df.adam.from_spec(spec, dataset="ADVS").to_frame()
-        assert result["ADY"].to_list() == [1]
+        with pytest.raises(SpecError, match="depends_on"):
+            df.adam.from_spec(spec, dataset="ADVS")
 
 
 # ──────────────────────────────────────────────────────────────────────

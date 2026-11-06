@@ -131,7 +131,7 @@ SUBJECTS = pl.DataFrame({"USUBJID": ["S2", "S4", "S5"]})
 def test_pick_with_a_top_level_order_takes_the_latest_over_all_events() -> None:
     """admiral LSTALVDT template: order = exprs(LSTALVDT, ...), mode = "last"."""
     out = SUBJECTS.adam.adsl.pick(
-        ["LSTALVDT", "DTHFL"], events=EVENTS, order=["LSTALVDT"], mode="last"
+        ["LSTALVDT", "DTHFL"], events=EVENTS, order_by=["LSTALVDT"], mode="last"
     ).to_frame()
 
     assert out["LSTALVDT"].to_list() == [
@@ -143,7 +143,7 @@ def test_pick_with_a_top_level_order_takes_the_latest_over_all_events() -> None:
 
 def test_pick_tie_across_events_goes_to_the_first_listed_event() -> None:
     out = SUBJECTS.adam.adsl.pick(
-        ["LSTALVDT", "DTHFL"], events=EVENTS, order=["LSTALVDT"], mode="last"
+        ["LSTALVDT", "DTHFL"], events=EVENTS, order_by=["LSTALVDT"], mode="last"
     ).to_frame()
 
     assert out.filter(pl.col("USUBJID") == "S5")["DTHFL"].to_list() == ["Y"]
@@ -153,7 +153,7 @@ def test_pick_without_a_top_level_order_keeps_the_priority_cascade() -> None:
     """admiral DTHCAUS template: the first listed event with data wins."""
     events = [
         {**EVENTS[0]},
-        {**EVENTS[1], "order": ["AENDT"], "mode": "last"},
+        {**EVENTS[1], "order_by": ["AENDT"], "mode": "last"},
         {**EVENTS[2]},
     ]
 

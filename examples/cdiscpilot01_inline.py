@@ -96,6 +96,12 @@ print(f"   ae_raw : {ae_raw.shape[0]:>3} rows   columns → {ae_raw.columns}")
 #     Admiral uses DM as the starting point for ADSL:
 #       adsl <- dm %>% select(-DOMAIN) %>% mutate(TRT01P = ARM, ...)
 # ════════════════════════════════════════════════════════════════════════════
+_ARMCD_FROM_RAW = [
+    {"condition": pl.col("arm_code") == "Pbo", "value": "PBO"},
+    {"condition": pl.col("arm_code") == "Xan_Lo", "value": "XAN_LO"},
+    {"condition": pl.col("arm_code") == "Xan_Hi", "value": "XAN_HI"},
+]
+
 dm = (
     dm_raw.sdtm.assign("STUDYID", value="CDISCPILOT01")
     .assign("DOMAIN", value="DM")
@@ -123,17 +129,10 @@ dm = (
             "NOT HISPANIC OR LATINO": "NOT HISPANIC OR LATINO",
         },
     )
-    .case_when(
-        "ARMCD",
-        when=[
-            {"condition": pl.col("arm_code") == "Pbo", "value": "PBO"},
-            {"condition": pl.col("arm_code") == "Xan_Lo", "value": "XAN_LO"},
-            {"condition": pl.col("arm_code") == "Xan_Hi", "value": "XAN_HI"},
-        ],
-        else_="SCRNFAIL",
-    )
+    .case_when("ARMCD", when=_ARMCD_FROM_RAW)
     .assign("ARM", source="arm_description")
-    .assign("ACTARMCD", source="arm_code")
+    # The raw data has one arm per subject: the actual arm takes the same codes.
+    .case_when("ACTARMCD", when=_ARMCD_FROM_RAW)
     .assign("ACTARM", source="arm_description")
     .date("RFSTDTC", source="first_dose_date")
     .date("RFENDTC", source="last_dose_date")
@@ -163,9 +162,8 @@ dm = (
 print(f"\n── 2a. SDTM DM : {dm.shape[0]} subjects × {dm.shape[1]} variables")
 
 # ── 2a-bis. SUPPDM: Non-Standard Variables (SUPPQUAL for IG ≤3.4) ──────
-# nsv() declares qualifier columns with inline metadata. For IG 3.5+ the
-# columns stay in DM unchanged. For IG ≤3.4, export_supp() unpivots them
-# to the vertical SUPPQUAL structure.
+# nsv() declares qualifier columns with inline metadata. For IG ≤3.4,
+# export_supp() unpivots them to the vertical SUPPQUAL structure.
 dm_ns = (
     dm_raw.sdtm.assign("STUDYID", value="CDISCPILOT01")
     .assign("DOMAIN", value="DM")
@@ -176,16 +174,14 @@ dm_ns = (
 suppdm = dm_ns.export_supp()
 print(f"        → SUPPDM: {suppdm.shape[0]} qualifier rows × {suppdm.shape[1]} variables")
 
-# Post-hoc pattern: export_supp with explicit qualifiers dict on existing frame
-suppdm_alt = (
-    dm.sdtm.export_supp(
-        qualifiers={"ARM": {"label": "Description of Planned Arm", "origin": "PROTOCOL"}},
-    )
-    if "ARM" in dm.columns
-    else None
+# Post-hoc pattern: a qualifiers dict on a built frame. SAFETY is a sponsor
+# population flag ("Y" for a subject with a first dose), not a DM variable.
+suppdm_alt = dm.with_columns(
+    SAFETY=pl.when(pl.col("RFSTDTC").is_not_null()).then(pl.lit("Y"))
+).sdtm.export_supp(
+    qualifiers={"SAFETY": {"label": "Safety Population Flag", "origin": "Derived"}},
 )
-if suppdm_alt is not None:
-    print(f"        → SUPPDM (post-hoc): {suppdm_alt.shape[0]} rows")
+print(f"        → SUPPDM (post-hoc): {suppdm_alt.shape[0]} rows")
 
 # Export DM as CDISC Dataset-JSON v1.1
 from fleet.io import save_dataset_json  # noqa: E402
@@ -374,7 +370,11 @@ _ds_disp = ds.filter(pl.col("DSCAT") == "DISPOSITION EVENT").select(
 
 adsl = (
     adsl.adam.adsl.last_date(  # EOSDT: latest date of DISPOSITION EVENT (admiral: derive_vars_merged)
-        "EOSDT", from_dataset=ds, date_col="DSSTDTC", where='pl.col("DSCAT") == "DISPOSITION EVENT"'
+        "EOSDT",
+        from_dataset=ds,
+        date_col="DSSTDTC",
+        # admiral ad_adsl.R filter_add: a screen failure has no end of study.
+        where='(pl.col("DSCAT") == "DISPOSITION EVENT") & (pl.col("DSDECOD") != "SCREEN FAILURE")',
     )
     # RANDDT: date of RANDOMIZED protocol milestone (admiral: derive_vars_merged)
     .first_date(
@@ -388,7 +388,7 @@ adsl = (
     .case_when(
         "EOSSTT",
         when=[
-            {"condition": 'pl.col("DSDECOD").is_null()', "value": None},
+            {"condition": 'pl.col("DSDECOD").is_null()', "value": "ONGOING"},
             {"condition": 'pl.col("DSDECOD") == "COMPLETED"', "value": "COMPLETED"},
             {"condition": 'pl.col("DSDECOD") == "SCREEN FAILURE"', "value": None},
         ],
@@ -413,7 +413,7 @@ adsl = (
 )
 
 print(f"   {adsl.shape[0]} subjects × {adsl.shape[1]} variables")
-print(f"   EOSSTT counts: {adsl['EOSSTT'].value_counts().to_dicts()}")
+print(f"   EOSSTT counts: {adsl['EOSSTT'].value_counts().sort('EOSSTT').to_dicts()}")
 
 # ════════════════════════════════════════════════════════════════════════════
 # 7. Age Grouping (AGEGR1)
@@ -456,29 +456,38 @@ adsl = (
     adsl.adam.adsl.flag_exists(  # admiral: derive_var_merged_exist_flag
         "SAFFL", from_dataset=ex, on=["USUBJID"], source_filter=_treated, false_value="N"
     )
-    # ITTFL: all randomised subjects (ARMCD not SCRNFAIL)
-    .flag("ITTFL", criteria='pl.col("ARMCD") != "SCRNFAIL"', false_value="N")
+    # ITTFL: all randomised subjects. A screen failure has a null ARMCD (SDTMIG 3.4).
+    .flag("ITTFL", criteria='pl.col("ARMCD").is_not_null()', false_value="N")
     .to_frame()
 )
 
-print(f"   SAFFL : {adsl['SAFFL'].value_counts().to_dicts()}")
-print(f"   ITTFL : {adsl['ITTFL'].value_counts().to_dicts()}")
+print(f"   SAFFL : {adsl['SAFFL'].value_counts().sort('SAFFL').to_dicts()}")
+print(f"   ITTFL : {adsl['ITTFL'].value_counts().sort('ITTFL').to_dicts()}")
 assert (adsl["SAFFL"] == "Y").sum() == adsl.height, "every pilot subject took a dose"
 
 # ════════════════════════════════════════════════════════════════════════════
 # 9. Last Date Known Alive (LSTALVDT)
 #    Admiral: derive_vars_extreme_event(ae, lb, adsl; order=last)
 #    Fleet: pick() — the latest date over all sources.  Within each event
-#    the latest record is kept; then the top-level order=["LSTALVDT"],
+#    the latest record is kept; then the top-level order_by=["LSTALVDT"],
 #    mode="last" makes the events compete on the date, as admiral does.
 #    A tie on the date goes to the first listed event.
 #
 #    Sources:
-#      a) AE end dates   (AEENDTC)  — most clinically recent contact
-#      b) AE start dates (AESTDTC)  — if AE end is missing
-#      c) Treatment end  (TRTEDT)   — fallback from ADSL itself
+#      a) AE end dates   (AENDT from AEENDTC)  — most clinically recent contact
+#      b) AE start dates (ASTDT from AESTDTC)  — if AE end is missing
+#      c) Treatment end  (TRTEDT)              — fallback from ADSL itself
+#    Every event sets a date: pick() refuses a mix of dates and DTC text.
+#    admiral: convert_dtc_to_dt(AESTDTC, highest_imputation = "M").
 # ════════════════════════════════════════════════════════════════════════════
 print("\n── 9. Last date known alive (LSTALVDT) — via pick() ─────────────────────")
+
+ae_dates = (
+    fleet.frame(ae)
+    .adam.date("AENDT", source="AEENDTC", flag=False)
+    .date("ASTDT", source="AESTDTC", flag=False)
+    .to_frame()
+)
 
 adsl = (
     fleet.frame(adsl)
@@ -486,15 +495,15 @@ adsl = (
         "LSTALVDT",
         events=[
             {
-                "when": pl.col("AEENDTC").is_not_null(),
-                "set": {"LSTALVDT": "AEENDTC"},
-                "source": ae,
+                "when": pl.col("AENDT").is_not_null(),
+                "set": {"LSTALVDT": "AENDT"},
+                "source": ae_dates,
                 "label": "AE end date (latest contact)",
             },
             {
-                "when": pl.col("AESTDTC").is_not_null(),
-                "set": {"LSTALVDT": "AESTDTC"},
-                "source": ae,
+                "when": pl.col("ASTDT").is_not_null(),
+                "set": {"LSTALVDT": "ASTDT"},
+                "source": ae_dates,
                 "label": "AE start date (fallback)",
             },
             {
@@ -504,7 +513,7 @@ adsl = (
             },
         ],
         by=["USUBJID"],
-        order=["LSTALVDT"],
+        order_by=["LSTALVDT"],
         mode="last",
     )
     .to_frame()
@@ -684,7 +693,7 @@ advs = (
     .merge(dataset=_trtsdt_map, on="USUBJID", how="left")
     .duration("ADY", start="TRTSDT", end="ADT")
     # admiral: flag_variables — last pre-dose visit (vsdy ≤ 0)
-    .flag("ABLFL", criteria='pl.col("vsdy") <= 0', by=["USUBJID", "PARAMCD"])
+    .flag("ABLFL", criteria='pl.col("vsdy") <= 0')
     .to_frame()  # materialise — ABLFL must exist before baseline() window fn
     .adam.baseline(  # admiral: derive_var_base
         "BASE", aval="AVAL", baseline_flag="ABLFL", by=["USUBJID", "PARAMCD"]
@@ -786,7 +795,7 @@ adae = (
     .to_frame()
 )
 
-ADAE_COLS = [
+ADAE_COLS = [  # a demo subset of ADAE, not the full admiral variable list
     "STUDYID",
     "USUBJID",
     "ASEQ",
@@ -872,7 +881,7 @@ adex_final = adex.select([c for c in ADEX_COLS if c in adex.columns])
 adex_final.write_parquet(OUT / "adex_admiral.parquet")
 
 print(f"   Shape        : {adex_final.shape[0]} records × {adex_final.shape[1]} variables")
-print(f"   Treatments   : {adex_final['EXTRT'].unique().to_list()}")
+print(f"   Treatments   : {adex_final['EXTRT'].unique().sort().to_list()}")
 print(f"   EXDURD range : {adex_final['EXDURD'].min()} – {adex_final['EXDURD'].max()} days")
 
 # ════════════════════════════════════════════════════════════════════════════

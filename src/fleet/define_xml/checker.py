@@ -50,19 +50,16 @@ Typical usage::
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import polars as pl
 
-from fleet.core.define_spec import load_spec_yaml
+from fleet.core.define_spec import read_define_yaml
 
 if TYPE_CHECKING:
     from fleet.validation.models import ValidationResult
-
-_SCHEMA_PATH = Path(__file__).parent / "schemas" / "define_spec_schema.json"
 
 # Maps simplified define type → acceptable Polars dtype families.
 # A column passes the type check if its dtype is an instance of any of the
@@ -96,9 +93,9 @@ _TYPE_LABEL: dict[str, str] = {
 }
 
 # CDISC core values that are treated as "required" when strict=True.
-_REQ_CORES: frozenset[str] = frozenset({"Req", "Required"})
+_REQ_CORES: frozenset[str] = frozenset({"Req"})
 # CDISC core values that are treated as "expected" (warning-level).
-_EXP_CORES: frozenset[str] = frozenset({"Exp", "Expected"})
+_EXP_CORES: frozenset[str] = frozenset({"Exp"})
 
 
 @dataclass
@@ -106,6 +103,13 @@ class TypeMismatch:
     variable: str
     define_type: str
     actual_dtype: str
+
+
+def _code_text(value: Any) -> str:
+    """The text of a coded value; a whole float (54.0, read from XPT) is '54'."""
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value)
 
 
 @dataclass
@@ -181,10 +185,12 @@ class CheckResult:
         print()
 
     def raise_on_errors(self) -> None:
-        """Raise ``ValueError`` if any errors were found."""
+        """Raise ``DefineCheckError`` (a ``ValueError``) if any errors were found."""
+        from fleet.core.exceptions import DefineCheckError
+
         if not self.is_valid:
             summary = "; ".join(self.errors)
-            raise ValueError(f"Dataset '{self.dataset}' failed define checks: {summary}")
+            raise DefineCheckError(f"Dataset '{self.dataset}' failed define checks: {summary}")
 
 
 def _classify(
@@ -198,9 +204,9 @@ def _classify(
     """Route *msg* to errors / warnings / info based on *core* and *strict*.
 
     Severity logic:
-    - ``core`` in {Req, Required} → error (or warning if ``strict=False``).
-    - ``core`` in {Exp, Expected} → warning.
-    - ``core`` in {Perm, Permissible, Conditionally Required, ""} → info.
+    - ``core`` Req → error (or warning if ``strict=False``).
+    - ``core`` Exp → warning.
+    - ``core`` Perm or Cond → info.
     - Fallback for defines without ``core``: ``mandatory=True`` → error/warning.
     """
     if core:
@@ -243,6 +249,11 @@ class DatasetChecker:
         When *True* (default), verify values of variables declaring a
         ``codelist:`` against the spec's inline ``codelists:`` items.
         Out-of-codelist values are errors.
+    check_values:
+        When *True* (default), verify the define ``length`` of text values,
+        no null in a ``mandatory`` variable, and no two records with the
+        same ``keys`` (a null key value counts as one value, as in
+        ``PROC SORT NODUPKEY``).
     validate_schema:
         When *True* (default), validate the YAML against the JSON schema on
         load.  Set to *False* to skip during tight inner loops.
@@ -256,18 +267,18 @@ class DatasetChecker:
         check_columns: bool = True,
         check_types: bool = True,
         check_ct: bool = True,
+        check_values: bool = True,
         validate_schema: bool = True,
     ) -> None:
         self._enabled = enabled
         self._check_columns = check_columns
         self._check_types = check_types
         self._check_ct = check_ct
+        self._check_values = check_values
 
-        path = Path(define_yaml_path)
-        self._data: dict[str, Any] = load_spec_yaml(path.read_text(encoding="utf-8"))
-
-        if validate_schema and enabled:
-            self._validate_schema()
+        self._data: dict[str, Any] = read_define_yaml(
+            define_yaml_path, validate_schema=validate_schema and enabled
+        )
 
         # Build a lookup: dataset_name (upper) → dataset dict
         self._datasets: dict[str, dict[str, Any]] = {
@@ -284,36 +295,40 @@ class DatasetChecker:
 
     def check(
         self,
-        df: pl.DataFrame,
+        df: pl.DataFrame | pl.LazyFrame,
         dataset: str,
         *,
         strict: bool = True,
     ) -> CheckResult:
         """Check *df* against the define for *dataset*.
 
-        Parameters
-        ----------
-        df:
-            The materialised ``pl.DataFrame`` to check.
-        dataset:
-            Dataset name to look up in the define (e.g. ``"DM"``).
-            Case-insensitive.
-        strict:
-            When ``True`` (default), ``core="Req"`` issues are errors.
-            When ``False``, ``Req`` issues are downgraded to warnings so
-            the pipeline can proceed despite missing required variables
-            (e.g. during development or when source data is incomplete).
+        Args:
+            df: The ``pl.DataFrame`` to check.  A ``pl.LazyFrame`` is
+                collected.
+            dataset: Dataset name to look up in the define (e.g. ``"DM"``).
+                Case-insensitive.
+            strict: When ``True`` (default), ``core="Req"`` issues are
+                errors.  When ``False``, ``Req`` issues are downgraded to
+                warnings so the pipeline can proceed despite missing
+                required variables (e.g. during development or when source
+                data is incomplete).
 
-        Returns
-        -------
-        CheckResult
-            Always returns a result — never raises unless you call
-            ``result.raise_on_errors()``.
+        Returns:
+            CheckResult: Always returns a result — never raises unless you
+                call ``result.raise_on_errors()``.
+
+        Examples:
+            Check DM against the pilot define::
+
+                checker = DatasetChecker("examples/cdiscpilot01/sdtm/define.yaml")
+                checker.check(dm, "DM").print_report()
         """
         result = CheckResult(dataset=dataset.upper())
 
         if not self._enabled:
             return result
+        if isinstance(df, pl.LazyFrame):
+            df = df.collect()
 
         ds_def = self._datasets.get(dataset.upper())
         if ds_def is None:
@@ -328,7 +343,7 @@ class DatasetChecker:
         }
 
         # Labels always populated regardless of other flags
-        result.labels = {name: v["label"] for name, v in vars_by_name.items()}
+        result.labels = {name: v.get("label", "") for name, v in vars_by_name.items()}
 
         # Actual DataFrame columns excluding private _-prefix columns
         actual_cols: set[str] = {c for c in df.columns if not c.startswith("_")}
@@ -342,6 +357,9 @@ class DatasetChecker:
         if self._check_ct:
             self._run_ct_checks(result, df, vars_by_name, actual_cols)
 
+        if self._check_values:
+            self._run_value_checks(result, df, ds_def, vars_by_name, actual_cols, strict=strict)
+
         return result
 
     def datasets(self) -> list[str]:
@@ -353,7 +371,11 @@ class DatasetChecker:
         ds_def = self._datasets.get(dataset.upper())
         if ds_def is None:
             return {}
-        return {v["name"]: v["label"] for v in ds_def["variables"] if not v["name"].startswith("_")}
+        return {
+            v["name"]: v.get("label", "")
+            for v in ds_def["variables"]
+            if not v["name"].startswith("_")
+        }
 
     # ------------------------------------------------------------------ #
     # Check runners                                                        #
@@ -398,13 +420,19 @@ class DatasetChecker:
         for col_name, var_def in vars_by_name.items():
             if col_name not in actual_cols:
                 continue  # already reported as missing
-            define_type = var_def["type"]
+            define_type = var_def.get("type")
+            if define_type is None:
+                continue  # the schema check reports a variable with no type
             actual_dtype = schema[col_name]
             # --DTC is ISO 8601 text whatever the define type says (SDTMIG 3.4 4.4)
             is_dtc = col_name.upper().endswith("DTC")
             compat_types = (pl.String,) if is_dtc else _POLARS_COMPAT.get(define_type, ())
 
             ok = isinstance(actual_dtype, compat_types)
+            if not ok and define_type == "integer" and actual_dtype in (pl.Float32, pl.Float64):
+                # SAS transport has only Char and Num: an XPT code reads as a float.
+                values = df[col_name].drop_nulls()
+                ok = bool((values == values.round(0)).all())
             if not ok:
                 mm = TypeMismatch(
                     variable=col_name,
@@ -469,7 +497,8 @@ class DatasetChecker:
             }
             ct_mapping: dict[str, Any] = (var_def.get("derivation") or {}).get("ct_map") or {}
 
-            values = [str(v) for v in df[col_name].drop_nulls().unique().to_list() if str(v) != ""]
+            values = [_code_text(v) for v in df[col_name].drop_nulls().unique().to_list()]
+            values = [v for v in values if v != ""]
             invalid = sorted(v for v in values if v not in coded)
             if not invalid:
                 continue
@@ -488,6 +517,60 @@ class DatasetChecker:
             )
             result.ct_violations.append(msg)
             result.errors.append(msg)
+
+    @staticmethod
+    def _run_value_checks(
+        result: CheckResult,
+        df: pl.DataFrame,
+        ds_def: dict[str, Any],
+        vars_by_name: dict[str, dict[str, Any]],
+        actual_cols: set[str],
+        *,
+        strict: bool = True,
+    ) -> None:
+        """Check the define Length, the Mandatory variables and the key of *df*."""
+        found: list[str] = []
+        for col_name, var_def in vars_by_name.items():
+            if col_name not in actual_cols:
+                continue
+            column = df[col_name]
+            length = var_def.get("length")
+            if length is not None and column.dtype == pl.String:
+                too_long = column.str.len_bytes() > int(length)
+                if too_long.any():
+                    longest = int(column.str.len_bytes().max() or 0)
+                    found.append(
+                        f"Column '{col_name}': {int(too_long.sum())} value(s) longer than the "
+                        f"define Length {length} (longest {longest} bytes)."
+                    )
+            if var_def.get("mandatory"):
+                empty = column.is_null()
+                if column.dtype == pl.String:
+                    empty = empty | (column.str.strip_chars() == "")
+                if empty.any():
+                    found.append(
+                        f"Column '{col_name}': {int(empty.sum())} null value(s), but the "
+                        "define marks it Mandatory."
+                    )
+        keys = list(ds_def.get("keys") or [])
+        absent = [k for k in keys if k not in actual_cols]
+        if keys and absent:
+            found.append(
+                f"Key variable(s) {absent} are missing, so duplicate keys are not checked."
+            )
+        elif keys:
+            dupes = df.select(keys).is_duplicated()
+            if dupes.any():
+                example = df.filter(dupes).select(keys).row(0)
+                found.append(
+                    f"{int(dupes.sum())} record(s) share their key {keys} with another "
+                    f"record (first: {dict(zip(keys, example, strict=True))})."
+                )
+        for msg in found:
+            if strict:
+                result.errors.append(msg)
+            else:
+                result.warnings.append(msg + " [strict=False: downgraded from error]")
 
     # ------------------------------------------------------------------ #
     # CDISC Core validation                                                #
@@ -510,31 +593,58 @@ class DatasetChecker:
         Requires the CDISC Rules Engine to be installed and discoverable.  See
         ``OfficialCDISCValidator`` for setup instructions.
 
-        Parameters
-        ----------
-        df:
-            The materialised ``pl.DataFrame`` to validate.
-        dataset:
-            Dataset / domain name (e.g. ``"DM"``, ``"ADVS"``).
-        standard:
-            Override — e.g. ``"SDTMIG"`` or ``"ADAMIG"``.
-        version:
-            Override — e.g. ``"3.4"`` or ``"1.1"``.
+        Args:
+            df: The materialised ``pl.DataFrame`` to validate.
+            dataset: Dataset / domain name (e.g. ``"DM"``, ``"ADVS"``).
+            standard: Override — e.g. ``"SDTMIG"`` or ``"ADAMIG"``.
+            version: Override — e.g. ``"3.4"`` or ``"1.1"``.
 
-        Returns
-        -------
-        ValidationResult
+        Returns:
+            ValidationResult: The engine findings.
+
+        Raises:
+            ValidationSetupError: The run setup is refused (an IG version
+                Fleet does not support), or no engine is found.  The
+                engine, custom rules, timeout and accepted findings come
+                from the study config, as for ``fleet validate``.
+
+        Examples:
+            Run CORE on DM with the define's standard::
+
+                checker = DatasetChecker("examples/cdiscpilot01/sdtm/define.yaml")
+                result = checker.validate(dm, "DM")
         """
+        from fleet.core.exceptions import ValidationSetupError
+        from fleet.validation.run_setup import build_run_setup, missing_engine_reason
         from fleet.validation.service import ValidationService
 
         study = self._data.get("study", {})
         detected_standard = (standard or study.get("standard", "SDTMIG")).upper()
-        detected_version = version or str(study.get("standard_version", "3.4"))
+        declared = study.get("standard_version")
+        setup = build_run_setup(
+            name=dataset,
+            standard="adam" if "ADAM" in detected_standard else "sdtm",
+            version=version or (str(declared) if declared is not None else None),
+        )
+        if setup.engine.value is None:
+            raise ValidationSetupError(missing_engine_reason(setup))
 
-        svc = ValidationService()
-        if "ADAM" in detected_standard:
-            return svc.validate_adam(df, dataset=dataset, version=detected_version)
-        return svc.validate_sdtm(df, domain=dataset, version=detected_version)
+        svc = ValidationService(rules_engine_path=setup.engine.value)
+        ig, rules, timeout = (
+            setup.ig_version.value,
+            setup.custom_rules.value,
+            setup.timeout.value,
+        )
+        if setup.standard.value == "adam":
+            result = svc.validate_adam(
+                df, dataset=dataset, version=ig, custom_rules=rules, timeout=timeout
+            )
+        else:
+            result = svc.validate_sdtm(
+                df, domain=dataset, version=ig, custom_rules=rules, timeout=timeout
+            )
+        result.apply_setup(setup)
+        return result
 
     # ------------------------------------------------------------------ #
     # XPT export                                                           #
@@ -559,24 +669,27 @@ class DatasetChecker:
 
         Requires ``pyreadstat``.  Install with ``uv add "fleet-cdisc[io]"``.
 
-        Parameters
-        ----------
-        df:
-            The materialised ``pl.DataFrame`` to write.
-        dataset:
-            Dataset name used to look up the variable order in the define.
-            It must equal the file name (FDA TCG 3.1.1).
-        path:
-            Destination file path (e.g. ``"outputs/dm.xpt"``).
-        reorder:
-            Whether to reorder / filter columns to match define order.
+        Args:
+            df: The materialised ``pl.DataFrame`` to write.
+            dataset: Dataset name used to look up the variable order in the
+                define.  It must equal the file name (FDA TCG 3.1.1).
+            path: Destination file path (e.g. ``"outputs/dm.xpt"``).
+            reorder: Whether to reorder / filter columns to match define
+                order.
 
-        Returns
-        -------
-        Path
-            Resolved path of the written file.
+        Returns:
+            Path: Resolved path of the written file.
+
+        Raises:
+            FleetIOError: When the file name is not the dataset name.
+
+        Examples:
+            Write DM with the define labels::
+
+                checker = DatasetChecker("examples/cdiscpilot01/sdtm/define.yaml")
+                checker.write_xpt(dm, "DM", "outputs/dm.xpt")
         """
-        from fleet.core.exceptions import IOError as FleetIOError
+        from fleet.core.exceptions import FleetIOError
         from fleet.io import save_xpt
 
         out = Path(path)
@@ -599,19 +712,3 @@ class DatasetChecker:
             label=ds_def.get("label") if ds_def is not None else None,
             column_labels=self.labels(dataset),
         )
-
-    # ------------------------------------------------------------------ #
-    # Schema validation                                                    #
-    # ------------------------------------------------------------------ #
-
-    def _validate_schema(self) -> None:
-        import jsonschema
-
-        from fleet.core.exceptions import SpecSchemaError
-
-        schema = json.loads(_SCHEMA_PATH.read_text(encoding="utf-8"))
-        validator = jsonschema.Draft202012Validator(schema)
-        errors = list(validator.iter_errors(self._data))
-        if errors:
-            msgs = "\n".join(f"  - {e.json_path}: {e.message}" for e in errors[:5])
-            raise SpecSchemaError(f"define YAML failed schema validation:\n{msgs}")

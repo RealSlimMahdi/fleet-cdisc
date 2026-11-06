@@ -104,12 +104,14 @@ nav:
       - Why Fleet?: why-fleet.md
       - Installation: getting-started/installation.md
       - Quickstart: getting-started/quickstart.md
+      - Coming from SAS: getting-started/from-sas.md
       - CLI Reference: getting-started/cli.md
       - IDE & AI Tooling: getting-started/ide-tooling.md
       - Troubleshooting Guide: getting-started/troubleshooting.md
   - Concepts:
       - How define.yaml Works: concepts/define-yaml.md
       - Namespace Pipeline: concepts/pipeline.md
+      - Coming from SAS: concepts/coming-from-sas.md
       - "Event-Priority Derivation (pick)": concepts/pick.md
       - Trial Design Domains: concepts/tdd.md
       - Validation with CORE: concepts/validation-core.md
@@ -125,7 +127,6 @@ nav:
       - "ADTTE (time-to-event)": examples/adtte_pipeline.md
       - TLG from a Spec: examples/tlg_pipeline.md
       - Code-Driven Workflow: examples/01_code_driven_pipeline.ipynb
-      - Spec-Driven Workflow: examples/02_spec_driven_pipeline.ipynb
   - API Reference:
       - Overview: api/index.md
       - Verb Cheat Sheet: api/cheat_sheet.md

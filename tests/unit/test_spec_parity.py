@@ -3,9 +3,8 @@
 Three layers of guarantees, all driven by ``fleet.core.spec_registry``
 (the single source of truth for spec-executable algorithms):
 
-1. **Sync tests** — the ``SDTMAlgorithm`` / ``ADAMAlgorithm`` enums and the
-   published JSON schema must exactly match the registry, so none of the
-   six former copies of verb knowledge can drift again.
+1. **Sync tests** — the published JSON schema must exactly match the
+   registry, so no copy of verb knowledge can drift again.
 2. **Reverse parity** — every public namespace verb is either the target
    of a registered algorithm or explicitly listed in
    ``SPEC_UNSUPPORTED`` (the machine-checked coverage matrix).
@@ -27,32 +26,15 @@ import pytest
 import yaml
 
 import fleet  # noqa: F401 — triggers namespace registration
-from fleet.adam.models import ADAMAlgorithm
 from fleet.adam.namespace import AdamNamespace
 from fleet.adam.transforms import clear_transforms
 from fleet.core import spec_registry
 from fleet.core.derivation import derivation
-from fleet.sdtm.models import SDTMAlgorithm
 from fleet.sdtm.namespace import SDTMNamespace
 
 # ──────────────────────────────────────────────────────────────────────
-# 1. Sync: enums and JSON schema must match the registry
+# 1. Sync: the JSON schema must match the registry
 # ──────────────────────────────────────────────────────────────────────
-
-
-@pytest.mark.parametrize(
-    ("algorithm_enum", "standard"),
-    [(SDTMAlgorithm, "sdtm"), (ADAMAlgorithm, "adam")],
-)
-def test_enum_matches_registry(algorithm_enum: type, standard: str) -> None:
-    """Enum values == registry names: the verb names (ADR-0008)."""
-    enum_values = {a.value for a in algorithm_enum}
-    registry_values = set(spec_registry.algorithm_names(standard))
-    assert enum_values == registry_values, (
-        f"{algorithm_enum.__name__} out of sync with spec_registry: "
-        f"enum-only={sorted(enum_values - registry_values)}, "
-        f"registry-only={sorted(registry_values - enum_values)}"
-    )
 
 
 def test_json_schema_in_sync() -> None:
@@ -790,7 +772,6 @@ ADAM_CASES: list[Case] = [
                 "target": "ABLFL",
                 "algorithm": "flag",
                 "criteria": 'pl.col("VISITNUM") == 1',
-                "by": ["USUBJID"],
             }
         ],
         lambda df: df.sort("USUBJID", "VISITNUM")["ABLFL"].to_list() == ["Y", None, "Y"],

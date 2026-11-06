@@ -57,17 +57,18 @@ def docstring_summary(doc: str | None) -> str:
     if not text:
         return ""
     # Take everything up to the first blank line, then end at a period that a
-    # space or the end follows, so 18.5 and v2.1 stay whole.
+    # space or the end follows, so 18.5 and v2.1 stay whole; an abbreviation
+    # (e.g., i.e., etc.) does not end the sentence.
     head = text.split("\n\n", 1)[0].strip().replace("\n", " ")
-    match = re.search(r"\.(?=\s|$)", head)
-    if match:
-        head = head[: match.start()].strip() + "."
+    for match in re.finditer(r"\.(?=\s|$)", head):
+        if not _ABBREVIATION.search(head[: match.end()]):
+            head = head[: match.start()].strip() + "."
+            break
     return head
 
 
-#: Backward-compatible aliases.
-first_sentence = docstring_summary
-_first_sentence = docstring_summary
+#: Abbreviations whose final period does not end a sentence.
+_ABBREVIATION = re.compile(r"(?:^|[\s(])(?:e\.g|i\.e|etc|vs|cf)\.$")
 
 
 def _candidate_namespaces() -> list[type]:
@@ -99,16 +100,21 @@ def _candidate_namespaces() -> list[type]:
 
 def resolve_algorithm_docstring(
     algorithm: str,
+    standard: str | None = None,
 ) -> tuple[str, str] | tuple[None, None]:
     """Resolve a Fleet algorithm name to its docstring summary and dotted path.
 
     Searches the known SDTM/ADaM verb namespace classes for a method whose
     name equals *algorithm*.  The first match wins (SDTM is searched
-    before ADaM mixins).
+    before ADaM mixins).  With *standard*, only the registry and the
+    namespace classes of that standard are searched, so ``seq`` in an ADaM
+    spec names the ADaM verb.
 
     Args:
         algorithm: Algorithm string from a ``define.yaml`` derivation
             block (e.g. ``"assign"`` or ``"baseline"``).
+        standard: ``"sdtm"`` or ``"adam"`` to search one standard only;
+            ``None`` searches both.
 
     Returns:
         Tuple of ``(summary, dotted_path)`` if a match is found, or
@@ -124,24 +130,43 @@ def resolve_algorithm_docstring(
     # Resolve through the spec registry first: the algorithm is the verb,
     # dotted for a sub-namespace verb (``onco.best_overall_response``).
     method_names = [algorithm]
+    standards = ("sdtm", "adam") if standard is None else (standard,)
     try:
         from fleet.core.spec_registry import get_algorithm
 
-        for standard in ("sdtm", "adam"):
-            algo = get_algorithm(standard, algorithm)
+        for std in standards:
+            algo = get_algorithm(std, algorithm)
             if algo is not None and algo.verb not in method_names:
                 method_names.append(algo.verb)
     except Exception:  # pragma: no cover — resolver must never break generation
         pass
 
+    classes = [
+        cls
+        for cls in _candidate_namespaces()
+        if standard is None or cls.__module__.startswith(f"fleet.{standard}.")
+    ]
     for name in method_names:
-        for cls in _candidate_namespaces():
-            method = getattr(cls, name, None)
+        for cls in classes:
+            method = _dotted_method(cls, name)
             if method is None or not callable(method):
                 continue
             summary = docstring_summary(method.__doc__)
             return (summary, defining_method_path(cls, name))
     return (None, None)
+
+
+def _dotted_method(cls: type, name: str) -> Any:
+    """The method *name* of *cls*; a dotted name walks the sub-namespace properties."""
+    from fleet.core.lineage import sub_namespace_class
+
+    *path, leaf = name.split(".")
+    for part in path:
+        sub = sub_namespace_class(cls, part)
+        if sub is None:
+            return None
+        cls = sub
+    return getattr(cls, leaf, None)
 
 
 def resolve_callable_docstring(

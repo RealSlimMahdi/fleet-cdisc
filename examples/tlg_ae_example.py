@@ -345,7 +345,7 @@ print(f"\n   ARD shape: {ard_builder.shape[0]} rows × {ard_builder.shape[1]} co
 
 # Show header rows
 hdr = ard_builder.filter((pl.col("variable") == "") & (pl.col("stat_name") != "N"))
-print(f"   Header rows: {hdr['variable_level'].unique().to_list()}")
+print(f"   Header rows: {hdr['variable_level'].unique().sort().to_list()}")
 
 
 # ════════════════════════════════════════════════════════════════════════════

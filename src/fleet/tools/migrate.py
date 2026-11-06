@@ -23,25 +23,31 @@ preserved).  libcst ships behind the ``migrate`` extra::
 What gets rewritten
 -------------------
 * Deprecated verbs → canonical verbs, including their kwargs:
-  ``assign_no_ct``/``assign_ct``/``hardcode_no_ct``/``hardcode_ct``/
-  ``dataset_level``/``assigned`` → ``assign``; ``rename(source=)`` and
-  ``source(from_col=)`` → ``assign``; ``if_then_else``/``condderivation``
-  → ``case_when``; ``lookup`` → ``merge``.
+  ``assign_no_ct``/``assign_ct``/``hardcode_no_ct``/``hardcode_ct`` →
+  ``assign``; ``dataset_level(value=)``/``assigned(value=)``,
+  ``rename(source=)`` and ``source(from_col=)`` → ``assign``;
+  ``if_then_else``/``condderivation`` → ``case_when``;
+  ``lookup(dataset=)`` → ``merge``; ``assign_dtc(input_format=)`` →
+  ``date(format=)``.
 * Deprecated kwargs on kept verbs: ``groups=``/``by_vars=``/
   ``group_cols=``/``group_by=`` → ``by=``; ``target_cols=``/``keep_cols=``
   → ``keep=``.
-* A leading positional list on ``merge``/``lookup`` (the legacy
-  ``target_cols`` position) → a trailing ``keep=[...]`` keyword.
+* A leading positional argument on ``merge(dataset=)``/``lookup(dataset=)``
+  (the legacy ``target_cols`` position) → ``keep=``, in place.
 
-Renames are keyed on the *method name* of the call, so unrelated calls
-(e.g. Polars' own ``df.rename({...})``, which has no ``source=`` kwarg)
-are left untouched.
+Renames are keyed on the *method name* of the call, and a name that other
+libraries also use (``rename``, ``lookup``, ``merge``) needs the Fleet
+keyword, so unrelated calls (Polars' ``df.rename({...})``,
+``codecs.lookup(...)``, ``heapq.merge(...)``) are left untouched.  A call
+that has no automatic rewrite (``remove_dup``) and an old verb name used
+as a value (``fn = df.sdtm.assign_no_ct``) are reported, not rewritten.
 """
 
 from __future__ import annotations
 
 import argparse
 import difflib
+import os
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -51,8 +57,7 @@ if TYPE_CHECKING:
 
 _INSTALL_HINT = (
     "fleet.tools.migrate requires libcst, which is not installed. "
-    "Install it with the 'migrate' extra: uv pip install 'fleet-cdisc[migrate]' "
-    "(or: uv sync --extra migrate)."
+    "Install it with the 'migrate' extra: uv add 'fleet-cdisc[migrate]'."
 )
 
 #: Deprecated verb → canonical verb (plain method rename).
@@ -61,11 +66,9 @@ VERB_RENAMES: dict[str, str] = {
     "assign_ct": "assign",
     "hardcode_no_ct": "assign",
     "hardcode_ct": "assign",
-    "dataset_level": "assign",
-    "assigned": "assign",
     "if_then_else": "case_when",
     "condderivation": "case_when",
-    "lookup": "merge",
+    "assign_dtc": "date",
 }
 
 #: Deprecated verbs renamed only when a signature-identifying kwarg is
@@ -75,6 +78,9 @@ GUARDED_VERB_RENAMES: dict[str, tuple[str, str]] = {
     # old verb -> (guard kwarg that must be present, canonical verb)
     "rename": ("source", "assign"),
     "source": ("from_col", "assign"),
+    "lookup": ("dataset", "merge"),
+    "assigned": ("value", "assign"),
+    "dataset_level": ("value", "assign"),
 }
 
 #: Per-verb kwarg renames applied together with the verb rename.
@@ -85,6 +91,7 @@ VERB_KWARG_RENAMES: dict[str, dict[str, str]] = {
     "condderivation": {"conditions": "when", "else_value": "else_"},
     "lookup": {"target_cols": "keep"},
     "source": {"from_col": "source"},
+    "assign_dtc": {"input_format": "format"},
 }
 
 #: Kwarg-only renames on verbs that keep their name.
@@ -108,8 +115,63 @@ KWARG_RENAMES: dict[str, dict[str, str]] = {
     "merge": {"target_cols": "keep"},
 }
 
-#: Verbs whose legacy *leading positional list* argument becomes keep=.
+#: Verbs whose legacy *leading positional* argument becomes keep= (with dataset= given).
 POSITIONAL_LIST_TO_KEEP: frozenset[str] = frozenset({"merge", "lookup"})
+
+#: Removed verbs with no automatic rewrite → the note printed for a call.
+MANUAL_REWRITES: dict[str, str] = {
+    "remove_dup": "use .nodup(subset=..., order_by=..., keep=...) and choose the kept row",
+}
+
+#: Old verb names that only Fleet used: reported when used as a value, not called.
+FLEET_ONLY_NAMES: frozenset[str] = frozenset(
+    {
+        "assign_no_ct",
+        "assign_ct",
+        "hardcode_no_ct",
+        "hardcode_ct",
+        "if_then_else",
+        "condderivation",
+        "assign_dtc",
+        "dataset_level",
+        "remove_dup",
+    }
+)
+
+#: ``--write`` help of both migrate tools.
+WRITE_HELP = (
+    "Rewrite files in place (default: print a unified diff). No backup file is kept: "
+    "commit the files to git first."
+)
+
+#: Folders that `fleet migrate` never walks into: caches, installed packages, tool state.
+_SKIP_DIRS = frozenset({"__pycache__", "site-packages", "node_modules"})
+
+
+def iter_source_files(paths: Sequence[str], suffixes: tuple[str, ...]) -> list[Path]:
+    """The files under *paths* with one of *suffixes*; a named file is always kept.
+
+    A directory walk skips hidden folders (``.venv``, ``.git``), caches,
+    ``site-packages`` and each folder that holds a ``pyvenv.cfg``.
+    """
+    files: list[Path] = []
+    for raw in paths:
+        root = Path(raw)
+        if not root.is_dir():
+            files.append(root)
+            continue
+        found: list[Path] = []
+        for folder, dirs, names in os.walk(root):
+            dirs[:] = [
+                d
+                for d in dirs
+                if not d.startswith(".")
+                and d not in _SKIP_DIRS
+                and not (Path(folder) / d / "pyvenv.cfg").is_file()
+            ]
+            found.extend(Path(folder) / n for n in names if n.endswith(suffixes))
+        files.extend(sorted(found))
+    return files
 
 
 def _require_libcst():
@@ -120,17 +182,42 @@ def _require_libcst():
     return libcst
 
 
-def _build_transformer(cst, changes: list[str]):
-    """Create the libcst transformer class bound to a change log."""
+def _build_transformer(cst, changes: list[str], notes: list[str]):
+    """Create the libcst transformer class bound to a change log and a note log."""
+    from libcst.metadata import PositionProvider
 
     class _FleetMigrator(cst.CSTTransformer):
-        METADATA_DEPENDENCIES = ()
+        METADATA_DEPENDENCIES = (PositionProvider,)
+
+        def __init__(self) -> None:
+            super().__init__()
+            self._called: set[int] = set()
+
+        def _line(self, node) -> int:
+            return self.get_metadata(PositionProvider, node).start.line
+
+        def visit_Call(self, node) -> bool:
+            self._called.add(id(node.func))
+            return True
+
+        def leave_Attribute(self, original_node, updated_node):
+            name = original_node.attr.value
+            if name in FLEET_ONLY_NAMES and id(original_node) not in self._called:
+                notes.append(f"line {self._line(original_node)}: .{name} is used as a value")
+            return updated_node
 
         def leave_Call(self, original_node, updated_node):
             func = updated_node.func
             if not isinstance(func, cst.Attribute):
                 return updated_node
             name = func.attr.value
+            keywords = {a.keyword.value for a in updated_node.args if a.keyword is not None}
+
+            if name in MANUAL_REWRITES:
+                notes.append(
+                    f"line {self._line(original_node)}: .{name}(): {MANUAL_REWRITES[name]}"
+                )
+                return updated_node
 
             new_verb: str | None = None
             kwarg_map: dict[str, str] = {}
@@ -140,9 +227,7 @@ def _build_transformer(cst, changes: list[str]):
                 kwarg_map = dict(VERB_KWARG_RENAMES.get(name, {}))
             elif name in GUARDED_VERB_RENAMES:
                 guard, target = GUARDED_VERB_RENAMES[name]
-                if any(
-                    a.keyword is not None and a.keyword.value == guard for a in updated_node.args
-                ):
+                if guard in keywords:
                     new_verb = target
                     kwarg_map = dict(VERB_KWARG_RENAMES.get(name, {}))
             elif name in KWARG_RENAMES:
@@ -153,22 +238,28 @@ def _build_transformer(cst, changes: list[str]):
 
             args = list(updated_node.args)
             changed = False
-            moved_positional = False
 
-            # Legacy leading positional list on merge/lookup → keep=
-            if name in POSITIONAL_LIST_TO_KEEP and args:
-                first = args[0]
-                if first.keyword is None and isinstance(first.value, cst.List):
-                    keep_arg = first.with_changes(
-                        keyword=cst.Name("keep"),
-                        equal=cst.AssignEqual(
-                            whitespace_before=cst.SimpleWhitespace(""),
-                            whitespace_after=cst.SimpleWhitespace(""),
-                        ),
-                    )
-                    args = args[1:] + [keep_arg]
-                    changed = moved_positional = True
-                    changes.append(f".{name}([...]) positional column list -> keep=[...]")
+            # Legacy leading positional column list on merge/lookup -> keep=, in place,
+            # so its comma and comment stay.  Only a Fleet call (dataset= given) with
+            # no other positional argument: a keyword may not precede a positional one.
+            if (
+                name in POSITIONAL_LIST_TO_KEEP
+                and args
+                and "dataset" in keywords
+                and not keywords & {"keep", "target_cols"}
+                and args[0].keyword is None
+                and not args[0].star
+                and not any(a.keyword is None and a.star != "**" for a in args[1:])
+            ):
+                args[0] = args[0].with_changes(
+                    keyword=cst.Name("keep"),
+                    equal=cst.AssignEqual(
+                        whitespace_before=cst.SimpleWhitespace(""),
+                        whitespace_after=cst.SimpleWhitespace(""),
+                    ),
+                )
+                changed = True
+                changes.append(f".{name}() leading positional column list -> keep=")
 
             # Kwarg renames
             for i, arg in enumerate(args):
@@ -188,28 +279,19 @@ def _build_transformer(cst, changes: list[str]):
 
             if not changed:
                 return updated_node
-            if moved_positional and args:
-                # Repair comma placement after moving keep= to the end.
-                fixed_args = []
-                for i, arg in enumerate(args):
-                    if i < len(args) - 1 and not isinstance(arg.comma, cst.Comma):
-                        arg = arg.with_changes(
-                            comma=cst.Comma(whitespace_after=cst.SimpleWhitespace(" "))
-                        )
-                    elif i == len(args) - 1:
-                        arg = arg.with_changes(comma=cst.MaybeSentinel.DEFAULT)
-                    fixed_args.append(arg)
-                args = fixed_args
             return updated_node.with_changes(func=new_func, args=args)
 
     return _FleetMigrator()
 
 
-def migrate_source(code: str) -> tuple[str, list[str]]:
+def migrate_source(code: str, *, notes: list[str] | None = None) -> tuple[str, list[str]]:
     """Rewrite deprecated Fleet spellings in *code* to canonical ones.
 
     Args:
         code: Python source text.
+        notes: When given, receives one line per old spelling that has no
+            automatic rewrite (``remove_dup``, an old verb name used as a
+            value).  The code at those places is left as is.
 
     Returns:
         tuple: ``(new_code, changes)`` where *changes* is one
@@ -225,45 +307,19 @@ def migrate_source(code: str) -> tuple[str, list[str]]:
 
             from fleet.tools.migrate import migrate_source
 
-            new_code, changes = migrate_source(open("dm.py").read())
-            for change in changes:
+            notes = []
+            new_code, changes = migrate_source(open("dm.py").read(), notes=notes)
+            for change in changes + notes:
                 print(change)
     """
     cst = _require_libcst()
     changes: list[str] = []
-    module = cst.parse_module(code)
-    new_module = module.visit(_build_transformer(cst, changes))
+    found: list[str] = []
+    wrapper = cst.metadata.MetadataWrapper(cst.parse_module(code))
+    new_module = wrapper.visit(_build_transformer(cst, changes, found))
+    if notes is not None:
+        notes.extend(found)
     return new_module.code, changes
-
-
-def migrate_file(path: str | Path, *, write: bool = False) -> list[str]:
-    """Migrate one file; optionally write the result back in place.
-
-    Args:
-        path: Path to a Python source file.
-        write: When ``True``, overwrite the file with the migrated code;
-            otherwise the file is left untouched.
-
-    Returns:
-        list[str]: The change descriptions (empty when nothing changed).
-    """
-    p = Path(path)
-    original = p.read_text(encoding="utf-8")
-    new_code, changes = migrate_source(original)
-    if changes and write:
-        p.write_text(new_code, encoding="utf-8")
-    return changes
-
-
-def _iter_python_files(paths: Sequence[str]) -> list[Path]:
-    files: list[Path] = []
-    for raw in paths:
-        p = Path(raw)
-        if p.is_dir():
-            files.extend(sorted(p.rglob("*.py")))
-        else:
-            files.append(p)
-    return files
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -274,8 +330,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             arguments: one or more file/directory paths and ``--write``.
 
     Returns:
-        int: Process exit code — ``0`` on success (including "nothing to
-            do"), ``1`` when libcst is missing or a file cannot be parsed.
+        int: Process exit code: ``0`` on success (including "nothing to
+            do"); ``1`` when libcst is missing, a file cannot be read,
+            parsed or written, or a place needs a rewrite by hand.  The
+            other files are still migrated.
     """
     parser = argparse.ArgumentParser(
         prog="python -m fleet.tools.migrate",
@@ -285,7 +343,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--write",
         action="store_true",
-        help="Rewrite files in place (default: print a unified diff).",
+        help=WRITE_HELP,
     )
     args = parser.parse_args(argv)
 
@@ -297,21 +355,36 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     exit_code = 0
     total_changes = 0
-    for path in _iter_python_files(args.files):
+    for path in iter_source_files(args.files, (".py",)):
         try:
-            original = path.read_text(encoding="utf-8")
-            new_code, changes = migrate_source(original)
+            with open(path, encoding="utf-8", newline="") as fh:
+                original = fh.read()
+        except (OSError, UnicodeError) as err:
+            print(f"{path}: cannot read: {err}", file=sys.stderr)
+            exit_code = 1
+            continue
+        notes: list[str] = []
+        try:
+            new_code, changes = migrate_source(original, notes=notes)
         except ImportError:
             raise
         except Exception as err:  # parse errors etc. — report and continue
             print(f"{path}: failed to migrate: {err}", file=sys.stderr)
             exit_code = 1
             continue
+        for note in notes:
+            print(f"{path}: left as is, rewrite by hand: {note}", file=sys.stderr)
+            exit_code = 1
         if not changes:
             continue
-        total_changes += len(changes)
         if args.write:
-            path.write_text(new_code, encoding="utf-8")
+            try:
+                with open(path, "w", encoding="utf-8", newline="") as fh:
+                    fh.write(new_code)
+            except OSError as err:
+                print(f"{path}: cannot write: {err}", file=sys.stderr)
+                exit_code = 1
+                continue
             print(f"{path}: {len(changes)} change(s) written")
         else:
             diff = difflib.unified_diff(
@@ -321,9 +394,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 tofile=f"{path} (migrated)",
             )
             sys.stdout.writelines(diff)
+        total_changes += len(changes)
         for change in changes:
             print(f"  {change}", file=sys.stderr)
-    if total_changes == 0:
+    if total_changes == 0 and exit_code == 0:
         print("Nothing to migrate.", file=sys.stderr)
     return exit_code
 

@@ -55,7 +55,7 @@ Display contract (derived from NEST AET01 / pharma conventions)
 
 **Row types and indentation:**
 
-  - ``header``:  ``variable == ""`` — no indent, bold, optional separator above hierarchy
+  - ``header``:  ``variable == ""`` — no indent, not bold, separator above hierarchy
   - ``group``:   parent stub row — level-0 indent, bold (SOC or PARAMCD);
     a count parent (SOC) carries its own n (%) cells, a parent of
     continuous rows (PARAMCD) stays blank
@@ -80,10 +80,14 @@ Display contract (derived from NEST AET01 / pharma conventions)
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 
 import polars as pl
+
+from .._ard import level_text
+from .._specs import SchemaError
 
 # ------------------------------------------------------------------ #
 # Phase 1 — Display contract models                                    #
@@ -98,8 +102,9 @@ class RenderMetadata:
         title: Table/listing title (e.g. "Table 14.3.1.1").
         subtitle: Subtitle line (e.g. "Summary of AEs — Safety Population").
         footnotes: List of footnote strings.
-        page_by: ARD variable to page-break on (e.g. ``"PARAMCD"``) —
-            honoured by :func:`paginate` and every renderer.
+        page_by: ARD variable to page-break on (e.g. ``"PARAMCD"``).
+            Tables only: :func:`paginate` and the table renderers honour
+            it; a listing has no page_by.
         population: Population label (e.g. "Safety Population").
         datasource: Data source label (e.g. "ADAE").
     """
@@ -217,8 +222,10 @@ def _merge_n_pct(n_val: str, pct_val: str) -> str:
     """Merge n and pct formatted values into ``"n (xx.x%)"`` string.
 
     A missing percentage (no denominator) shows the count alone — never
-    a fabricated ``0%``.  A nonzero count whose percentage displays as
-    zero renders the sub-threshold form ``"n (<0.1%)"``.
+    a fabricated ``0%``.  A zero count shows no percentage, as a SAS
+    PROC REPORT shell.  A nonzero count whose percentage displays as
+    zero renders the sub-threshold form ``"n (<0.1%)"``.  A ``%`` that
+    the pct format already carries (``"xx.x%"``) is not doubled.
 
     Args:
         n_val: Formatted n count string.
@@ -228,12 +235,12 @@ def _merge_n_pct(n_val: str, pct_val: str) -> str:
         str: Merged display string.
     """
     n_str = n_val.strip() if n_val else ""
-    pct_str = pct_val.strip() if pct_val else ""
+    pct_str = pct_val.strip().removesuffix("%") if pct_val else ""
 
     if not n_str:
         return ""
-    if n_str == "0":
-        return "0"
+    if _formats_to_zero(n_str):
+        return n_str
     if not pct_str:
         return n_str
     if _formats_to_zero(pct_str):
@@ -245,6 +252,7 @@ def _merge_n_pct(n_val: str, pct_val: str) -> str:
 
 def _pct_display(pct_str: str, pct_raw: float | None) -> str:
     """Standalone percentage display, identical in behaviour to merged cells."""
+    pct_str = pct_str.strip().removesuffix("%")
     if not pct_str:
         return ""
     if pct_raw is not None and pct_raw > 0 and _formats_to_zero(pct_str):
@@ -285,9 +293,10 @@ def _collect_cell_stats(
             continue
         # Prefer stat_fmt, fall back to stat
         sfmt = sr.get("stat_fmt") or ""
-        if not sfmt and sr["stat"] is not None:
-            sfmt = str(int(sr["stat"])) if sr["stat"] == int(sr["stat"]) else str(sr["stat"])
-        per_arm[arm][sname] = (sfmt, sr["stat"])
+        raw = sr["stat"]
+        if not sfmt and raw is not None and math.isfinite(raw):
+            sfmt = level_text(raw)
+        per_arm[arm][sname] = (sfmt, raw)
     return stat_order, stat_labels, per_arm
 
 
@@ -298,13 +307,13 @@ def _count_cell(stats: dict[str, tuple[str, float | None]]) -> str:
     if "N" in stats:
         # Per-cell denominator (LBT04): the reader must see N.
         den_str = stats["N"][0].strip()
-        if n_str in ("", "0") or den_str in ("", "0"):
+        if not n_str or _formats_to_zero(n_str) or not den_str or _formats_to_zero(den_str):
             return f"{n_str or '0'}/{den_str or '0'}"
         merged = _merge_n_pct(den_str, pct_str)
         return f"{n_str}/{merged}"
     cell = _merge_n_pct(n_str, pct_str) if "pct" in stats else n_str
     events = stats.get("n_events", ("", None))[0].strip()
-    if events and cell and cell != "0":
+    if events and cell and not _formats_to_zero(cell):
         cell = f"{cell} {events}"
     return cell
 
@@ -448,6 +457,12 @@ def ard_to_table_model(
             model = ard_to_table_model(ard, RenderMetadata(title="Table 14.3.1.1"))
     """
     meta = metadata or RenderMetadata()
+    # The group columns are optional in the ARD schema.
+    ard = ard.with_columns(
+        pl.lit("", dtype=pl.Utf8).alias(c)
+        for c in ("group2", "group2_level")
+        if c not in ard.columns
+    )
 
     # ── 1. Extract column order (arms) ──
     # Respect the order already present in the ARD (set by column_order in spec)
@@ -464,7 +479,7 @@ def ard_to_table_model(
     for row in big_n_rows.iter_rows(named=True):
         arm = row["group1_level"]
         val = row["stat"]
-        if arm and val is not None:
+        if arm and val is not None and math.isfinite(val):
             big_n_map[arm] = int(val)
 
     columns = [ColumnHeader(label=arm, big_n=big_n_map.get(arm)) for arm in arm_order]
@@ -762,6 +777,22 @@ def _chunk_rows(
     return pages
 
 
+def check_rows_per_page(rows_per_page: int | None) -> None:
+    """Raise when *rows_per_page* is below 1.
+
+    Args:
+        rows_per_page: The page size, or ``None`` for no splitting.
+
+    Raises:
+        SchemaError: If *rows_per_page* is 0 or negative.
+
+    Examples:
+        ``check_rows_per_page(40)``
+    """
+    if rows_per_page is not None and rows_per_page < 1:
+        raise SchemaError(f"rows_per_page must be 1 or more, got {rows_per_page}.")
+
+
 def _paginate(
     model: TableModel,
     *,
@@ -771,9 +802,17 @@ def _paginate(
     budget: float | None = None,
 ) -> list[TableModel]:
     """Body of :func:`paginate`, with an optional per-row cost budget (RTF)."""
+    check_rows_per_page(rows_per_page)
     effective_page_by = page_by or model.metadata.page_by
     if rows_per_page is None and budget is None and not effective_page_by:
         return [model]
+    if effective_page_by and model.rows:
+        present = list(dict.fromkeys(r.variable for r in model.rows if r.variable))
+        if effective_page_by not in present:
+            raise SchemaError(
+                f"page_by {effective_page_by!r} is not a row variable of the table. "
+                f"Row variables: {', '.join(present) or 'none'}."
+            )
 
     # ── 1. Split into blocks at page_by stub boundaries ──
     blocks: list[list[TableRow]] = [[]]
@@ -830,15 +869,21 @@ def paginate(
         model: The display-ready table model.
         rows_per_page: Maximum body rows per page.  A stub-only row
             (group/section heading) is never left orphaned at the bottom
-            of a page.  ``None`` means no row-count splitting.
+            of a page.  ``None`` means no row-count splitting; a value
+            below 1 raises.
         page_by: ARD variable whose stub rows force a page break (e.g.
             ``"PARAMCD"`` → one page per parameter).  Defaults to
             ``model.metadata.page_by``.  The first page of each block
-            has no ``(continued)`` row.
+            has no ``(continued)`` row.  A name that is no row variable
+            of the table raises.
 
     Returns:
         list[TableModel]: One model per page (a single-element list when
         no pagination applies).
+
+    Raises:
+        SchemaError: If *rows_per_page* is below 1 or *page_by* is not a
+            row variable.
 
     References:
         ADR-0040 (continued parent rows).  SAS PROC REPORT keeps a block
@@ -865,16 +910,20 @@ def paginate_listing(
     Args:
         model: The display-ready listing model.
         rows_per_page: Maximum data rows per page; ``None`` disables
-            splitting.
+            splitting.  A value below 1 raises.
 
     Returns:
         list[ListingModel]: One model per page.
+
+    Raises:
+        SchemaError: If *rows_per_page* is below 1.
 
     Examples:
         Split a long listing into 40-row pages::
 
             pages = paginate_listing(model, rows_per_page=40)
     """
+    check_rows_per_page(rows_per_page)
     if rows_per_page is None or len(model.data) <= rows_per_page:
         return [model]
     return [
@@ -899,6 +948,7 @@ def _paginate_listing(
     Each page holds at least one row, so a row taller than the budget
     still gets a page.
     """
+    check_rows_per_page(rows_per_page)
     pages: list[list[dict[str, str]]] = []
     page: list[dict[str, str]] = []
     used = 0.0
@@ -942,6 +992,13 @@ def listing_to_model(
 
     data: list[dict[str, str]] = []
     for row in listing.iter_rows(named=True):
-        data.append({col: str(v) if v is not None else "" for col, v in row.items()})
+        data.append({col: _cell_text(v) for col, v in row.items()})
 
     return ListingModel(metadata=meta, column_labels=col_labels, data=data)
+
+
+def _cell_text(value: object) -> str:
+    """Listing cell text: empty for null or NaN, SAS BEST.-like for a float."""
+    if value is None or (isinstance(value, float) and math.isnan(value)):
+        return ""
+    return level_text(value)

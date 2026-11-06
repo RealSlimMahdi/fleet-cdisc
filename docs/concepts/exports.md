@@ -112,7 +112,7 @@ in every verb that joins (`merge`, `pick`, `first_date`, `derive_param`, ...).
 
 ## Not to be confused with TLG render formats
 
-Tables, listings, and graphs render to **display** formats — HTML, RTF,
+Tables and listings render to **display** formats — HTML, RTF,
 PDF, PPTX — via `fleet tlg run --format ...`. Those are outputs for humans;
 this page covers dataset files for machines and submissions. See
 [TLG from a Spec](../examples/tlg_pipeline.md).

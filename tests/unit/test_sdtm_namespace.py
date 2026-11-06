@@ -238,7 +238,7 @@ class TestNodupSDTM:
 │ 2   ┆ b   │
 └─────┴─────┘
 """)
-        result = df.sdtm.nodup(subset=["id"], sort_by=["id"], keep="first").to_frame()
+        result = df.sdtm.nodup(subset=["id"], order_by=["id"], keep="first").to_frame()
         assert result.height == 2
 
 
@@ -438,6 +438,6 @@ class TestNodupWithTies:
 └─────────┴──────────┴──────────┘
 """)
         result = df.sdtm.nodup(
-            subset=["USUBJID", "VISITNUM"], sort_by=["VSSTRESN"], keep="first"
+            subset=["USUBJID", "VISITNUM"], order_by=["VSSTRESN"], keep="first"
         ).to_frame()
         assert result.height == 1  # deduplication happened

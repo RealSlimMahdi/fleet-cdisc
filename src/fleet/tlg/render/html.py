@@ -192,13 +192,57 @@ table.fleet-listing tbody tr:last-child td {
 
 
 def _esc(text: str) -> str:
-    """Escape HTML special characters."""
+    """Escape HTML special characters; non-ASCII becomes ``&#N;``.
+
+    Pure ASCII output reads the same under any charset, so a server
+    that sends no charset does not garble ≥ or °.
+    """
     return (
         text.replace("&", "&amp;")
         .replace("<", "&lt;")
         .replace(">", "&gt;")
         .replace('"', "&quot;")
         .replace("'", "&#x27;")
+        .encode("ascii", "xmlcharrefreplace")
+        .decode("ascii")
+    )
+
+
+def _wrap(html: str, html_wrapper: str | None) -> str:
+    """Put *html* into the ``{table}`` placeholder of *html_wrapper*."""
+    if html_wrapper is None:
+        return html
+    if "{table}" not in html_wrapper:
+        raise ValueError(
+            "html_wrapper has no {table} placeholder, so the page would have no "
+            "table. Add {table} where the table goes."
+        )
+    return html_wrapper.replace("{table}", html)
+
+
+def html_document(fragment: str, title: str = "") -> str:
+    """Wrap an HTML fragment in a complete UTF-8 document.
+
+    A file written to disk starts with ``<!DOCTYPE html>`` and a
+    ``<meta charset="utf-8">``, so a browser opens it in standards mode.
+
+    Args:
+        fragment: The output of :func:`render_html` or
+            :func:`render_listing_html`.
+        title: The document title.
+
+    Returns:
+        str: The HTML document.
+
+    Examples:
+        ``Path("t.html").write_text(html_document(render_html(model)), encoding="utf-8")``
+    """
+    return (
+        "<!DOCTYPE html>\n"
+        '<html><head><meta charset="utf-8">'
+        f"<title>{_esc(title)}</title></head><body>\n"
+        f"{fragment}\n"
+        "</body></html>\n"
     )
 
 
@@ -274,6 +318,12 @@ def _table_page_parts(model: TableModel, page_footer: str | None = None) -> list
     return parts
 
 
+def _check_wrapper(html_wrapper: str | None) -> None:
+    """Refuse a wrapper with no ``{table}`` placeholder: the page would hold no table."""
+    if html_wrapper is not None and "{table}" not in html_wrapper:
+        raise ValueError("the HTML wrapper has no {table} placeholder")
+
+
 def render_html(
     model: TableModel,
     *,
@@ -292,15 +342,20 @@ def render_html(
         html_wrapper: Optional HTML template string.  If given, the
             generated ``<table>`` block replaces the ``{table}`` placeholder,
             enabling embedding in sponsor portals, Quarto documents, or
-            interactive dashboards.
+            interactive dashboards.  A wrapper with no ``{table}`` raises
+            ``ValueError``.
         rows_per_page: Maximum body rows per page; ``None`` disables
             row-count splitting.
         page_by: ARD variable to page-break on (e.g. ``"PARAMCD"``).
             Defaults to ``model.metadata.page_by``.
 
     Returns:
-        str: Complete HTML string (with ``<style>`` block) or injected
-            into *html_wrapper*.
+        str: An HTML fragment (a ``<div>`` with its ``<style>`` block,
+            pure ASCII) or the fragment injected into *html_wrapper*.
+            :func:`html_document` makes a complete document of it.
+
+    Raises:
+        ValueError: If *html_wrapper* has no ``{table}`` placeholder.
 
     Examples:
         Render an AE summary to HTML::
@@ -310,6 +365,7 @@ def render_html(
             model = ard_to_table_model(ard, RenderMetadata(title="Table 14.3.1.1"))
             html = render_html(model)
     """
+    _check_wrapper(html_wrapper)
     pages = paginate(model, rows_per_page=rows_per_page, page_by=page_by)
 
     parts: list[str] = ['<div class="fleet-table-container">', _SUMMARY_CSS]
@@ -322,12 +378,7 @@ def render_html(
             parts.append("</div>")
     parts.append("</div>")
 
-    html = "\n".join(parts)
-
-    if html_wrapper is not None:
-        return html_wrapper.replace("{table}", html)
-
-    return html
+    return _wrap("\n".join(parts), html_wrapper)
 
 
 # ------------------------------------------------------------------ #
@@ -389,13 +440,16 @@ def render_listing_html(
     Args:
         model: The display-ready listing model from ``listing_to_model()``.
         html_wrapper: Optional HTML template string with ``{table}``
-            placeholder.
+            placeholder; a wrapper with no ``{table}`` raises ``ValueError``.
         rows_per_page: Maximum data rows per page; each page repeats
             title, column headers, and footnotes with a ``Page X of Y``
             footer.  ``None`` renders one continuous listing.
 
     Returns:
-        str: Complete HTML string (with ``<style>`` block).
+        str: An HTML fragment (with ``<style>`` block, pure ASCII).
+
+    Raises:
+        ValueError: If *html_wrapper* has no ``{table}`` placeholder.
 
     Examples:
         Render an AE listing to HTML::
@@ -404,6 +458,7 @@ def render_listing_html(
             model = listing_to_model(listing, RenderMetadata(title="Listing 16.2.7"))
             html = render_listing_html(model)
     """
+    _check_wrapper(html_wrapper)
     pages = paginate_listing(model, rows_per_page=rows_per_page)
 
     parts: list[str] = ['<div class="fleet-listing-container">', _LISTING_CSS]
@@ -416,9 +471,4 @@ def render_listing_html(
             parts.append("</div>")
     parts.append("</div>")
 
-    html = "\n".join(parts)
-
-    if html_wrapper is not None:
-        return html_wrapper.replace("{table}", html)
-
-    return html
+    return _wrap("\n".join(parts), html_wrapper)

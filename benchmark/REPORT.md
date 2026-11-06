@@ -57,7 +57,7 @@ Pipeline time only (SDTM + ADaM, no file read). Median [min-max] of 3 runs. Spee
 
 - **R at 11,468,544 rows.** The first run took 322.20 s (SDTM 87.19 s, ADaM 235.01 s). In the second run the R process went into swap (gc "max used" 75.6 GB on a 64 GB machine), because the script kept the output of the previous run in memory; it took 466.39 s. The run was stopped during the third repetition, so this size has one clean R run and no row-by-row check. The script now frees the previous output before each repetition; this fix was not run at this size. The largest size with the full protocol (3 runs and the check) is 5M rows.
 - **Order of the runs.** The rerun stopped at that point, so `run_benchmark.py` did not finish. The R dense runs were then started alone (`admiral_adae_benchmark.R --reps=3 --input=dense --tag=dense`), and the check of section 6 ran on the saved outputs with `compare_outputs` of `run_benchmark.py`.
-- **Earlier report.** From 500K rows on, the Fleet times on the sparse input are about 2.9 times those of the 2025-07-22 report (2.12 s against 0.74 s at 1M rows, 26.61 s against 9.02 s at 11.5M rows). A recheck at 1M rows at load average 3.3 gave 2.11 to 2.13 s. The cause (Fleet code or the Polars version, 1.39.0 then and 1.44.2 now) is not investigated here. The R times are close to the earlier ones (31.64 s against 30.5 s at 1M rows).
+- **Earlier report.** From 500K rows on, the Fleet times on the sparse input are about 2.9 times those of the earlier report (its header date, 2025-07-22, is wrong; it ran in 2026) (2.12 s against 0.74 s at 1M rows, 26.61 s against 9.02 s at 11.5M rows). A recheck at 1M rows at load average 3.3 gave 2.11 to 2.13 s. The cause (Fleet code or the Polars version, 1.39.0 then and 1.44.2 now) is not investigated here. The R times are close to the earlier ones (31.64 s against 30.5 s at 1M rows).
 
 ### Native R vs rpy2 (same R code called from Python)
 
@@ -115,7 +115,7 @@ adae = (
     .source("AEREL").source("AEOUT").source("AEACN")
     .date("ASTDT", source="AESTDTC")
     .date("AENDT", source="AEENDTC")
-    .duration("ADY", start="TRTSDT", end="ASTDT")
+    .study_day("ADY", date_col="ASTDT", ref_col="TRTSDT")
     .to_frame()
     .adam.occds
     .treatment_emergent("TRTEMFL",
