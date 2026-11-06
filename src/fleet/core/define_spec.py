@@ -74,6 +74,7 @@ class VariableEntry(BaseModel):
     length: Any = None
     significant_digits: Any = None
     mandatory: Any = None
+    optional: bool = False
     core: Any = None
     origin: str | None = None
     origin_source: str | None = None

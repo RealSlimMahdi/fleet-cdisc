@@ -77,7 +77,7 @@ What a study run yields for one step: the dataset name, its standard, the define
 _Avoid_: result, output, run result
 
 **Carry-through column**:
-A variable a define declares with no derivation. A study run takes it from the dataset's inputs, unchanged. A variable with a derivation never comes from an input, only from its algorithm.
+A variable a define declares with no derivation. A study run takes it from the dataset's inputs, unchanged. A variable with a derivation never comes from an input, only from its algorithm. When no input has it, the run stops, unless the define marks it `optional: true` (ADR 0053).
 _Avoid_: pass-through, copied column, merged column
 ### Tables, listings and graphs
 

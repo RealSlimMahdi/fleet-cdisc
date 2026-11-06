@@ -121,7 +121,7 @@ Run one step of the study bootstrap: cfg, then define, then ct, then rules. Use 
 | `--config` / `-c` | _(none)_ | Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style). |
 | `--out` / `--output` / `-o` | _(none)_ | Output directory for every dataset. Default: the configured data/sdtm and data/adam directories. Fleet only writes here: inputs are read from the run, a declared path:, the raw directory (type: raw) or the data directory of the input's standard (type: dataset). |
 | `--format` | _(none)_ | Output format of every dataset. Default: the output_format of the dataset, else of define.yaml, else parquet (the rule of the Define-XML leaf). Choices: `parquet`, `xpt`, `dataset-json`. |
-| `--strict` / `--no-strict` | _(on)_ | Raise on unknown spec algorithms (default). --no-strict warns and skips. |
+| `--strict` / `--no-strict` | _(on)_ | Raise on unknown spec algorithms and on a declared variable with no derivation that no input has (default). --no-strict warns and skips both. |
 | `--overwrite` | _(none)_ | Let a spec derivation replace a column that the input already has. Default off, so a QC run keeps the guard. |
 | `--check` | _(none)_ | Stop before the write when a variable's values do not match its define type (for CI). Without it the mismatch is a warning on stderr. |
 

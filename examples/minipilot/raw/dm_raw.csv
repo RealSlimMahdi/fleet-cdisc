@@ -1,0 +1,4 @@
+subject,site,age,sex,arm_code,arm,actual_arm_code,actual_arm,first_dose_date
+001,101,68,F,XAN,Xanomeline,XAN,Xanomeline,2024-01-10
+002,101,72,M,PBO,Placebo,PBO,Placebo,2024-01-11
+003,102,65,F,XAN,Xanomeline,NOTTRT,Not Treated,

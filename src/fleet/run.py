@@ -12,6 +12,7 @@ rule on inputs and ``CONTEXT.md``, section "Running a study", for the terms.
 from __future__ import annotations
 
 import re
+import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
@@ -103,6 +104,8 @@ class Step:
             keep their characters.
         qualifiers: The SDTM variables with ``role: qualifier`` or
             ``algorithm: nsv``.  The run moves them to a SUPP dataset.
+        optional: The carry-through variables with ``optional: true``.
+            The run may write the dataset without them.
     """
 
     define: Path
@@ -112,6 +115,7 @@ class Step:
     carry_through: tuple[str, ...]
     text_columns: tuple[str, ...] = ()
     qualifiers: tuple[str, ...] = ()
+    optional: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -206,6 +210,9 @@ def plan_study(ctx: StudyContext, *, datasets: Sequence[str] | None = None) -> S
                     carry_through=tuple(v.name for v in entry.variables if v.derivation is None),
                     text_columns=_text_columns(entry),
                     qualifiers=_qualifiers(entry) if standard == "sdtm" else (),
+                    optional=tuple(
+                        v.name for v in entry.variables if v.optional and v.derivation is None
+                    ),
                 )
             )
 
@@ -273,8 +280,10 @@ def run_study(
         plan: The plan from :func:`plan_study`.
         inputs: Frames the caller already holds, by dataset name.  A seed
             is used before any file.
-        strict: Raise on an unknown spec algorithm (default).  ``False``
-            warns and skips, as ``from_spec`` does.
+        strict: Raise on an unknown spec algorithm and on a declared
+            variable with no derivation that no input has (default).
+            ``False`` warns and skips both.  For a permanent exception,
+            mark the variable ``optional: true`` in the define.
         overwrite: Let a spec derivation replace a column the input
             already has, as ``from_spec(overwrite=True)``.  Default off.
 
@@ -283,8 +292,10 @@ def run_study(
 
     Raises:
         StudyRunError: When a seed is also a step of the plan, an input
-            cannot be found, or a carry-through column needs a USUBJID
-            that one side lacks or that has two different rows in the input.
+            cannot be found, a carry-through column needs a USUBJID
+            that one side lacks or that has two different rows in the input,
+            or, with *strict*, a carry-through variable that is not
+            ``optional: true`` is in no input.
 
     Examples:
         Build ADVS from an ADSL held in memory::
@@ -332,6 +343,7 @@ def run_study(
         except SpecError as err:
             _undeclared_source(step, err)
             raise
+        _check_absent(step, built_frame, strict=strict)
         held[step.dataset] = _Held(
             built_frame, ResolvedInput(path=None, source="built", rows=built_frame.height)
         )
@@ -430,6 +442,23 @@ def _carry(dataset: str, name: str, base: pl.DataFrame, extra: pl.DataFrame) -> 
             f"{repeated[0]}, so carrying its columns would repeat base records "
             "(ADaMIG: one record per subject in ADSL). List the many-row input first."
         ) from None
+
+
+def _check_absent(step: Step, built: pl.DataFrame, *, strict: bool) -> None:
+    """Refuse a carry-through variable that no input supplied, unless it is optional."""
+    absent = [v for v in step.carry_through if v not in built.columns and v not in step.optional]
+    if not absent:
+        return
+    names = ", ".join(absent)
+    inputs = ", ".join(d.name for d in step.inputs)
+    message = (
+        f"dataset {step.dataset}: no input ({inputs}) has {names}, which the define "
+        "declares with no derivation. Add a derivation:, add the input that has it, "
+        "or mark it optional: true in the define."
+    )
+    if strict:
+        raise StudyRunError(f"{message} --no-strict (strict=False) writes the dataset without it.")
+    warnings.warn(message, UserWarning, stacklevel=3)
 
 
 def _undeclared_source(step: Step, err: SpecError) -> None:

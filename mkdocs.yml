@@ -122,6 +122,7 @@ nav:
       - Interactive Explorer: concepts/interactive-explorer.md
   - Examples:
       - Multi-Domain Pipeline: examples/full_pipeline.md
+      - "Study run end to end (MINIPILOT)": examples/minipilot.md
       - "Raw-to-Render (R2R)": examples/r2r_strategy.md
       - "Trial Design (offline)": examples/tdd_pipeline.md
       - "ADTTE (time-to-event)": examples/adtte_pipeline.md

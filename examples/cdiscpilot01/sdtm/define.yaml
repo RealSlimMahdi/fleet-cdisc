@@ -151,6 +151,7 @@ datasets:
         label: Date/Time of First Study Treatment
         type: datetime
         mandatory: false
+        optional: true
         origin: Derived
         comment: Earliest EX.EXSTDTC for the subject
 
@@ -158,6 +159,7 @@ datasets:
         label: Date/Time of Last Study Treatment
         type: datetime
         mandatory: false
+        optional: true
         origin: Derived
         comment: Latest EX.EXENDTC for the subject
 

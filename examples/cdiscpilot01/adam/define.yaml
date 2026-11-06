@@ -259,6 +259,15 @@ datasets:
         comment: >-
           Y if the subject has at least one EX record with EXDOSE > 0, or with
           EXDOSE = 0 and EXTRT containing PLACEBO; else N.
+        derivation:
+          algorithm: flag
+          criteria: exists
+          from_dataset: EX
+          "on": [USUBJID]
+          source_filter: >-
+            (pl.col('EXDOSE') > 0) | ((pl.col('EXDOSE') == 0)
+            & pl.col('EXTRT').str.to_uppercase().str.contains('PLACEBO'))
+          false_value: "N"
 
       - name: ITTFL
         label: Intent-To-Treat Population Flag
@@ -267,6 +276,10 @@ datasets:
         mandatory: false
         origin: Derived
         comment: Y if ARMCD is not SCRNFAIL; else N.
+        derivation:
+          algorithm: flag
+          criteria: "pl.col('ARMCD') != 'SCRNFAIL'"
+          false_value: "N"
 
   # ───────────────────────────────────────────────────────────── ADVS ─── #
   - name: ADVS

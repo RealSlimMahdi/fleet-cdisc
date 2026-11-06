@@ -141,6 +141,38 @@ class TestPchg:
         assert result["PCHG"][1] == pytest.approx(20.0)
 
 
+class TestPostBaseline:
+    """CHG and PCHG on post-baseline records only (ADaMIG 1.3, section 3.3.4)."""
+
+    _ADVS = pl.from_repr("""\
+┌───────────┬───────┬───────┬───────┐
+│ VISIT     ┆ AVISN ┆ AVAL  ┆ BASE  │
+│ ---       ┆ ---   ┆ ---   ┆ ---   │
+│ str       ┆ i64   ┆ f64   ┆ f64   │
+╞═══════════╪═══════╪═══════╪═══════╡
+│ SCREENING ┆ -1    ┆ 120.0 ┆ 100.0 │
+│ DAY 1     ┆ 0     ┆ 100.0 ┆ 100.0 │
+│ WEEK 2    ┆ 2     ┆ 110.0 ┆ 100.0 │
+│ UNSCHED   ┆ null  ┆ 90.0  ┆ 100.0 │
+└───────────┴───────┴───────┴───────┘
+""")
+
+    def test_chg_and_pchg_are_null_outside_the_post_baseline_records(self):
+        result = (
+            self._ADVS.adam.chg("CHG", post_baseline="pl.col('AVISN') > 0")
+            .pchg("PCHG", post_baseline=pl.col("AVISN") > 0)
+            .to_frame()
+        )
+
+        assert result["CHG"].to_list() == [None, None, 10.0, None]
+        assert result["PCHG"].to_list() == [None, None, 10.0, None]
+
+    def test_without_post_baseline_every_record_gets_a_value(self):
+        result = self._ADVS.adam.chg("CHG").to_frame()
+
+        assert result["CHG"].to_list() == [20.0, 0.0, 10.0, -10.0]
+
+
 class TestFlag:
     def test_expression_criteria(self, vs_frame):
         result = vs_frame.adam.flag(

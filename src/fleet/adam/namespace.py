@@ -90,6 +90,18 @@ if TYPE_CHECKING:
 _GRADES = frozenset({"0", "1", "2", "3", "4"})
 
 
+def _post_baseline_only(expr: pl.Expr, post_baseline: str | pl.Expr | None) -> pl.Expr:
+    """*expr* on the records *post_baseline* marks, null elsewhere; ``None`` keeps every record."""
+    if post_baseline is None:
+        return expr
+    if isinstance(post_baseline, str):
+        from fleet.sdtm.utils import parse_expression
+
+        post_baseline = parse_expression(post_baseline)
+    name = expr.meta.output_name()
+    return pl.when(post_baseline.fill_null(False)).then(expr).otherwise(None).alias(name)
+
+
 @pl.api.register_dataframe_namespace("adam")
 @pl.api.register_lazyframe_namespace("adam")
 class AdamNamespace(SharedADaMVerbsMixin):
@@ -205,27 +217,43 @@ class AdamNamespace(SharedADaMVerbsMixin):
         *,
         aval: str = "AVAL",
         base: str = "BASE",
+        post_baseline: str | pl.Expr | None = None,
     ) -> Self:
         """Compute change from baseline: ``CHG = AVAL - BASE``.
+
+        Without *post_baseline*, every record gets a value, also the baseline
+        record (0) and the records before it.
 
         Args:
             target: Name of the output column (e.g. ``"CHG"``).
             aval: Analysis value column.
             base: Baseline value column.
+            post_baseline: Condition that marks the post-baseline records,
+                as an expression or a string parsed as ``where=`` is.  The
+                other records get null.  Default ``None``: every record.
 
         Returns:
             AdamNamespace: The namespace with *target* appended.
 
+        References:
+            ADaMIG 1.3, section 3.3.4: CHG is populated for post-baseline
+            records.  admiral template ``ad_advs.R`` restricts
+            ``derive_var_chg`` with ``restrict_derivation(filter = AVISITN > 0)``.
+
         Examples:
-            Derive CHG from AVAL and BASE::
+            Derive CHG on the records after the first dose::
 
                 advs = (
                     vs_raw.adam
-                    .chg("CHG", aval="AVAL", base="BASE")
+                    .chg("CHG", aval="AVAL", base="BASE",
+                         post_baseline="pl.col('ADT') > pl.col('TRTSDT')")
                     .to_frame()
                 )
         """
-        return self._chain(chg(aval=aval, base=base, target=target), verb="chg")
+        return self._chain(
+            _post_baseline_only(chg(aval=aval, base=base, target=target), post_baseline),
+            verb="chg",
+        )
 
     # ------------------------------------------------------------------ #
     # 11. pchg — percent change from baseline                             #
@@ -237,6 +265,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
         *,
         aval: str = "AVAL",
         base: str = "BASE",
+        post_baseline: str | pl.Expr | None = None,
     ) -> Self:
         """Compute percent change from baseline.
 
@@ -249,20 +278,32 @@ class AdamNamespace(SharedADaMVerbsMixin):
             target: Name of the output column (e.g. ``"PCHG"``).
             aval: Analysis value column.
             base: Baseline value column.
+            post_baseline: Condition that marks the post-baseline records,
+                as an expression or a string parsed as ``where=`` is.  The
+                other records get null.  Default ``None``: every record.
 
         Returns:
             AdamNamespace: The namespace with *target* appended.
 
+        References:
+            ADaMIG 1.3, section 3.3.4: PCHG is populated for post-baseline
+            records.  admiral template ``ad_advs.R`` restricts
+            ``derive_var_pchg`` with ``restrict_derivation(filter = AVISITN > 0)``.
+
         Examples:
-            Derive PCHG from AVAL and BASE::
+            Derive PCHG on the records after the first dose::
 
                 advs = (
                     vs_raw.adam
-                    .pchg("PCHG", aval="AVAL", base="BASE")
+                    .pchg("PCHG", aval="AVAL", base="BASE",
+                          post_baseline="pl.col('ADT') > pl.col('TRTSDT')")
                     .to_frame()
                 )
         """
-        return self._chain(pchg(aval=aval, base=base, target=target), verb="pchg")
+        return self._chain(
+            _post_baseline_only(pchg(aval=aval, base=base, target=target), post_baseline),
+            verb="pchg",
+        )
 
     # ------------------------------------------------------------------ #
     # 13. bmi — Body Mass Index                                            #

@@ -1,0 +1,631 @@
+# yaml-language-server: $schema=../../../src/fleet/define_xml/schemas/define_spec_schema.json
+# ADaM define of MINIPILOT. Each dataset reads only the SDTM datasets and the
+# ADSL that its inputs: block names; a variable with no derivation is carried
+# from those inputs unchanged.
+
+fleet_spec_version: 2
+study:
+  id: MINIPILOT
+  name: MINIPILOT
+  description: Small synthetic study for fleet run, raw CSV to SDTM to ADaM.
+  protocol_name: MINIPILOT
+  originator: Fleet Team
+  source_system: Fleet
+  standard: ADAMIG
+  standard_version: "1.1"
+
+datasets:
+  # ───────────────────────────────────────────────────────────── ADSL ─── #
+  - name: ADSL
+    label: Subject-Level Analysis Dataset
+    structure: One record per subject
+    class: SUBJECT LEVEL ANALYSIS DATASET
+    keys: [STUDYID, USUBJID]
+    inputs:
+      - name: DM
+        type: dataset
+      - name: EX
+        type: dataset
+    variables:
+      - name: STUDYID
+        label: Study Identifier
+        type: text
+        length: 9
+        mandatory: true
+        origin: Predecessor
+        predecessor: DM.STUDYID
+
+      - name: USUBJID
+        label: Unique Subject Identifier
+        type: text
+        length: 13
+        mandatory: true
+        origin: Predecessor
+        predecessor: DM.USUBJID
+
+      - name: SUBJID
+        label: Subject Identifier for the Study
+        type: text
+        length: 3
+        mandatory: true
+        origin: Predecessor
+        predecessor: DM.SUBJID
+
+      - name: SITEID
+        label: Study Site Identifier
+        type: text
+        length: 3
+        mandatory: true
+        origin: Predecessor
+        predecessor: DM.SITEID
+
+      - name: AGE
+        label: Age
+        type: integer
+        length: 3
+        mandatory: false
+        origin: Predecessor
+        predecessor: DM.AGE
+
+      - name: AGEU
+        label: Age Units
+        type: text
+        length: 5
+        mandatory: false
+        origin: Predecessor
+        predecessor: DM.AGEU
+
+      - name: SEX
+        label: Sex
+        type: text
+        length: 1
+        mandatory: true
+        origin: Predecessor
+        predecessor: DM.SEX
+
+      - name: ARM
+        label: Description of Planned Arm
+        type: text
+        length: 40
+        mandatory: true
+        origin: Predecessor
+        predecessor: DM.ARM
+
+      - name: ACTARM
+        label: Description of Actual Arm
+        type: text
+        length: 40
+        mandatory: true
+        origin: Predecessor
+        predecessor: DM.ACTARM
+
+      - name: TRT01P
+        label: Planned Treatment for Period 01
+        type: text
+        length: 40
+        mandatory: true
+        origin: Derived
+        derivation:
+          algorithm: assign
+          source: ARM
+
+      - name: TRT01A
+        label: Actual Treatment for Period 01
+        type: text
+        length: 40
+        mandatory: false
+        origin: Derived
+        derivation:
+          algorithm: assign
+          source: ACTARM
+
+      - name: TRTSDT
+        label: Date of First Exposure to Treatment
+        type: date
+        mandatory: false
+        origin: Derived
+        derivation:
+          algorithm: first_date
+          from_dataset: EX
+          date_col: EXSTDTC
+
+      - name: TRTEDT
+        label: Date of Last Exposure to Treatment
+        type: date
+        mandatory: false
+        origin: Derived
+        derivation:
+          algorithm: last_date
+          from_dataset: EX
+          date_col: EXENDTC
+
+      - name: SAFFL
+        label: Safety Population Flag
+        type: text
+        length: 1
+        mandatory: true
+        origin: Derived
+        comment: >-
+          Y if the subject has at least one EX record with EXDOSE > 0, or with
+          EXDOSE = 0 and EXTRT containing PLACEBO; else N.
+        derivation:
+          algorithm: flag
+          criteria: exists
+          from_dataset: EX
+          "on": [USUBJID]
+          source_filter: >-
+            (pl.col('EXDOSE') > 0) | ((pl.col('EXDOSE') == 0)
+            & pl.col('EXTRT').str.to_uppercase().str.contains('PLACEBO'))
+          false_value: "N"
+
+  # ───────────────────────────────────────────────────────────── ADVS ─── #
+  - name: ADVS
+    label: Vital Signs Analysis Dataset
+    structure: One record per subject per parameter per visit
+    class: BASIC DATA STRUCTURE
+    keys: [STUDYID, USUBJID, PARAMCD, ADT, VISITNUM]
+    inputs:
+      - name: VS
+        type: dataset
+      - name: ADSL
+        type: dataset
+    variables:
+      - name: STUDYID
+        label: Study Identifier
+        type: text
+        length: 9
+        mandatory: true
+        origin: Predecessor
+        predecessor: VS.STUDYID
+
+      - name: USUBJID
+        label: Unique Subject Identifier
+        type: text
+        length: 13
+        mandatory: true
+        origin: Predecessor
+        predecessor: VS.USUBJID
+
+      - name: TRT01A
+        label: Actual Treatment for Period 01
+        type: text
+        length: 40
+        mandatory: false
+        origin: Predecessor
+        predecessor: ADSL.TRT01A
+
+      - name: TRTSDT
+        label: Date of First Exposure to Treatment
+        type: date
+        mandatory: false
+        origin: Predecessor
+        predecessor: ADSL.TRTSDT
+
+      - name: SAFFL
+        label: Safety Population Flag
+        type: text
+        length: 1
+        mandatory: true
+        origin: Predecessor
+        predecessor: ADSL.SAFFL
+
+      - name: PARAMCD
+        label: Parameter Code
+        type: text
+        length: 8
+        mandatory: true
+        origin: Predecessor
+        predecessor: VS.VSTESTCD
+        derivation:
+          algorithm: assign
+          source: VSTESTCD
+
+      - name: PARAM
+        label: Parameter
+        type: text
+        length: 40
+        mandatory: true
+        origin: Predecessor
+        predecessor: VS.VSTEST
+        derivation:
+          algorithm: assign
+          source: VSTEST
+
+      - name: AVAL
+        label: Analysis Value
+        type: float
+        length: 5
+        significant_digits: 1
+        mandatory: false
+        origin: Predecessor
+        predecessor: VS.VSSTRESN
+        derivation:
+          algorithm: assign
+          source: VSSTRESN
+
+      - name: AVALU
+        label: Analysis Value Unit
+        type: text
+        length: 8
+        mandatory: false
+        origin: Predecessor
+        predecessor: VS.VSSTRESU
+        derivation:
+          algorithm: assign
+          source: VSSTRESU
+
+      - name: VISITNUM
+        label: Visit Number
+        type: float
+        length: 3
+        significant_digits: 0
+        mandatory: false
+        origin: Predecessor
+        predecessor: VS.VISITNUM
+
+      - name: VISIT
+        label: Visit Name
+        type: text
+        length: 20
+        mandatory: false
+        origin: Predecessor
+        predecessor: VS.VISIT
+
+      - name: ADT
+        label: Analysis Date
+        type: date
+        mandatory: false
+        origin: Derived
+        derivation:
+          algorithm: date
+          source: VSDTC
+
+      - name: ADTF
+        label: Analysis Date Imputation Flag
+        type: text
+        length: 1
+        mandatory: false
+        origin: Derived
+        comment: Written by the date derivation of ADT; null when VSDTC is a complete date.
+
+      - name: ABLFL
+        label: Baseline Record Flag
+        type: text
+        length: 1
+        mandatory: false
+        origin: Derived
+        comment: >-
+          Y on the last record, by ADT then VISITNUM, with a non-missing AVAL
+          and ADT on or before TRTSDT, per USUBJID and PARAMCD.
+        derivation:
+          algorithm: flag
+          criteria: last
+          by: [USUBJID, PARAMCD]
+          order_by: [ADT, VISITNUM]
+          where: "pl.col('AVAL').is_not_null() & (pl.col('ADT') <= pl.col('TRTSDT'))"
+
+      - name: BASE
+        label: Baseline Value
+        type: float
+        length: 5
+        significant_digits: 1
+        mandatory: false
+        origin: Derived
+        derivation:
+          algorithm: baseline
+          aval: AVAL
+          baseline_flag: ABLFL
+          by: [USUBJID, PARAMCD]
+
+      - name: CHG
+        label: Change from Baseline
+        type: float
+        length: 5
+        significant_digits: 1
+        mandatory: false
+        origin: Derived
+        derivation:
+          algorithm: chg
+          aval: AVAL
+          base: BASE
+          post_baseline: "pl.col('ADT') > pl.col('TRTSDT')"
+
+      - name: PCHG
+        label: Percent Change from Baseline
+        type: float
+        length: 6
+        significant_digits: 2
+        mandatory: false
+        origin: Derived
+        derivation:
+          algorithm: pchg
+          aval: AVAL
+          base: BASE
+          post_baseline: "pl.col('ADT') > pl.col('TRTSDT')"
+
+  # ───────────────────────────────────────────────────────────── ADAE ─── #
+  - name: ADAE
+    label: Adverse Events Analysis Dataset
+    structure: One record per subject per adverse event
+    class: OCCURRENCE DATA STRUCTURE
+    keys: [STUDYID, USUBJID, ASEQ]
+    inputs:
+      - name: AE
+        type: dataset
+      - name: ADSL
+        type: dataset
+    variables:
+      - name: STUDYID
+        label: Study Identifier
+        type: text
+        length: 9
+        mandatory: true
+        origin: Predecessor
+        predecessor: AE.STUDYID
+
+      - name: USUBJID
+        label: Unique Subject Identifier
+        type: text
+        length: 13
+        mandatory: true
+        origin: Predecessor
+        predecessor: AE.USUBJID
+
+      - name: TRT01A
+        label: Actual Treatment for Period 01
+        type: text
+        length: 40
+        mandatory: false
+        origin: Predecessor
+        predecessor: ADSL.TRT01A
+
+      - name: TRTSDT
+        label: Date of First Exposure to Treatment
+        type: date
+        mandatory: false
+        origin: Predecessor
+        predecessor: ADSL.TRTSDT
+
+      - name: TRTEDT
+        label: Date of Last Exposure to Treatment
+        type: date
+        mandatory: false
+        origin: Predecessor
+        predecessor: ADSL.TRTEDT
+
+      - name: SAFFL
+        label: Safety Population Flag
+        type: text
+        length: 1
+        mandatory: true
+        origin: Predecessor
+        predecessor: ADSL.SAFFL
+
+      - name: AETERM
+        label: Reported Term for the Adverse Event
+        type: text
+        length: 40
+        mandatory: true
+        origin: Predecessor
+        predecessor: AE.AETERM
+
+      - name: AEDECOD
+        label: Dictionary-Derived Term
+        type: text
+        length: 40
+        mandatory: true
+        origin: Predecessor
+        predecessor: AE.AEDECOD
+
+      - name: AESEV
+        label: Severity/Intensity
+        type: text
+        length: 8
+        mandatory: false
+        origin: Predecessor
+        predecessor: AE.AESEV
+
+      - name: AESER
+        label: Serious Event
+        type: text
+        length: 1
+        mandatory: false
+        origin: Predecessor
+        predecessor: AE.AESER
+
+      - name: ASTDT
+        label: Analysis Start Date
+        type: date
+        mandatory: false
+        origin: Derived
+        derivation:
+          algorithm: date
+          source: AESTDTC
+
+      - name: AENDT
+        label: Analysis End Date
+        type: date
+        mandatory: false
+        origin: Derived
+        derivation:
+          algorithm: date
+          source: AEENDTC
+
+      - name: ASTDTF
+        label: Analysis Start Date Imputation Flag
+        type: text
+        length: 1
+        mandatory: false
+        origin: Derived
+        comment: Written by the date derivation of ASTDT; null when AESTDTC is a complete date.
+
+      - name: AENDTF
+        label: Analysis End Date Imputation Flag
+        type: text
+        length: 1
+        mandatory: false
+        origin: Derived
+        comment: Written by the date derivation of AENDT; null when AEENDTC is a complete date.
+
+      - name: TRTEMFL
+        label: Treatment Emergent Analysis Flag
+        type: text
+        length: 1
+        mandatory: false
+        origin: Derived
+        derivation:
+          algorithm: occds.treatment_emergent
+          start_date: ASTDT
+          end_date: AENDT
+          trtsdt: TRTSDT
+          trtedt: TRTEDT
+          end_window: 0
+
+      - name: AESEVN
+        label: Analysis Severity/Intensity (N)
+        type: integer
+        length: 1
+        mandatory: false
+        origin: Derived
+        derivation:
+          algorithm: recode
+          source: AESEV
+          recode_map: {MILD: 1, MODERATE: 2, SEVERE: 3}
+
+      - name: ASEQ
+        label: Analysis Sequence Number
+        type: integer
+        length: 2
+        mandatory: true
+        origin: Derived
+        derivation:
+          algorithm: seq
+          by: [USUBJID]
+          order_by: [ASTDT, AEDECOD]
+
+  # ───────────────────────────────────────────────────────────── ADEX ─── #
+  - name: ADEX
+    label: Exposure Analysis Dataset
+    structure: One record per subject per exposure record
+    class: OCCURRENCE DATA STRUCTURE
+    keys: [STUDYID, USUBJID, ASEQ]
+    inputs:
+      - name: EX
+        type: dataset
+      - name: ADSL
+        type: dataset
+    variables:
+      - name: STUDYID
+        label: Study Identifier
+        type: text
+        length: 9
+        mandatory: true
+        origin: Predecessor
+        predecessor: EX.STUDYID
+
+      - name: USUBJID
+        label: Unique Subject Identifier
+        type: text
+        length: 13
+        mandatory: true
+        origin: Predecessor
+        predecessor: EX.USUBJID
+
+      - name: TRT01A
+        label: Actual Treatment for Period 01
+        type: text
+        length: 40
+        mandatory: false
+        origin: Predecessor
+        predecessor: ADSL.TRT01A
+
+      - name: SAFFL
+        label: Safety Population Flag
+        type: text
+        length: 1
+        mandatory: true
+        origin: Predecessor
+        predecessor: ADSL.SAFFL
+
+      - name: EXTRT
+        label: Name of Treatment
+        type: text
+        length: 20
+        mandatory: true
+        origin: Predecessor
+        predecessor: EX.EXTRT
+
+      - name: EXDOSE
+        label: Dose
+        type: float
+        length: 3
+        significant_digits: 0
+        mandatory: false
+        origin: Predecessor
+        predecessor: EX.EXDOSE
+
+      - name: EXDOSU
+        label: Dose Units
+        type: text
+        length: 4
+        mandatory: false
+        origin: Predecessor
+        predecessor: EX.EXDOSU
+
+      - name: ASTDT
+        label: Analysis Start Date
+        type: date
+        mandatory: false
+        origin: Derived
+        derivation:
+          algorithm: date
+          source: EXSTDTC
+
+      - name: AENDT
+        label: Analysis End Date
+        type: date
+        mandatory: false
+        origin: Derived
+        derivation:
+          algorithm: date
+          source: EXENDTC
+
+      - name: ASTDTF
+        label: Analysis Start Date Imputation Flag
+        type: text
+        length: 1
+        mandatory: false
+        origin: Derived
+        comment: Written by the date derivation of ASTDT; null when EXSTDTC is a complete date.
+
+      - name: AENDTF
+        label: Analysis End Date Imputation Flag
+        type: text
+        length: 1
+        mandatory: false
+        origin: Derived
+        comment: Written by the date derivation of AENDT; null when EXENDTC is a complete date.
+
+      - name: EXDURD
+        label: Exposure Duration (Days)
+        type: integer
+        length: 3
+        mandatory: false
+        origin: Derived
+        comment: AENDT - ASTDT + 1, as admiral derive_var_duration.
+        derivation:
+          algorithm: duration
+          start: ASTDT
+          end: AENDT
+          add_one: true
+
+      - name: ASEQ
+        label: Analysis Sequence Number
+        type: integer
+        length: 2
+        mandatory: true
+        origin: Derived
+        derivation:
+          algorithm: seq
+          by: [USUBJID]
+          order_by: [ASTDT]

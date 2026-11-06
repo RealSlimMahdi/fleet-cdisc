@@ -1444,14 +1444,28 @@ spec_verb(
     "chg",
     standard="adam",
     description="Change from baseline (AVAL - BASE).",
-    method_text=((set(), "Change from baseline: {aval} - {base}."),),
+    method_text=(
+        (
+            {"post_baseline"},
+            "Change from baseline: {aval} - {base}, on the records where {post_baseline}; "
+            "null on the other records.",
+        ),
+        (set(), "Change from baseline: {aval} - {base}."),
+    ),
 )
 
 spec_verb(
     "pchg",
     standard="adam",
     description="Percent change from baseline.",
-    method_text=((set(), "Percent change from baseline: 100 * ({aval} - {base}) / {base}."),),
+    method_text=(
+        (
+            {"post_baseline"},
+            "Percent change from baseline: 100 * ({aval} - {base}) / {base}, on the "
+            "records where {post_baseline}; null on the other records.",
+        ),
+        (set(), "Percent change from baseline: 100 * ({aval} - {base}) / {base}."),
+    ),
 )
 
 spec_verb("flag", standard="adam", description="Derive a Y/null flag from criteria.")

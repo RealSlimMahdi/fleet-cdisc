@@ -202,9 +202,9 @@ print(f"SDTM AE  : {ae.shape[0]} records  ·  {ae.shape[1]} columns")
 # ════════════════════════════════════════════════════════════════════════════
 # 5. ADaM ADSL — spec-driven
 #    Simple derivations (source/rename/assigned) live in the spec, and so do
-#    TRTSDT/TRTEDT (first_date/last_date on the pinned EX).
-#    Join-based pre-computations (AGEGR1, SAFFL, ITTFL, TRT01P/TRT01A)
-#    are added to the DM frame before from_spec() runs.
+#    TRTSDT/TRTEDT (first_date/last_date on the pinned EX) and the population
+#    flags SAFFL/ITTFL (flag on the pinned EX, admiral derive_var_merged_exist_flag).
+#    AGEGR1 and TRT01P/TRT01A are added to the DM frame before from_spec() runs.
 # ════════════════════════════════════════════════════════════════════════════
 print("\n── ADaM ADSL (spec-driven) ──────────────────────────────────────────────")
 
@@ -222,25 +222,13 @@ dm_enriched = (
         ],
         else_="Missing",
     )
-    # Population flags (admiral: derive_var_merged_exist_flag). This is the admiral
-    # template condition; the SAP decides. A population flag is never blank: N.
-    .flag_exists(
-        "SAFFL",
-        from_dataset=ex,
-        on=["USUBJID"],
-        source_filter=(pl.col("EXDOSE") > 0)
-        | ((pl.col("EXDOSE") == 0) & pl.col("EXTRT").str.to_uppercase().str.contains("PLACEBO")),
-        false_value="N",
-    )
-    .flag("ITTFL", criteria='pl.col("ARMCD") != "SCRNFAIL"', false_value="N")
     .to_frame()
 )
-assert (dm_enriched["SAFFL"] == "Y").sum() == dm_enriched.height, "every pilot subject took a dose"
 
 # The columns below are derived inline above (or upstream in DM) with a
 # *different* method than the spec documents, so they are omitted from the
 # spec pass — from_spec()'s overwrite guard would (rightly) raise otherwise.
-# TRTSDT and TRTEDT run from the spec on the pinned EX.
+# TRTSDT, TRTEDT, SAFFL and ITTFL run from the spec on the pinned EX.
 adsl = (
     dm_enriched.adam.pin("EX", ex)
     .from_spec(
@@ -251,6 +239,7 @@ adsl = (
     .select(spec=ADAM_SPEC, dataset="ADSL")
     .write_parquet(OUT / "adsl.parquet")
 )
+assert (adsl["SAFFL"] == "Y").sum() == adsl.height, "every pilot subject took a dose"
 print(f"   {adsl.shape[0]} subjects × {adsl.shape[1]} variables")
 
 # ════════════════════════════════════════════════════════════════════════════
