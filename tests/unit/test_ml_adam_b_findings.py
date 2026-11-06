@@ -175,7 +175,9 @@ def test_c1_374_km_data_warns_on_null_duration():
 
 def test_c1_376_lineage_lists_the_real_outputs():
     adsl = pl.from_repr(TTE_ADSL)
-    ns = adsl.adam.tte.param("OS", "Overall Survival", **_tte_frames(adsl), stop_at=["DTHDT"])
+    ns = adsl.adam.tte.param(
+        "OS", "Overall Survival", **_tte_frames(adsl), stop_at={"DTHDT": (2, "DEATH DATE")}
+    )
     nodes = {n.name: n for n in ns._lineage if n.verb == "param"}
     assert "OS" not in nodes
     assert {"STARTDT", "ADT", "CNSR", "EVNTDESC", "PARAMCD", "PARAM"} <= set(nodes)

@@ -69,7 +69,8 @@ class TTENamespace(SharedADaMVerbsMixin):
         start: str,
         events: dict[str, pl.DataFrame | pl.LazyFrame],
         censors: dict[int, pl.DataFrame | pl.LazyFrame] | None = None,
-        stop_at: list[str] | None = None,
+        stop_at: dict[str, tuple[int, str]] | None = None,
+        keep_reason: list[int] | None = None,
         by: list[str] | None = None,
         set_values_to: dict[str, Any] | None = None,
         subject_keys: list[str] | None = None,
@@ -83,12 +84,24 @@ class TTENamespace(SharedADaMVerbsMixin):
         The stop date of a subject is the earliest non-null *stop_at* date
         in ADSL; event and censor records after it are dropped. The first
         event left wins: ``CNSR = 0`` and ``EVNTDESC`` = its key. A subject
-        without an event is censored at the last censor record left:
-        ``CNSR`` = its key (on a date tie, the frame given last wins). A
-        subject with no record left is dropped with a warning. ``STARTDT``
-        comes from ADSL (the pinned ADSL, else the base frame). An event or
-        censor date before it is set to it (admiral: ADT = max(ADT,
-        STARTDT)); the CNSR does not change. AVAL comes from :meth:`aval`.
+        without an event is censored at the date of the last censor record
+        left (on a date tie, the frame given last wins). A subject with no
+        record left is dropped with a warning. ``STARTDT`` comes from ADSL
+        (the pinned ADSL, else the base frame). An event or censor date
+        before it is set to it (admiral: ADT = max(ADT, STARTDT)); the CNSR
+        does not change. AVAL comes from :meth:`aval`.
+
+        The censor record gives the date; the stop gives the reason. CNSR
+        and EVNTDESC of a censored subject come from, in this order:
+
+        1. The censor frame, when its key is in *keep_reason*.
+        2. The stop of the subject: the *stop_at* column with the earliest
+           non-null date. On a tie, the first column in *stop_at* wins.
+        3. The censor frame (CNSR = its key), when the subject has no stop
+           date.
+
+        ``CNSDTDSC`` always comes from the censor frame. ``explain=True``
+        shows the rule per subject in the ``cnsr_from`` column.
 
         A source frame may also carry ``EVNTDESC`` (censors only),
         ``CNSDTDSC``, ``SRCDOM``, ``SRCVAR`` and ``SRCSEQ``; they go onto the
@@ -120,8 +133,14 @@ class TTENamespace(SharedADaMVerbsMixin):
             start: Date column in ADSL that starts the clock (``STARTDT``).
             events: ``EVNTDESC -> frame`` of event records.
             censors: ``CNSR -> frame`` of censor records (CNSR >= 1).
-            stop_at: Date columns in ADSL. The earliest non-null one ends
-                the observation: records after it are dropped.
+            stop_at: ``ADSL date column -> (CNSR, EVNTDESC)``. The earliest
+                non-null date ends the observation: records after it are
+                dropped, and its CNSR and EVNTDESC go onto a censored row.
+                The CNSR values are distinct integers >= 1 and differ from
+                the *censors* keys.
+            keep_reason: Keys of *censors* whose frame keeps its own CNSR
+                and EVNTDESC, also when a stop date applies (for example
+                no baseline assessment).
             by: Stratum columns, present in every event frame. A censor
                 frame with none of them (for example from ADSL) is crossed
                 with the strata of the event frames, as in admiral
@@ -137,7 +156,8 @@ class TTENamespace(SharedADaMVerbsMixin):
             retain: ``"drop"`` (admiral, warns) or ``"censor_at_start"``
                 for a subject with no record.
             explain: Log the decision trace per subject (every candidate,
-                the selected one and the reason) through the fleet logger.
+                the selected one, the reason and ``cnsr_from``, the rule
+                that gave the CNSR) through the fleet logger.
 
         Returns:
             TTENamespace: A fresh namespace whose frame contains the
@@ -145,24 +165,37 @@ class TTENamespace(SharedADaMVerbsMixin):
 
         Raises:
             DerivationError: On unknown columns (with did-you-mean), date
-                columns that are not Date/Datetime, bad dict keys, PARAMCD
-                collisions, by-group 1:1 violations, or no PARAM label.
+                columns that are not Date/Datetime, bad dict keys, a
+                *stop_at* that is not a dict of ``(CNSR, EVNTDESC)``, a CNSR
+                used twice across *stop_at* and *censors*, a *keep_reason*
+                key not in *censors*, PARAMCD collisions, by-group 1:1
+                violations, or no PARAM label.
 
         References:
             admiral 1.5 ``derive_param_tte`` (``end_dates``,
             ``event_type = "negative"``: records after the first end date
-            are not used; ADT = max(ADT, STARTDT); ``censor_source`` has no
-            default EVNTDESC). ADaM BDS-TTE v1.0: EVNTDESC is permissible
-            free text with no codelist. ADaMIG v1.3: PARAM and PARAMCD map
-            one to one. ADR-0043
+            are not used; a censor record takes the CNSR and
+            ``set_values_to`` of the first end date unless
+            ``consider_end_dates = FALSE``; ADT = max(ADT, STARTDT);
+            ``censor_source`` has no default EVNTDESC). FDA Guidance for
+            Industry, Clinical Trial Endpoints for the Approval of Cancer
+            Drugs and Biologics (2018): the censoring date is the last
+            adequate tumour assessment, and the reason is a separate fact.
+            EMA Guideline on the evaluation of anticancer medicinal
+            products, Appendix 1 (PFS): the same split. ADaM BDS-TTE v1.0:
+            CNSR and EVNTDESC give the reason, CNSDTDSC the date; EVNTDESC
+            is permissible free text with no codelist. ADaMIG v1.3: PARAM
+            and PARAMCD map one to one. ADR-0043
             (docs/adr/0043-tte-censors-at-the-last-record-before-the-stop-date.md).
 
         Examples:
             PFS censored at the last assessment before new therapy::
 
                 last_assessment = adrs.select(
-                    "USUBJID", "ADT", EVNTDESC=pl.lit("NO PROGRESSION"),
-                    CNSDTDSC=pl.lit("LAST ASSESSMENT"),
+                    "USUBJID", "ADT", CNSDTDSC=pl.lit("LAST ADEQUATE TUMOR ASSESSMENT")
+                )
+                no_baseline = adsl.select(
+                    "USUBJID", ADT="TRTSDT", EVNTDESC=pl.lit("NO BASELINE ASSESSMENT")
                 )
                 adtte = (
                     adsl.adam.tte
@@ -170,9 +203,14 @@ class TTENamespace(SharedADaMVerbsMixin):
                         "PFS",
                         "Progression-Free Survival",
                         start="TRTSDT",
-                        events={"PD": adrs.filter(pl.col("AVALC") == "PD")},
-                        censors={2: last_assessment, 3: adsl.select("USUBJID", ADT="TRTSDT")},
-                        stop_at=["EOSDT", "NACTDT"],
+                        events={"PROGRESSIVE DISEASE": adrs.filter(pl.col("AVALC") == "PD")},
+                        censors={1: last_assessment, 3: no_baseline},
+                        stop_at={
+                            "EOSDT": (4, "END OF STUDY"),
+                            "NACTDT": (2, "NEW ANTICANCER THERAPY"),
+                            "DCUTDT": (5, "DATA CUT-OFF"),
+                        },
+                        keep_reason=[3],
                     )
                     .aval(unit="days")
                     .to_frame()
@@ -182,7 +220,8 @@ class TTENamespace(SharedADaMVerbsMixin):
         if reserved:
             raise DerivationError(
                 f"param(): {reserved} cannot be set in set_values_to. CNSR comes from the "
-                "censors= key, and ADT/ADTM/STARTDT/STARTDTM come from the source frames."
+                "censors= key or the stop_at code, and ADT/ADTM/STARTDT/STARTDTM come from the "
+                "source frames."
             )
         base = self.to_frame()
         pinned = getattr(self, "_pinned", {})
@@ -201,6 +240,7 @@ class TTENamespace(SharedADaMVerbsMixin):
             events=events,
             censors=censors or {},
             stop_at=stop_at,
+            keep_reason=keep_reason,
             subject_keys=keys,
             by=by,
             create_datetime=create_datetime,
