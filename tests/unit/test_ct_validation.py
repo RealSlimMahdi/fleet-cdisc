@@ -1,5 +1,7 @@
 """Unit tests for CT loading and validation."""
 
+import pytest
+
 import fleet  # noqa: F401
 
 
@@ -128,24 +130,21 @@ class TestCTCasingAndWhitespace:
 class TestCTMissingCodelist:
     """Behavior when codelist does not exist in the cache."""
 
-    def test_validate_unknown_codelist_returns_invalid(self, ct_sample_path):
+    def test_validate_unknown_codelist_is_skipped(self, ct_sample_path):
         from fleet.ct import CTValidator
 
         validator = CTValidator.get_instance()
         validator.load_ct_file(ct_sample_path)
-        is_valid, msg = validator.validate_value("NONEXISTENT_CL", "M")
-        # Should either be invalid or handled gracefully
-        # (depends on implementation — this documents the contract)
-        assert isinstance(is_valid, bool)
-        assert isinstance(msg, str)
+        result = validator.validate_value("NONEXISTENT_CL", "M")
+        # An unknown codelist is not a failed check: the value passes with a reason.
+        assert result == (True, "Codelist 'NONEXISTENT_CL' not loaded - validation skipped")
 
     def test_get_valid_values_unknown_codelist(self, ct_sample_path):
         from fleet.ct import CTValidator
 
         validator = CTValidator.get_instance()
         validator.load_ct_file(ct_sample_path)
-        vals = validator.get_valid_values("TOTALLY_FAKE_CL")
-        assert vals == [] or vals is None or isinstance(vals, list)
+        assert validator.get_valid_values("TOTALLY_FAKE_CL") == []
 
 
 class TestCTMalformedCodelistClass:
@@ -166,23 +165,25 @@ class TestCTMalformedCodelistClass:
         assert result["AGEU"].to_list() == ["YEARS", "YEARS", "YEARS"]
 
     def test_codelist_class_with_none_concept_id(self, simple_raw):
-        """A class with _concept_id=None should be handled gracefully."""
+        """A class with _concept_id=None assigns the value unvalidated and warns."""
 
         class NoneCodelist:
             _concept_id = None
 
-        # Should either raise or fall back — not crash with cryptic error
-        try:
-            simple_raw.sdtm.assign("AGEU", value="YEARS", ct=NoneCodelist).to_frame()
-        except (ValueError, TypeError, AttributeError):
-            pass  # acceptable: explicit rejection
+        with pytest.warns(UserWarning, match="assigned unvalidated"):
+            result = simple_raw.sdtm.assign("AGEU", value="YEARS", ct=NoneCodelist).to_frame()
+
+        assert result["AGEU"].to_list() == ["YEARS", "YEARS", "YEARS"]
 
 
 class TestAssignCTWithMessyData:
     """assign_ct behavior with terminology drift in source data."""
 
-    def test_unmapped_value_propagates_as_null_or_passthrough(self):
-        """Source value not in ct_mapping should not silently map to wrong term."""
+    def test_unmapped_value_passes_through_unchanged(self, ct_sample_path):
+        """Source value not in ct_mapping is kept as is and named in a warning."""
+        from fleet.ct import CTValidator
+
+        CTValidator.get_instance().load_ct_file(ct_sample_path)
         df = pl.from_repr("""\
 ┌─────────┐
 │ sex     │
@@ -195,29 +196,31 @@ class TestAssignCTWithMessyData:
 │ null    │
 └─────────┘
 """)
-        result = df.sdtm.assign(
-            "SEX",
-            source="sex",
-            ct="C66731",
-            ct_map={"F": "F", "M": "M"},
-        ).to_frame()
-        # UNKNOWN should become null (unmapped) or remain unchanged — never "F" or "M"
-        assert result["SEX"][2] is None or result["SEX"][2] == "UNKNOWN"
-        # None source should remain None
-        assert result["SEX"][3] is None
+        with pytest.warns(UserWarning, match=r"not in codelist 'C66731': \['UNKNOWN'\]"):
+            result = df.sdtm.assign(
+                "SEX",
+                source="sex",
+                ct="C66731",
+                ct_map={"F": "F", "M": "M"},
+            ).to_frame()
+        assert result["SEX"].to_list() == ["F", "M", "UNKNOWN", None]
 
-    def test_whitespace_in_source_not_silently_matched(self):
-        """Source ' M' should not map to 'M' without explicit stripping."""
+    def test_whitespace_in_source_not_silently_matched(self, ct_sample_path):
+        """Source ' M' does not map to 'M' without explicit stripping."""
+        from fleet.ct import CTValidator
+
+        CTValidator.get_instance().load_ct_file(ct_sample_path)
         df = pl.DataFrame({"sex": [" M", "F "]})
-        result = df.sdtm.assign(
-            "SEX",
-            source="sex",
-            ct="C66731",
-            ct_map={"F": "F", "M": "M"},
-        ).to_frame()
-        # Whitespace-drifted values should NOT silently match
-        assert result["SEX"][0] is None or result["SEX"][0] == " M"
-        assert result["SEX"][1] is None or result["SEX"][1] == "F "
+        with pytest.warns(
+            UserWarning, match=r"not in codelist 'C66731': \[(' M', 'F '|'F ', ' M')\]"
+        ):
+            result = df.sdtm.assign(
+                "SEX",
+                source="sex",
+                ct="C66731",
+                ct_map={"F": "F", "M": "M"},
+            ).to_frame()
+        assert result["SEX"].to_list() == [" M", "F "]
 
 
 class TestAssignCTValidateValues:
@@ -404,3 +407,40 @@ class TestAssignCTValidateValues:
             # Restore validator state
             validator._ct_cache = old_cache
             validator._initialized = old_init
+
+
+class TestAssignValueChecksTheClassTerms:
+    """c1-640: assign(value=, ct=<class>) checks the literal against the class terms."""
+
+    class _Ageu:
+        _concept_id = "CTEST640"
+        _terms = ("DAYS", "YEARS")
+
+    _ONE_ROW = """\
+┌─────┐
+│ x   │
+│ --- │
+│ i64 │
+╞═════╡
+│ 1   │
+└─────┘
+"""
+
+    def _warnings(self, value):
+        import warnings
+
+        df = pl.from_repr(self._ONE_ROW)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            out = df.sdtm.assign("AGEU", value=value, ct=self._Ageu).to_frame()
+        assert out["AGEU"].to_list() == [value]
+        return [str(w.message) for w in caught]
+
+    def test_a_value_outside_the_class_warns_with_the_valid_terms(self):
+        assert self._warnings("YRS") == [
+            "assign('AGEU'): value 'YRS' not in codelist 'CTEST640'. "
+            "Valid values: ['DAYS', 'YEARS']"
+        ]
+
+    def test_a_value_of_the_class_gives_no_warning(self):
+        assert self._warnings("YEARS") == []

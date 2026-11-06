@@ -25,3 +25,4 @@ We checked admiral 1.4.1 `derive_vars_dtm` on a grid of 15 `--DTC` forms, six `h
 - With `time=`, a partial date now gives an imputed value; the collected time is not kept. An `hh:mm` time takes seconds 00, or 59 with `impute_time="last"`, and TMF `S`.
 - A null time with `time=` takes `impute_time`, else `impute` (it took `"first"` before).
 - `impute="mid"` on a missing month gives June 15, and admiral gives June 30. That is a separate defect and is out of the grid.
+- An `hh:mm` time (`2021-03-15T10:30`) gives TMF `S`. admiral `derive_vars_dtm` gives NA by default, because `ignore_seconds_flag = TRUE`. The `date` docstring says so; a SAP that follows admiral drops or nulls the TMF column (c1-73).

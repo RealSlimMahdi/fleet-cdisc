@@ -19,16 +19,22 @@ Polars frame with ``USUBJID`` and ``ADT``::
 from __future__ import annotations
 
 import logging
-from typing import Any, Literal
+import warnings
+from typing import Any, Literal, Self
 
 import polars as pl
 
 from fleet.adam._mixins import SharedADaMVerbsMixin
 from fleet.adam.tte import param_label, select_tte
+from fleet.core import log as fleet_log
 from fleet.core.dtc import to_day
 from fleet.core.exceptions import DerivationError
+from fleet.core.joins import refuse_repeated_keys
 
 logger = logging.getLogger("fleet")
+
+#: Columns that param() derives; set_values_to cannot overwrite them.
+_DERIVED = frozenset({"CNSR", "ADT", "ADTM", "STARTDT", "STARTDTM"})
 
 #: Days per unit — CDISC conventions (SDTMIG/ADaMIG durations).
 _UNIT_DAYS: dict[str, float] = {
@@ -47,7 +53,9 @@ class TTENamespace(SharedADaMVerbsMixin):
     new ``TTENamespace``; ``to_frame()`` materialises the result.
     """
 
-    _domain = "ADTTE"
+    def __init__(self, df: pl.DataFrame | pl.LazyFrame) -> None:
+        super().__init__(df)
+        self._domain = "ADTTE"  # an instance value: _sub_namespace keeps it
 
     # ------------------------------------------------------------------ #
     # 1. param — derive one TTE parameter (admiral derive_param_tte)       #
@@ -61,26 +69,39 @@ class TTENamespace(SharedADaMVerbsMixin):
         start: str,
         events: dict[str, pl.DataFrame | pl.LazyFrame],
         censors: dict[int, pl.DataFrame | pl.LazyFrame] | None = None,
-        stop_at: list[str] | None = None,
+        stop_at: dict[str, tuple[int, str]] | None = None,
+        keep_reason: list[int] | None = None,
         by: list[str] | None = None,
         set_values_to: dict[str, Any] | None = None,
         subject_keys: list[str] | None = None,
         create_datetime: bool = False,
         retain: Literal["drop", "censor_at_start"] = "drop",
         explain: bool = False,
-    ) -> TTENamespace:
+    ) -> Self:
         """Derive one time-to-event parameter and append its rows.
 
         Each source is a plain frame with the subject keys and ``ADT``.
         The stop date of a subject is the earliest non-null *stop_at* date
         in ADSL; event and censor records after it are dropped. The first
         event left wins: ``CNSR = 0`` and ``EVNTDESC`` = its key. A subject
-        without an event is censored at the last censor record left:
-        ``CNSR`` = its key (on a date tie, the frame given last wins). A
-        subject with no record left is dropped with a warning. ``STARTDT``
-        comes from ADSL (the pinned ADSL, else the base frame). An event or
-        censor date before it is set to it (admiral: ADT = max(ADT,
-        STARTDT)); the CNSR does not change. AVAL comes from :meth:`aval`.
+        without an event is censored at the date of the last censor record
+        left (on a date tie, the frame given last wins). A subject with no
+        record left is dropped with a warning. ``STARTDT`` comes from ADSL
+        (the pinned ADSL, else the base frame). An event or censor date
+        before it is set to it (admiral: ADT = max(ADT, STARTDT)); the CNSR
+        does not change. AVAL comes from :meth:`aval`.
+
+        The censor record gives the date; the stop gives the reason. CNSR
+        and EVNTDESC of a censored subject come from, in this order:
+
+        1. The censor frame, when its key is in *keep_reason*.
+        2. The stop of the subject: the *stop_at* column with the earliest
+           non-null date. On a tie, the first column in *stop_at* wins.
+        3. The censor frame (CNSR = its key), when the subject has no stop
+           date.
+
+        ``CNSDTDSC`` always comes from the censor frame. ``explain=True``
+        shows the rule per subject in the ``cnsr_from`` column.
 
         A source frame may also carry ``EVNTDESC`` (censors only),
         ``CNSDTDSC``, ``SRCDOM``, ``SRCVAR`` and ``SRCSEQ``; they go onto the
@@ -112,20 +133,31 @@ class TTENamespace(SharedADaMVerbsMixin):
             start: Date column in ADSL that starts the clock (``STARTDT``).
             events: ``EVNTDESC -> frame`` of event records.
             censors: ``CNSR -> frame`` of censor records (CNSR >= 1).
-            stop_at: Date columns in ADSL. The earliest non-null one ends
-                the observation: records after it are dropped.
-            by: Stratum columns, present in every source frame. Give a
-                per-stratum PARAMCD as an expression in *set_values_to*.
+            stop_at: ``ADSL date column -> (CNSR, EVNTDESC)``. The earliest
+                non-null date ends the observation: records after it are
+                dropped, and its CNSR and EVNTDESC go onto a censored row.
+                The CNSR values are distinct integers >= 1 and differ from
+                the *censors* keys.
+            keep_reason: Keys of *censors* whose frame keeps its own CNSR
+                and EVNTDESC, also when a stop date applies (for example
+                no baseline assessment).
+            by: Stratum columns, present in every event frame. A censor
+                frame with none of them (for example from ADSL) is crossed
+                with the strata of the event frames, as in admiral
+                ``derive_param_tte`` with ``by_vars``. Give a per-stratum
+                PARAMCD as an expression in *set_values_to*.
             set_values_to: Extra constant or expression columns on the new
                 rows (PARAMN, PARCAT1, ...). A static PARAMCD with several
-                strata raises (1:1 guard).
+                strata raises (1:1 guard). CNSR, ADT, ADTM, STARTDT and
+                STARTDTM are derived, so they raise here.
             subject_keys: Subject identifiers (default: the ADSL pin's join
                 key, usually ``["USUBJID"]``).
             create_datetime: Give ``ADTM``/``STARTDTM`` instead of dates.
             retain: ``"drop"`` (admiral, warns) or ``"censor_at_start"``
                 for a subject with no record.
             explain: Log the decision trace per subject (every candidate,
-                the selected one and the reason) through the fleet logger.
+                the selected one, the reason and ``cnsr_from``, the rule
+                that gave the CNSR) through the fleet logger.
 
         Returns:
             TTENamespace: A fresh namespace whose frame contains the
@@ -133,24 +165,37 @@ class TTENamespace(SharedADaMVerbsMixin):
 
         Raises:
             DerivationError: On unknown columns (with did-you-mean), date
-                columns that are not Date/Datetime, bad dict keys, PARAMCD
-                collisions, by-group 1:1 violations, or no PARAM label.
+                columns that are not Date/Datetime, bad dict keys, a
+                *stop_at* that is not a dict of ``(CNSR, EVNTDESC)``, a CNSR
+                used twice across *stop_at* and *censors*, a *keep_reason*
+                key not in *censors*, PARAMCD collisions, by-group 1:1
+                violations, or no PARAM label.
 
         References:
             admiral 1.5 ``derive_param_tte`` (``end_dates``,
             ``event_type = "negative"``: records after the first end date
-            are not used; ADT = max(ADT, STARTDT); ``censor_source`` has no
-            default EVNTDESC). ADaM BDS-TTE v1.0: EVNTDESC is permissible
-            free text with no codelist. ADaMIG v1.3: PARAM and PARAMCD map
-            one to one. ADR-0043
+            are not used; a censor record takes the CNSR and
+            ``set_values_to`` of the first end date unless
+            ``consider_end_dates = FALSE``; ADT = max(ADT, STARTDT);
+            ``censor_source`` has no default EVNTDESC). FDA Guidance for
+            Industry, Clinical Trial Endpoints for the Approval of Cancer
+            Drugs and Biologics (2018): the censoring date is the last
+            adequate tumour assessment, and the reason is a separate fact.
+            EMA Guideline on the evaluation of anticancer medicinal
+            products, Appendix 1 (PFS): the same split. ADaM BDS-TTE v1.0:
+            CNSR and EVNTDESC give the reason, CNSDTDSC the date; EVNTDESC
+            is permissible free text with no codelist. ADaMIG v1.3: PARAM
+            and PARAMCD map one to one. ADR-0043
             (docs/adr/0043-tte-censors-at-the-last-record-before-the-stop-date.md).
 
         Examples:
             PFS censored at the last assessment before new therapy::
 
                 last_assessment = adrs.select(
-                    "USUBJID", "ADT", EVNTDESC=pl.lit("NO PROGRESSION"),
-                    CNSDTDSC=pl.lit("LAST ASSESSMENT"),
+                    "USUBJID", "ADT", CNSDTDSC=pl.lit("LAST ADEQUATE TUMOR ASSESSMENT")
+                )
+                no_baseline = adsl.select(
+                    "USUBJID", ADT="TRTSDT", EVNTDESC=pl.lit("NO BASELINE ASSESSMENT")
                 )
                 adtte = (
                     adsl.adam.tte
@@ -158,14 +203,26 @@ class TTENamespace(SharedADaMVerbsMixin):
                         "PFS",
                         "Progression-Free Survival",
                         start="TRTSDT",
-                        events={"PD": adrs.filter(pl.col("AVALC") == "PD")},
-                        censors={2: last_assessment, 3: adsl.select("USUBJID", ADT="TRTSDT")},
-                        stop_at=["EOSDT", "NACTDT"],
+                        events={"PROGRESSIVE DISEASE": adrs.filter(pl.col("AVALC") == "PD")},
+                        censors={1: last_assessment, 3: no_baseline},
+                        stop_at={
+                            "EOSDT": (4, "END OF STUDY"),
+                            "NACTDT": (2, "NEW ANTICANCER THERAPY"),
+                            "DCUTDT": (5, "DATA CUT-OFF"),
+                        },
+                        keep_reason=[3],
                     )
                     .aval(unit="days")
                     .to_frame()
                 )
         """
+        reserved = sorted(_DERIVED & set(set_values_to or {}))
+        if reserved:
+            raise DerivationError(
+                f"param(): {reserved} cannot be set in set_values_to. CNSR comes from the "
+                "censors= key or the stop_at code, and ADT/ADTM/STARTDT/STARTDTM come from the "
+                "source frames."
+            )
         base = self.to_frame()
         pinned = getattr(self, "_pinned", {})
         universe = pinned["ADSL"][0] if "ADSL" in pinned else base
@@ -183,6 +240,7 @@ class TTENamespace(SharedADaMVerbsMixin):
             events=events,
             censors=censors or {},
             stop_at=stop_at,
+            keep_reason=keep_reason,
             subject_keys=keys,
             by=by,
             create_datetime=create_datetime,
@@ -209,6 +267,7 @@ class TTENamespace(SharedADaMVerbsMixin):
                 )
 
         if explain and not trace.is_empty():
+            fleet_log.ensure_default_handler()
             with pl.Config(
                 tbl_hide_dataframe_shape=True, tbl_hide_column_data_types=True, tbl_rows=-1
             ):
@@ -216,10 +275,14 @@ class TTENamespace(SharedADaMVerbsMixin):
 
         # Accumulate: a base frame that already carries PARAMCD holds prior
         # ADTTE rows → append (with collision guard); otherwise replace.
+        added = [c for c in rows.columns if c not in base.columns]
         if "PARAMCD" in base.columns and base.height:
-            if (base.get_column("PARAMCD") == paramcd).any():
+            clash = set(rows.get_column("PARAMCD").drop_nulls()) & set(
+                base.get_column("PARAMCD").drop_nulls()
+            )
+            if clash:
                 raise DerivationError(
-                    f"param(): PARAMCD '{paramcd}' already exists in the dataset — "
+                    f"param(): PARAMCD '{sorted(clash)[0]}' already exists in the dataset — "
                     "the PARAMCD ↔ PARAM mapping must stay one-to-one."
                 )
             for c in base.columns:
@@ -238,9 +301,10 @@ class TTENamespace(SharedADaMVerbsMixin):
             new = new.pin("ADSL", universe, join_on=keys)
         from fleet.core.lineage import record_lineage
 
+        date_cols = pl.struct([start, *(stop_at or [])])
         record_lineage(
             new,
-            (pl.col(start).alias(paramcd),),
+            tuple(date_cols.alias(c) for c in added),
             verb="param",
             params={
                 "param": param,
@@ -261,7 +325,7 @@ class TTENamespace(SharedADaMVerbsMixin):
         unit: Literal["days", "weeks", "months", "years"] = "days",
         add_one: bool = True,
         avalu: bool = True,
-    ) -> TTENamespace:
+    ) -> Self:
         """Derive ``AVAL`` (and ``AVALU``) from ``STARTDT``/``ADT``.
 
         ``AVAL = (ADT − STARTDT [+ 1 day]) / unit`` using the CDISC
@@ -276,7 +340,8 @@ class TTENamespace(SharedADaMVerbsMixin):
             unit: Output unit (default ``"days"``).
             add_one: Include both endpoints (CDISC day convention).
             avalu: Also stamp the ``AVALU`` unit variable (default True —
-                a required BDS variable admiral leaves to the user).
+                a required BDS variable admiral leaves to the user). AVALU
+                is null where AVAL is null (admiral ``derive_vars_duration``).
 
         Returns:
             TTENamespace: The namespace with ``AVAL`` (and ``AVALU``)
@@ -315,7 +380,7 @@ class TTENamespace(SharedADaMVerbsMixin):
             days = pl.when(days >= 0).then(days + 1).otherwise(days)
         exprs = [(days / _UNIT_DAYS[unit]).alias("AVAL")]
         if avalu:
-            exprs.append(pl.lit(unit.upper()).alias("AVALU"))
+            exprs.append(pl.when(days.is_not_null()).then(pl.lit(unit.upper())).alias("AVALU"))
         return self._chain(*exprs, verb="aval")
 
     # ------------------------------------------------------------------ #
@@ -342,12 +407,17 @@ class TTENamespace(SharedADaMVerbsMixin):
                 ADSL automatically.
 
         Returns:
-            pl.DataFrame: ``USUBJID | duration | event [| by...]``.
+            pl.DataFrame: ``<subject keys> | duration | event [| by...]``;
+                the subject keys are the ADSL pin's join key, else
+                ``USUBJID``.
 
         Raises:
             DerivationError: When AVAL/CNSR are missing (call ``aval()``
-                first) or several parameters are present and *paramcd* is
-                not given.
+                first), several parameters are present and *paramcd* is
+                not given, or *paramcd* is not in the PARAMCD values.
+
+        Warns:
+            UserWarning: When rows of the parameter have a null AVAL.
 
         Examples:
             Fit a KM curve per treatment arm::
@@ -363,17 +433,28 @@ class TTENamespace(SharedADaMVerbsMixin):
                 "param() and aval() first."
             )
         if paramcd is not None:
+            if "PARAMCD" not in df.columns:
+                raise DerivationError(
+                    f"km_data(): paramcd='{paramcd}' given, but the frame has no PARAMCD column."
+                )
+            present = df.get_column("PARAMCD").unique(maintain_order=True).to_list()
+            if paramcd not in present:
+                raise DerivationError(
+                    f"km_data(): PARAMCD '{paramcd}' not found; present: {present}"
+                )
             df = df.filter(pl.col("PARAMCD") == paramcd)
         elif "PARAMCD" in df.columns and df.get_column("PARAMCD").n_unique() > 1:
             raise DerivationError(
                 "km_data(): several parameters present — pass paramcd= to pick one."
             )
 
+        pinned = getattr(self, "_pinned", {})
+        id_cols = self._pin_join_key("ADSL") if "ADSL" in pinned else ["USUBJID"]
+
         # Group columns absent from the ADTTE rows resolve from the pinned
         # ADSL (the admiral template's post-hoc derive_vars_merged, built in).
         needed = [c for c in (by or []) if c not in df.columns]
         if needed:
-            pinned = getattr(self, "_pinned", {})
             if "ADSL" not in pinned:
                 raise DerivationError(
                     f"km_data(): column(s) {needed} not on the ADTTE rows and no "
@@ -386,15 +467,28 @@ class TTENamespace(SharedADaMVerbsMixin):
                     f"km_data(): column(s) {missing} not found on the ADTTE rows "
                     "nor in the pinned ADSL."
                 )
+            ref = refuse_repeated_keys(
+                "km_data()", adsl_df.select(list(join_on) + needed), list(join_on), source="ADSL"
+            )
             df = df.join(
-                adsl_df.select(list(join_on) + needed),
+                ref,
                 on=list(join_on),
                 how="left",
                 nulls_equal=True,
             )
 
+        null_aval = df.filter(pl.col("AVAL").is_null())
+        if null_aval.height:
+            ids = null_aval.get_column(id_cols[-1]).head(5).to_list()
+            warnings.warn(
+                f"km_data(): {null_aval.height} row(s) have a null AVAL (duration), for "
+                f"example {ids}. Survival fits drop them. Check STARTDT and ADT, and call "
+                "aval() after the last param().",
+                UserWarning,
+                stacklevel=2,
+            )
         cols = [
-            pl.col("USUBJID"),
+            *[pl.col(c) for c in id_cols],
             pl.col("AVAL").alias("duration"),
             (pl.col("CNSR") == 0).alias("event"),
         ]

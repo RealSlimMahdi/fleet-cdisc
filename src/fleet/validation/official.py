@@ -74,63 +74,73 @@ def _run_command(cmd: list[str], *, cwd: str, timeout: float) -> subprocess.Comp
     return subprocess.CompletedProcess(cmd, proc.returncode, stdout, stderr)
 
 
+#: Names CORE puts in ``variables`` for a metadata column, not a dataset variable.
+_METADATA_NAMES = frozenset({"dataset_name", "variable_name", "variable_label"})
+
+
+def _is_variable(name: object) -> bool:
+    """Whether *name* in an engine ``variables`` list is a dataset variable."""
+    return not (isinstance(name, str) and (name.startswith("$") or name in _METADATA_NAMES))
+
+
 def _resolve_variable_field(item: dict) -> str | None:
     """Resolve the engine's variables/values pair into a human-readable string.
 
     The engine returns template parameter names (e.g. ``$dataset_variables``)
     in ``variables`` and actual values in a parallel ``values`` list.
     For missing-variable rules (CORE-000334, CORE-000355) we compute the
-    set difference. For everything else, we join the resolved values.
+    set difference.  A template name, a metadata column name
+    (``variable_name``) and a value are never shown as a variable: a list
+    that holds only those gives ``None``.
     """
     raw_vars = item.get("variables", item.get("Variables"))
     raw_vals = item.get("values", item.get("Values"))
 
     # Simple case: variables is a plain string (not a template)
     if isinstance(raw_vars, str):
-        return raw_vars or None
+        return raw_vars if raw_vars and _is_variable(raw_vars) else None
 
     # Not a list or empty → nothing to show
     if not isinstance(raw_vars, list) or not raw_vars:
         return None
 
-    # If all entries are $-prefixed templates, resolve from values
     all_templates = all(isinstance(v, str) and v.startswith("$") for v in raw_vars)
     if not all_templates:
-        # Non-template list — just join as-is
-        return ", ".join(str(v) for v in raw_vars) or None
+        return ", ".join(str(v) for v in raw_vars if _is_variable(v)) or None
 
-    # We have template variables — use values for resolution
-    if not isinstance(raw_vals, list) or len(raw_vals) != len(raw_vars):
-        # Can't resolve — show template names without $
-        return ", ".join(v.lstrip("$") for v in raw_vars)
-
-    # Build a name→value map
-    resolved = dict(zip(raw_vars, raw_vals))
-
-    # Special handling for missing-variable rules
     rule_id = item.get("core_id", "")
-    if rule_id in ("CORE-000334", "CORE-000355"):
-        # Compute which variables are missing
-        dataset_vars = _parse_list_string(resolved.get("$dataset_variables", ""))
-        expected_key = (
-            "$expected_variables" if "$expected_variables" in resolved else "$required_variables"
-        )
-        expected_vars = _parse_list_string(resolved.get(expected_key, ""))
-        missing = sorted(set(expected_vars) - set(dataset_vars))
-        if missing:
-            return ", ".join(missing)
-        # Fallback: show expected vars
-        return ", ".join(expected_vars) if expected_vars else None
+    if rule_id not in ("CORE-000334", "CORE-000355"):
+        return None
+    if not isinstance(raw_vals, list) or len(raw_vals) != len(raw_vars):
+        return None
 
-    # Generic: show the resolved values joined
-    parts = []
-    for val in raw_vals:
-        parsed = _parse_list_string(val)
-        if parsed:
-            parts.extend(parsed)
-        elif val:
-            parts.append(str(val))
-    return ", ".join(parts) or None
+    # Missing-variable rules: the expected variables the dataset lacks
+    resolved = dict(zip(raw_vars, raw_vals))
+    dataset_vars = _parse_list_string(resolved.get("$dataset_variables", ""))
+    expected_key = (
+        "$expected_variables" if "$expected_variables" in resolved else "$required_variables"
+    )
+    expected_vars = _parse_list_string(resolved.get(expected_key, ""))
+    missing = sorted(set(expected_vars) - set(dataset_vars))
+    if missing:
+        return ", ".join(missing)
+    return ", ".join(expected_vars) if expected_vars else None
+
+
+def _record_values(item: dict) -> list[str] | None:
+    """The values of the checked variables on the record, or ``None``.
+
+    A value paired with a template or metadata name is rule metadata, not
+    record data, so it is left out.
+    """
+    raw_vars = item.get("variables", item.get("Variables"))
+    raw_vals = item.get("values", item.get("Values"))
+    if not isinstance(raw_vals, list) or not isinstance(raw_vars, list):
+        return None
+    if len(raw_vars) != len(raw_vals):
+        return None
+    kept = [str(val) for var, val in zip(raw_vars, raw_vals) if _is_variable(var)]
+    return kept or None
 
 
 def _parse_list_string(s: str) -> list[str]:
@@ -172,8 +182,8 @@ class OfficialCDISCValidator:
     """Wrapper for the official CDISC Rules Engine CLI.
 
     Discovers the engine automatically via ``discover_engine()``
-    (env var → ``~/.fleet/bin/core`` → legacy ``../cdisc-rules-engine/core.py``),
-    or accepts an explicit *rules_engine_path*.
+    (env var → ``~/.fleet/cdisc-rules-engine/core/core`` → legacy
+    ``../cdisc-rules-engine/core.py``), or accepts an explicit *rules_engine_path*.
     """
 
     def __init__(self, rules_engine_path: Path | None = None) -> None:
@@ -276,7 +286,9 @@ class OfficialCDISCValidator:
         Examples:
             Validate DM and AE together, then read the AE result::
 
-                validator = OfficialCDISCValidator(Path("~/.fleet/core"))
+                validator = OfficialCDISCValidator(
+                    Path("~/.fleet/cdisc-rules-engine/core/core").expanduser()
+                )
                 results = validator.validate_datasets(
                     {"DM": dm, "AE": ae}, standard="sdtmig", version="3-4"
                 )
@@ -399,15 +411,30 @@ class OfficialCDISCValidator:
                 "the engine report has no Issue_Details and no Rules_Report: "
                 "Fleet cannot read this CORE report format."
             )
+        rules_report = data.get("Rules_Report")
+        reported = isinstance(rules_report, list) and any(
+            _status(row) == "ISSUE_REPORTED" for row in rules_report if isinstance(row, dict)
+        )
+        if reported and not data.get("Issue_Details"):
+            # A rule says "issue reported" but no finding is readable: not a pass.
+            return _CouldNotRun(
+                "a rule reported issues, but the report has no Issue_Details rows: "
+                "Fleet cannot read this CORE report format."
+            )
         if custom_rules is not None:
             data["_fleet_not_loaded"] = _not_loaded(rules_path, data.get("Rules_Report") or [])
         return data
 
     @staticmethod
     def _write_dataset_json(df: pl.DataFrame, path: Path, *, domain: str) -> None:
+        """Write the engine input; a null text value is written as "".
+
+        A SAS transport file has no null text, and CORE operators such as
+        ``max_date`` stop on a null (c2-887).
+        """
         from fleet.io.dataset_json import save_dataset_json
 
-        save_dataset_json(df, path, domain=domain)
+        save_dataset_json(df.with_columns(pl.col(pl.String).fill_null("")), path, domain=domain)
 
     @staticmethod
     def _parse_validation_result(
@@ -436,21 +463,26 @@ class OfficialCDISCValidator:
         one dataset cannot show whether the study lacks a domain.
         """
         name = domain or "unknown"
-        return _parse_report(data, [name], lambda _item: name, study_is_info=True)[name]
+        return _parse_report(data, [name], lambda _item: (name, ()), study_is_info=True)[name]
 
 
 def _split_validation_result(data: dict, names: list[str]) -> dict[str, ValidationResult]:
     """Split one multi-dataset engine report into one result per dataset.
 
     The engine names the dataset of each finding in its ``dataset`` field,
-    as the file name (``ae.json``) or the dataset name (``AE``).
+    as the file name (``ae.json``) or the dataset name (``AE``).  A finding
+    on a split pair (``"LBCH.JSON, LBHM"``) is attached once, to the first
+    given dataset it names; its message names the others.
     """
     known = {name.upper(): name for name in names}
 
-    def dataset_of(item: dict) -> str:
+    def dataset_of(item: dict) -> tuple[str, tuple[str, ...]]:
         raw = item.get("dataset", item.get("Dataset"))
-        stem = Path(str(raw)).stem.upper() if raw else "UNKNOWN"
-        return known.get(stem, stem)
+        if not raw:
+            return "UNKNOWN", ()
+        stems = [Path(part.strip()).stem.upper() for part in str(raw).split(",") if part.strip()]
+        first = next((s for s in stems if s in known), stems[0] if stems else "UNKNOWN")
+        return known.get(first, first), tuple(s for s in stems if s != first)
 
     return _parse_report(data, names, dataset_of)
 
@@ -458,14 +490,16 @@ def _split_validation_result(data: dict, names: list[str]) -> dict[str, Validati
 def _parse_report(
     data: dict,
     names: list[str],
-    dataset_of: Callable[[dict], str],
+    dataset_of: Callable[[dict], tuple[str, tuple[str, ...]]],
     *,
     study_is_info: bool = False,
 ) -> dict[str, ValidationResult]:
     """Parse an engine report into one result per dataset *dataset_of* names.
 
-    CORE gives no severity, so every finding blocks until the study
-    accepts it (ADR-0017).
+    *dataset_of* gives the dataset of a finding and the other datasets it
+    names.  Only ``Issue_Details`` rows become findings: ``Issue_Summary``
+    is a count of the same rows.  CORE gives no severity, so every finding
+    blocks until the study accepts it (ADR-0017).
     """
     conformance = data.get("Conformance_Details", {})
     dataset_type = conformance.get("Standard", "unknown").lower()
@@ -485,7 +519,10 @@ def _parse_report(
         if study_is_info and str(item.get("dataset", "")).upper() == "STUDY":
             issue.severity = Severity.INFO
             issue.message += " (study-level rule: not assessable in a single-dataset run)"
-        issues.setdefault(dataset_of(item), []).append(issue)
+        dataset, others = dataset_of(item)
+        if others:
+            issue.message += f" (also: {', '.join(others)})"
+        issues.setdefault(dataset, []).append(issue)
 
     # ── Issue_Details: one entry per individual finding ──────────
     for item in data.get("Issue_Details", []):
@@ -499,19 +536,12 @@ def _parse_report(
                 rule_id=item.get("core_id", item.get("Rule", "UNKNOWN")),
                 message=message,
                 variable=_resolve_variable_field(item),
-                rows_affected=_safe_int(item.get("row", item.get("Rows"))),
+                row=_safe_int(item.get("row", item.get("Rows"))),
+                usubjid=str(item.get("USUBJID") or "") or None,
+                seq=_safe_int(item.get("SEQ")),
+                values=_record_values(item),
             ),
         )
-
-    # ── Issue_Summary: real findings aggregated per rule ─────────
-    for item in data.get("Issue_Summary", []):
-        rule_id = item.get("core_id", "UNKNOWN")
-        message = item.get("message", "")
-        if rule_id in failed_rules:
-            continue
-        # Issue_Summary is a rollup of Issue_Details: add a rule only once.
-        if rule_id not in {i.rule_id for i in issues.get(dataset_of(item), [])}:
-            place(item, ValidationIssue(severity=Severity.ERROR, rule_id=rule_id, message=message))
 
     # ── Rules_Report: counted per run, never turned into findings ──
     # A skipped rule is expected (no dataset in scope, or a permissive

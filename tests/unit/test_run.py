@@ -729,3 +729,21 @@ class TestPilotStudy:
         ]
         assert built["ADSL"]["STUDYID"].to_list() == ["CDISCPILOT01", "CDISCPILOT01"]
         assert built["ADSL"]["TRTSDT"].cast(pl.String).to_list() == ["2014-01-02", "2014-01-03"]
+
+    @pytest.mark.skipif(not _PILOT.exists(), reason="examples/ is not shipped here")
+    def test_fleet_run_reads_the_shipped_raw_files(self, tmp_path, monkeypatch) -> None:
+        """c1-186: on a copy of the shipped pilot, ``fleet run --dataset DM`` builds DM."""
+        import shutil
+
+        from fleet import cli
+
+        study = tmp_path / "cdiscpilot01"
+        shutil.copytree(self._PILOT.parent, study)
+        monkeypatch.chdir(study)
+        try:
+            cli.main(["run", "--dataset", "DM", "--out", "out"])
+        except SystemExit as exc:
+            assert not exc.code
+        dm = pl.read_parquet(study / "out" / "dm.parquet")
+        assert dm["USUBJID"].to_list()[:2] == ["01-701-1015", "01-701-1023"]
+        assert dm.height == 5

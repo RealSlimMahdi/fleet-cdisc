@@ -16,7 +16,12 @@ builtin style (``except ValueError`` / ``except TypeError`` /
 
 
 class FleetError(Exception):
-    """Base exception for all fleet errors."""
+    """Base exception of the errors Fleet raises on purpose.
+
+    Fleet errors carry a message for the programmer.  An error from Polars,
+    Pydantic or the operating system that Fleet does not translate is not
+    a ``FleetError``.
+    """
 
 
 class DerivationError(FleetError, ValueError):
@@ -43,14 +48,6 @@ class PinError(FleetError, LookupError):
     """
 
 
-class SDTMError(FleetError):
-    """Raised when SDTM namespace operations fail."""
-
-
-class ADAMError(FleetError):
-    """Raised when ADaM namespace operations fail."""
-
-
 class CTError(FleetError):
     """Raised when controlled terminology operations fail."""
 
@@ -59,8 +56,19 @@ class CTNotFoundError(CTError, LookupError):
     """Raised when the CDISC Library has no such resource (HTTP 404), unlike a 401 or a network error."""
 
 
-class IOError(FleetError):  # noqa: A001
-    """Raised when data loading or saving fails."""
+class FleetIOError(FleetError, OSError):
+    """Raised when data loading or saving fails.
+
+    An ``OSError`` too, so ``except OSError`` handlers keep working.
+    """
+
+
+class DefineCheckError(FleetError, ValueError):
+    """Raised when a define check finds errors and the caller asked to stop.
+
+    A ``ValueError`` too, so code written for the earlier ``ValueError``
+    keeps working.
+    """
 
 
 class SpecError(FleetError):
@@ -107,6 +115,16 @@ class ComparisonError(FleetError, ValueError):
     ``.compare(..., on_fail="raise")`` is the one place that turns a
     difference into this error, on request.  Dual-inherits from
     ``ValueError`` so ``except ValueError`` handlers keep working.
+    """
+
+
+class ComparisonFailed(ComparisonError):  # noqa: N818
+    """Raised by ``.compare(..., on_fail="raise")`` when the datasets differ.
+
+    This is the QC finding: the comparison ran and the result is NOT
+    EQUAL.  A comparison that could not run raises the parent
+    :class:`ComparisonError`, so ``except ComparisonFailed`` catches the
+    finding only.
     """
 
 

@@ -58,22 +58,6 @@ def simple_raw() -> pl.DataFrame:
 """)
 
 
-@pytest.fixture
-def simple_vs() -> pl.DataFrame:
-    """Minimal VS-like frame for ADaM unit tests."""
-    return pl.from_repr("""\
-┌────────────────┬──────────┬──────────────────────────┬──────────┬──────────┬────────────┬────────────┐
-│ patient_number ┆ vstestcd ┆ vstest                   ┆ VSSTRESN ┆ vsorresu ┆ vsdtc      ┆ TRTSDT     │
-│ ---            ┆ ---      ┆ ---                      ┆ ---      ┆ ---      ┆ ---        ┆ ---        │
-│ str            ┆ str      ┆ str                      ┆ f64      ┆ str      ┆ str        ┆ str        │
-╞════════════════╪══════════╪══════════════════════════╪══════════╪══════════╪════════════╪════════════╡
-│ 01-701-1015    ┆ SYSBP    ┆ Systolic Blood Pressure  ┆ 120.0    ┆ mmHg     ┆ 2014-01-02 ┆ 2014-01-02 │
-│ 01-701-1015    ┆ DIABP    ┆ Diastolic Blood Pressure ┆ 80.0     ┆ mmHg     ┆ 2014-01-02 ┆ 2014-01-02 │
-│ 01-701-1023    ┆ SYSBP    ┆ Systolic Blood Pressure  ┆ 118.0    ┆ mmHg     ┆ 2014-01-03 ┆ 2014-01-03 │
-└────────────────┴──────────┴──────────────────────────┴──────────┴──────────┴────────────┴────────────┘
-""")
-
-
 # ------------------------------------------------------------------ #
 # Paths                                                                #
 # ------------------------------------------------------------------ #
@@ -90,48 +74,9 @@ def sdtm_define_path() -> Path:
     return SPECS_DIR / "define_sdtm.yaml"
 
 
-@pytest.fixture
-def adam_define_path() -> Path:
-    """Unified ADaM define.yaml (drives both Define-XML and from_spec())."""
-    return SPECS_DIR / "define_adam.yaml"
-
-
 # ------------------------------------------------------------------ #
 # Therapeutic-area shared frames (admiral-style, multi-subject)        #
 # ------------------------------------------------------------------ #
-
-
-@pytest.fixture
-def adrs_frame() -> pl.DataFrame:
-    """
-    Multi-subject overall response frame modelled on CDISC PILOT data.
-
-    Subject layout mirrors admiralonco test conventions:
-      01-701-1015  CR → PD                  BOR = CR
-      01-701-1023  SD → PR → SD             BOR = PR
-      01-701-1028  PD immediately           BOR = PD
-      01-701-1034  NE only                  BOR = NE
-      01-701-1039  no PD (PR, SD, PR)       all rows survive filter_pd
-    """
-    return pl.from_repr("""\
-┌──────────────┬──────────────┬─────────┬───────┬────────────┐
-│ STUDYID      ┆ USUBJID      ┆ PARAMCD ┆ AVALC ┆ ADT        │
-│ ---          ┆ ---          ┆ ---     ┆ ---   ┆ ---        │
-│ str          ┆ str          ┆ str     ┆ str   ┆ str        │
-╞══════════════╪══════════════╪═════════╪═══════╪════════════╡
-│ CDISCPILOT01 ┆ 01-701-1015  ┆ OVR     ┆ CR    ┆ 2020-01-01 │
-│ CDISCPILOT01 ┆ 01-701-1015  ┆ OVR     ┆ PD    ┆ 2020-02-01 │
-│ CDISCPILOT01 ┆ 01-701-1023  ┆ OVR     ┆ SD    ┆ 2020-01-01 │
-│ CDISCPILOT01 ┆ 01-701-1023  ┆ OVR     ┆ PR    ┆ 2020-02-01 │
-│ CDISCPILOT01 ┆ 01-701-1023  ┆ OVR     ┆ SD    ┆ 2020-03-01 │
-│ CDISCPILOT01 ┆ 01-701-1028  ┆ OVR     ┆ PD    ┆ 2020-01-01 │
-│ CDISCPILOT01 ┆ 01-701-1034  ┆ OVR     ┆ NE    ┆ 2020-01-01 │
-│ CDISCPILOT01 ┆ 01-701-1039  ┆ OVR     ┆ PR    ┆ 2020-01-01 │
-│ CDISCPILOT01 ┆ 01-701-1039  ┆ OVR     ┆ SD    ┆ 2020-02-01 │
-│ CDISCPILOT01 ┆ 01-701-1039  ┆ OVR     ┆ PR    ┆ 2020-03-01 │
-│ CDISCPILOT01 ┆ 01-701-1015  ┆ BOR     ┆ CR    ┆ 2020-01-01 │
-└──────────────┴──────────────┴─────────┴───────┴────────────┘
-""")
 
 
 @pytest.fixture

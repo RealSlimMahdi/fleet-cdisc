@@ -4,6 +4,461 @@ All notable changes to Fleet are documented here.
 
 ## [Unreleased]
 
+### Alpha audit: medium and low findings
+
+The medium and low findings of the alpha audit (`ML-REMAINING.md`, rechecked on 5 November 2026), fixed where no clinical decision was needed. Engineering choices follow the recommendation of each finding. ADR-0047 to ADR-0052 record the changed defaults.
+
+#### Added
+
+- `fleet.ct.terms.terms_for(ct, validator=, study_classes=, define_items=)`: one lookup of the terms of a codelist, in a fixed order (loaded validator, codelist class, study `codelists.py` classes, define items). The MCP tool `fleet_ct_terms` uses it, so it answers in a study with `codelists.py` and no loaded CT file. The source-path CT warnings of `assign` name `fleet init ct` (c1-35, part: the `assign` paths move to it with c1-33).
+- `ComparisonFailed`, a subclass of `ComparisonError`: `.compare(..., on_fail="raise")` raises it when the datasets differ, so `except ComparisonFailed` catches the QC finding only and not a comparison that could not run (c1-50).
+- c1-64: a namespace prints as "SDTM pipeline, not materialised. Call .to_frame() to see the data." (or ADaM); the `verbs()` example prints every row with `pl.Config(tbl_rows=-1, fmt_str_lengths=200)`.
+- c1-749: the `fleet` command line writes every WARNING of the `fleet` logger to stderr (`fleet.core.log.enable_cli_warnings`); `fleet init define` stops with exit 1 when no requested domain is in the IG, and a skipped domain (or one with no codelists in `fleet init ct`) is a `UserWarning` for library users.
+- c1-543: `fleet check` gives a FAIL row when `study_config.yaml` and a define disagree on the standard, the IG version (3-4 and 3.4 are equal) or the study id.
+- c1-550: `fleet new` (`StudyContext.init`) writes a `.gitignore` with `.env` when the study has none.
+- c1-751: `CDISCClient.get(path)` is public; tests cover `RulesScaffolder` (domain files, the `_ALL` file, no overwrite without `force`).
+- `derive_param(constant_by=, constant_parameters=)`: a parameter measured once per subject (height at screening) joins each visit, as admiral `constant_by_vars` (c1-320, ADR-0047).
+- `derive_summary_records(set_values_to=)` evaluates a `pl.Expr` value per group, for example `ADT=pl.col("ADT").min()` (c1-326).
+- `.adam` on every ADaM sub-namespace goes back to the BDS namespace with the pins, lineage and domain of the chain: `adae.adam.occds.treatment_emergent(...).adam.on_treatment(...)` (c1-337).
+- `tte.param()` carries the ADSL flag of the start date: `<start>DTF` as STARTDTF and, with `create_datetime=True`, `<start>TMF` as STARTTMF, as admiral `derive_param_tte` (c1-358).
+- c2-lead-1: `adam.pk.predose_flag(include_zero=True)` also flags time 0, for a nominal time column (NFRLT).
+- c1-395: `adam.pk.avalcat(digits=)` rounds the number text to significant digits (default `None`, no rounding).
+- c1-414: `src/fleet/THIRD_PARTY_NOTICES` ships in the package. It names admiral (the grading criteria data, ADR-0014) and admiralophtha with the Apache License 2.0 text. The ophtha module docstring says "inspired by ... (not ports)", and the test comment calls admiral Apache-2.0, not MIT.
+- c1-439: `Row.order_by` orders the levels of a row field by a numeric column. Without it, the engine takes `<field>N` when the dataset has it, so AVISIT sorts by AVISITN (Baseline, Week 2, Week 4, Week 12) and AGEGR1 by AGEGR1N (ADR-0049).
+- c2-965: `DMSummarySpec(continuous_vars={"AGE": "Age (yr)", "HEIGHTBL": "Height (cm)"})` and the builder verb `.continuous({...})` put several continuous blocks in one demographics table. `age_var` is removed (no alias).
+- c1-502: `LBListingSpec.prefilter` holds the abnormal-record rule of the lab listing; it applies after `dataset_filter`, and `prefilter=None` lists every record.
+- c1-817: the builder `to_html`, `to_rtf`, `to_pdf` and `to_pptx` take `rows_per_page`. Every physical PDF page shows "Page X of Y" from the PDF page counter.
+- c1-810: `df.tlg.verbs()` and `df.tlg.<domain>.verbs()` list the TLG verbs, as on `df.sdtm` and `df.adam`.
+- c1-793: `fleet.tlg.get`, `fleet.tlg.by_class` and `fleet.tlg.by_namespace` are exported.
+- c1-814: `fleet.tlg.render.html.html_document()` wraps an HTML fragment in a UTF-8 document.
+- c1-251: `tdd_audit.audit()` takes `td=` and `tm=` and reports each Req variable of the SDTMIG 3.4 structure that is absent, null or blank (`FLEETTD08`). `StudyDesign.audit()` reports an empty elements or arms section as an error and an empty visits or criteria section as a warning (`FLEETTD09`).
+- c1-786: `tdd_audit.audit(dm=)` warns when a DM (ARMCD, ARM) pair is not a TA pair (`FLEETTD07`, CORE-000047).
+- c1-224: `visit_map` with no `tolerance=` warns with the count of mapped rows and the largest distance in study days.
+- c1-110: `export_supp` checks the SUPPQUAL limits: a QNAM that is not 1 to 8 upper-case letters, digits or underscores with no digit first, or a QLABEL that is not 1 to 40 characters, raises; a QVAL over 200 characters warns.
+- c1-114: `ae_aerel` warns once with the values that have no mapping.
+- c1-784: `StudyDesign.from_usdm` writes the encounter transition rules to TVSTRL and TVENRL and warns with the count of visits with no start rule.
+- `fleet run --overwrite` lets a spec derivation replace a column the input already has; default off, so a QC run keeps the guard. A spec error from `fleet run` names `--overwrite` and `--no-strict`, not the Python arguments. (c1-245)
+- A validation finding keeps the record the engine names: `ValidationIssue.usubjid`, `.seq` and `.values`. The full report, the HTML page and the MCP `fleet_validate` issues show them. (c1-831)
+- The MCP tool `fleet_validate` returns the study-level findings as `study_issues`. (c1-267)
+- `scripts/refresh_rule_schema.py` rebuilds the bundled rule schema from the installed CORE engine and prints the added and removed rule types and operators. (c1-837)
+- `fleet.validation.check_ig_version` and `fleet.validation.missing_engine_reason` are public. (c1-838, c1-523)
+- `fleet.core.define_spec.read_define_yaml` and `validate_define_data`: one reader for `DefineSpecGenerator` and `DatasetChecker`. Bad YAML, an empty file, a list file or a file with no `datasets:` gives one `SpecSchemaError` line, also from `fleet define-xml`; an old algorithm name says "Run: fleet migrate --spec <file>" (c1-564).
+- define.yaml `subclass:` (written as `def:SubClass`) and `domain:` (the SDTM `Domain` of a split dataset, QSPH: QS) on a dataset (c1-567).
+- define.yaml value-level `where:` takes a list of conditions, ANDed into one WhereClauseDef, each with an optional `comparator:` (`EQ`, `NE`, `LT`, `LE`, `GT`, `GE`, `IN`, `NOTIN`) (c1-570).
+- `define2-1.xsl` ships in the package. `DefineSpecGenerator.generate()` copies it next to the XML when no file of that name is there (also with `--no-preview`), and never replaces one (c1-569).
+- `DatasetChecker(check_values=True)`: `check()` reports a text value longer than the define `length`, a null or blank value in a `mandatory` variable, and two records with the same `keys` (a null key value counts as one value, as in PROC SORT NODUPKEY). The pilot ADVS keys are now STUDYID, USUBJID, PARAMCD, ADT (c1-772).
+- `try_load_dotenv(start=)`: the CLI reads the `.env` next to the `--config` file first, then walks up from the working directory (c1-762).
+- `fleet.introspect` (additive): `check_derivation`, `DerivationProblem`, `renamed_algorithm` and `standard_of`; `fleet.core.define_spec.standard_of`. (c1-608 c1-614 c1-615)
+- `fleet.tlg.resolve_population(meta, data, adsl)`. (c1-601)
+- `ComparisonReport.values.within_tolerance` and the JSON key `values.within_tolerance` count the values equal under a tolerance or `ignore_trailing_whitespace` but not exactly equal. The text and HTML reports say "All compared values are within the rule in effect; 3 of them are not exactly equal." (c1-727)
+- `fleet run --check`: stop before the write when a variable's values do not match its define type. Without it, `fleet run` prints the type mismatch as a warning on stderr (c1-316).
+- An offline test runs `fleet new`, `fleet check`, `fleet add-rule` and `fleet check-rule` with a recorded CDISC Library, and one runs `fleet init rules` (c1-313).
+- `--config` on `fleet tlg run`, `fleet tlg explore`, `fleet tlg export` and `fleet add-ct`, as the CLI docstring promises. `StudyContext.define_path` is left for #161 (c1-306).
+- `fleet.introspect.algorithm_doc(name, standard=None)`: with `standard="adam"`, `seq` and `date` name the ADaM verb that runs, not the SDTM verb. The language server passes the standard of the file. (c1-780)
+- `import fleet` now exports `FleetError`, `DerivationError`, `SpecError`, `ValidationError`, `ComparisonError`, `PinError`, `PKNamespace` and `TTENamespace`. (c1-699)
+- `.github/dependabot.yml`: monthly grouped updates for `uv` and GitHub Actions. The release steps in CONTRIBUTING.md now refresh `uv.lock` first. (c2-871)
+- Tests with exact values replace presence and range checks, and new tests cover: `fleet lsp` and `fleet mcp` over stdio, `fleet new` to `define-xml`, `fleet add-ct` and the CDISC client over a mock transport, `DatasetChecker` per check, every docs page (compile, imports, YAML), SAS-written pilot XPT files and the CDISC Dataset-JSON ADSL, TD/TM and the IG column order, CTCAE and DAIDS cut-off edges, ties in `nodup` and `seq`. A `docs:no-run` marker now states its reason. Strict xfails record open defects: ADTM `value=` with hh:mm, the 24-month anniversary in `age_months`, VISITNUM 3.5 in `TrialVisit`, and egt01 with ATPT/DTYPE records. (c1-841, c1-843, c1-844, c1-846, c1-847, c1-848, c1-849, c1-851, c1-852, c1-853, c1-854, c1-855, c1-856, c1-857, c1-858, c2-972, c2-974, c2-975)
+- `docs/concepts/coming-from-sas.md`: the SAS rule and the Fleet rule for missing values, sort order, rounding, merge and dates, each with a tested sample (c1-688).
+- `SECURITY.md` and a "Trust" section in `define-yaml.md`: a study folder is code; the expression allow-list is not a security boundary (c1-642).
+- Cheat sheet: a TLG table with the one-line spec, the EX reference dates, the partial-date rule, BNRIND and the `--DTC` type (c1-639, c1-594).
+- `full_pipeline.md`: an EX step, RFXSTDTC/RFXENDTC from EX, TRTSDT from EX with `impute=`, BNRIND with `baseline()`; the page runs in a test (c1-594).
+- Docs CI fails when a mkdocstrings `options:` block prints as text (c1-636).
+- `PinMixin` on the core API page; `load_spec_yaml` and `Standard` on the introspect page (c1-636, c1-641).
+- `validation-strategy.md`: a dependency statement with a dated advisory scan, the `uv export` SBOM route and a dated licence summary (c2-875).
+- c1-192: `docs/getting-started/from-sas.md` maps SAS statements (PROC SORT NODUPKEY, FIRST./LAST., MERGE, IF/ELSE) to Fleet verbs and shows where a null in a condition gives a result other than a SAS missing value. README and Quickstart link to it.
+- c1-186: the pilot study ships small synthetic raw CSVs under `examples/cdiscpilot01/raw/`; the SDTM define names them as `raw/<name>.csv`, so `fleet run --dataset DM` runs on a copy of the folder. A test runs it.
+- c1-632: CONTRIBUTING.md section "Add a verb" lists the five edits of a spec-executable verb and the test that checks each.
+- c1-355: `df.adam.tte.param(keep_reason=[...])` names censor keys whose frame keeps its own CNSR and EVNTDESC before a stop (admiral `consider_end_dates = FALSE`), for example no baseline assessment.
+- c1-355: the TTE decision trace (`explain=True`, `select_tte()`) has a `cnsr_from` column that names the rule that gave the CNSR: `event`, `keep_reason`, `stop_at <column>`, `censors key` or `retain`.
+
+#### Changed
+
+- The Define-XML `FormalExpression` and `VariableNode.method` name the public namespace class the verb runs on (`fleet.adam.namespace.AdamNamespace.assign(...)`), not a private mixin, so the text of an unchanged study does not change when Fleet moves a verb between its mixins. A dotted verb names its sub-namespace class (c1-177, c1-175).
+- `from_spec` loads a spec `ct: file:` into a validator of that spec only, also without `validate: true`; the global `fleet.get_validator()` is unchanged, and an ID the file lacks falls back to it. The CT state of one `from_spec` call no longer reaches the next one (c1-56, c1-37).
+- `from_spec()` and `fleet define-xml` print one stderr line when they import the spec's `derivations_module`, because the module is study Python that runs (c1-60).
+- The define.yaml `case_when` method text reads each branch as "if <condition> then <value>"; `fleet define-xml` warns for each variable whose method text holds a Polars expression and that has no `comment:`. The pilot ABLFL has a `comment:` (c1-171).
+
+- `flag()` raises `VerbUsageError` for `by=` with an expression criteria or an exists mode, where it had no effect: an expression flags each row on its own. The pilot ABLFL in `examples/cdiscpilot01` and the docs no longer pass it (c1-214).
+- `criterion()` has no `prefix=` argument, requires `description=`, and refuses a number below 1, so it cannot write MCRIT1, CRIT0, CRIT-1 or a null CRIT1 (ADaMIG 1.3 CRITy; admiral `derive_vars_crit_flag`) (c1-205).
+- `flag_relative` (and `flag(criteria="before"/"after")`) computes the row position and the landmark in one window, so it scales with the number of groups; a condition with its own `.over()` gives the same flags (c1-208).
+- `merge_adsl(by=)` and `pick(by=)` accept one column name as a string; `flag(condition=)`, `flag_relative(condition=)`, `criterion(condition=)` and `flag_exists(source_filter=)` accept an expression string, parsed as `where=` is (c1-215).
+
+- `nodup(keep=...)` always sorts the rows by `subset`, then `sort_by`, as PROC SORT NODUPKEY, also when no duplicate exists. `descending=True` no longer reverses the key columns (c1-20).
+- `seq(order_by=...)` sorts the rows by the `by` groups, then `order_by`, so the rows of one subject stay together (c1-22).
+- `merge()` keeps the row order of the pipeline for `how="left"`, `"inner"` and `"full"`, whatever the size of the right frame (c1-16).
+- `validate()` takes keyword arguments only after the dataset name: `.validate("DM", version="3-4")` (c1-61).
+- The foreign-key check runs once, at the public `to_frame()` and the terminal verbs, on the final frame, with the last `fk_policy` of the chain, in any order of `pin`, `fk_policy` and the verbs. It checks `USUBJID` only: `VISITNUM`, `VISIT`, `EPOCH` and `ETCD` gave false orphans on unscheduled visits. A verb that collects mid-chain does not run it (c1-197, c1-198).
+- `pin()` and `repin()` collect a LazyFrame once, at pin time, so `study_day` and `join_adsl` work with a `fleet.load_datasets` frame. `repin()` refuses a value that is not a frame (c1-194).
+- The `case_when` docstring teaches closed bands with `else_="Missing"` and states that a null condition takes `else_` (c1-27).
+- c1-23 c1-24: `seq`, `merge` (`on=` on both sides, `where=` against the right dataset, key types), `group_by`, `nodup` (`subset=` and `sort_by=`, before the duplicate test) and `whereclauses` raise `DerivationError` at the call, with the verb, the column and a did-you-mean, when a column is not in the frame. `seq` says when the column comes from the default `by=`. A text key against a number key in `merge` is an error, as SAS stops on such a BY variable.
+- c1-33: `assign(value=, ct=<class>)` checks the literal against the terms of the class when no CT is loaded, and `validate_values=False` silences the check.
+- c1-36: the CT warning lists the values not in the codelist in sorted order, shows at most 20 codelist terms ("and N more"), points at the user line, and names the dataset of a `from_spec` run (`ADSL.SEX`).
+- c1-542 c1-543: an unknown key in `study_config.yaml` (`sdtm.ig_versoin`) is a `StudyConfigError` that names it; a `validation.engine_path` that does not exist is reported with its path by `fleet check` (WARN), `fleet doctor` and `fleet validate` (could not run), and never replaced by the managed engine.
+- c1-546: `ig_version: 3.4`, `'3.4'` and `'3-4'` all load as `'3-4'`.
+- c1-548 c1-747: `StudyConfigError` is a `FleetError` and is exported from `fleet.core` under its own name (the `StudyContextError` alias is gone). `fleet.core.exceptions.IOError` is renamed `FleetIOError` and is also an `OSError`. `CheckResult.raise_on_errors` raises `DefineCheckError` and `load_criteria` an unknown system as `DerivationError`, both still `ValueError`. The `FleetError` docstring says which errors it covers.
+- c1-549: `load_study_context` takes a `str` or a `Path` and resolves it, so the study paths do not change after `os.chdir`.
+- c1-734: `build_dag` adds an edge for each dataset a step reads through a pin (`from_dataset: EX`), so `impacted_by("EX")` includes ADSL, ADVS and ADAE in the pilot.
+- c1-748: `logging.getLogger("fleet").setLevel(logging.WARNING)` before the first diagnostic keeps the level, and a handler added to the `fleet` logger receives INFO lines.
+- c1-750: `to_repr` prints floats in full and raises when `pl.from_repr` of the table does not give back an equal frame (columns, text or width cut).
+- c1-757: `program_from_spec` keeps the dataset label, writes `.derivation(...)` for a bare `callable:` block, passes a pinned dataset as its frame (`from_dataset=ex`), and refuses a spec with no `study.standard`.
+- c1-758: `derivations_from_source` gives one row (empty `name`, status `stub` or `unknown`) for a verb call with no target variable, such as `merge`, `whereclauses` or a list target, so a join or a filter is never lost.
+- `.adam.date()`, `.sdtm.date()` and the cheat sheet say that a partial date is imputed to the first day or month by default, and show `highest="n"` for the admiral result (c1-120).
+- `derive_period()`: `"treatment"` is always a column; a literal goes in the new `"treatment_value"` key (c1-140).
+- `derive_param()` adds no record with a null AVAL by default (`keep_nas=False`, as admiral); `keep_nas=True` keeps it (c1-321, ADR-0047).
+- The verbs of `AdamNamespace`, `SDTMNamespace` and `TTENamespace` are typed `-> Self`, so a study subclass keeps its type in the chain; tests/unit/test_api_conventions.py checks it (c1-335).
+- `peds.corrected_age()` computes `(age in days - 7 x (term - GA)) / 365.25` and keeps full precision; the new `round_digits=` rounds as SAS `ROUND` (ADR-0025) (c1-166).
+- The vaccine module docstring says that a NaN from a user expression passes as a number and must be filled with `fill_nan(None)`; the CSV loader part is c1-713 (ml-adam-b) (c1-423).
+- `pick(order=)` (and the event key `"order"`) and `nodup(sort_by=)` (and the `row_steps:` key `sort_by:`) are now `order_by`, as `flag(order_by=)` and `seq(order_by=)`. `fleet migrate --spec <define.yaml> --write` rewrites the define.yaml keys, the event keys of a `pick` block included (c1-136).
+- c1-396: the `adam.pk.blq_impute` docstring says that one rule applies to every row, whatever the sample position.
+- c1-402: the PK namespace docstring no longer claims ADPP parameter datasets.
+- c1-404: new tests pin the LLOQ boundary, the pre-dose window, the minutes constant and log base 2.
+- c1-438: a table shows the arms first, then the pools. An Enum arm column keeps its category order, and a category with no subject keeps its column with N=0. A `column_order` entry that is not an arm or a pool raises (ADR-0049).
+- c1-804: each continuous block of the demographics table starts with `n`, the count of subjects with a value. The golden `dmt01` gains one `n` row per arm. A DM spec with Q1 or Q3, `rows`, or `value_col` (builder `.value()`) is refused.
+- c1-805: the deaths table computes the cause block on the full arm and pool universe, so a pool gets its cause cell and an arm with no death shows 0. A null cause of the last row field gets the "Unknown" row. The golden `dtht01` gains the zero cells of Drug B.
+- c1-501: `t_abnormal` requires BNRIND. Add a null BNRIND column to apply no baseline exclusion.
+- c1-512: `LBChgSpec` and `EGChgSpec` no longer require CHG; the prefilter requires the `value_col` column, so a PCHG table runs without CHG.
+- c1-465: a spec field that the template does not use raises at construction when it differs from its default (a YAML `adsl_filter:` on `ael01`, `rows:` on `dmt01`), as the builder does.
+- c1-814: `render_html` and `render_listing_html` return pure ASCII (`&#8805;` for a non-ASCII character), and the files that the CLI and `to_html(path)` write are complete UTF-8 documents. The goldens `vst01.html` and `lbt01.html` show `&#160;` for the non-breaking spaces.
+- c2-970: a PDF loads no external resource: WeasyPrint gets a `URLFetcher` with no allowed protocol, and each refused resource gives a `UserWarning`. A `file:` or base64 logo in a `--wrap` template is left out. The `tlg-pdf` extra needs `weasyprint>=70.0`.
+- c1-461: PPTX prints a header row as HTML and RTF do (not bold); the theme key `bold_header_rows` is removed (c1-819).
+- c1-791: a second `.filter()` on a builder raises; combine the conditions with `&`.
+- c1-107: SDTM `baseline_flag` requires `testcd_col=` and `ref_col=`; there is no `RFSTDTC` default (ADR-0051).
+- c1-786: `StudyDesign` requires an `arm_names` entry for each arm; TA.ARM is no longer made from the ARMCD (ADR-0052).
+- c1-109: `condition_add` keeps the current value of an existing target where the condition is false, as SAS `if ... then`.
+- c1-112: `multiple_responses` gives no record for an empty response (`x||y`, `x|`, `|`).
+- c2-958, c1-252: `TrialVisit.visitnum` accepts 0 and decimals; `TrialVisits` no longer needs VISITDY to rise with VISITNUM; ETCD and ARMCD have length limits only; TAETORD must be unique per arm, not 1..N.
+- c1-248: `TrialVisits` is unique per (ARMCD, VISITNUM), `TrialCriteria` per (IETESTCD, TIVERS); the audit TV duplicate rule is `FLEETTD06` keyed on ARMCD and VISITNUM.
+- c2-956, c1-96: the automatic FK rules accept ETCD `UNPLAN`, keep VISITNUM and VISIT orphans as warnings under `fk_policy("error")`, and check EPOCH against a pinned TA.
+- c1-785: `StudyDesign.from_usdm` orders epochs and encounters by previousId/nextId, takes the sponsor study identifier, raises on no study design or a dangling armId, epochId or elementId, and warns on more than one design.
+- c1-229: `study_header` and the `add_*` verbs must name the domain of `fetch_structure`; `study_id` must be a non-empty string.
+- c1-230: `fetch_structure` raises `FileNotFoundError` for a missing `define_path`, raises when the `save_to` cache holds another domain or IG version, and gives the CDISC Library cause in the `CTError` message.
+- c1-225: the TDD builder chain puts STUDYID and DOMAIN first.
+- c1-257: an ISO 8601 duration needs at least one component (`P`, `PT`, `P1DT`, `P1Y2W` raise).
+- c1-259: IETESTCD must not start with a digit in the model; the audit SD0018 also flags lower case, hyphens and spaces.
+- `ValidationIssue.rows_affected` is renamed `row`; it holds one row number. (c1-831)
+- The HTML validation page writes one row per group of identical findings (rule, message, variable, source), with the row ranges, the count and the first 20 records. 1000 identical EPOCH findings give one row, not 1000. (c1-832)
+- A finding that names several variables gets each producing verb with its variables (`assign (AESEQ, USUBJID)`); a list of more than five names gets none. (c1-830)
+- The bundled CDISC rule schema follows CORE 0.15.0: `references_correct_codelist`, `conformant_value_length` and four more operators, and the Define rule types, pass `fleet check-rule`. (c1-837)
+- `fleet add-rule` writes no machine-specific `yaml-language-server` line; it prints the line as an opt-in. The header names only rule types that `fleet check-rule` accepts, and each description line is a comment. (c1-531)
+- `save_dataset_json` names Fleet in `sourceSystem`, writes the creation time with `Z`, and defaults `fileOID` to `<STUDYID>.<domain>.<creation time>`. (c1-583)
+- `save_dataset_json` writes the rows in slices of 50,000, so memory does not grow with the dataset. (c1-584)
+- Install hints name `uv add 'fleet-cdisc[<extra>]'`, which works in a user project. (c1-244)
+- `fleet validate --version` help says that it applies to every dataset of the run. (c1-836)
+- A SENDIG define gets `Purpose="Tabulation"` (c1-560).
+- The define `FileOID` names the standard (`CDISC.CDISCPILOT01.ADAMIG.1.Define-XML_2.1.0`), so the SDTM and ADaM defines of one study differ. `SourceSystemVersion` defaults to the running Fleet version; `source_system_version:` stays an optional override, and `fleet init define` and the pilot specs no longer write it (c1-572).
+- A Submission define whose `def:leaf` names a file other than `.xpt` or `.json` gives one warning. The href is kept (c1-568).
+- An ADaM ItemGroupDef has no `Domain`. A dataset with no `class:` warns; a class of the other model (FINDINGS on an ADaM dataset) stops the generation. The pilot ADAE has `def:SubClass` ADVERSE EVENT (c1-567).
+- Two value-level conditions that give one WhereClauseDef OID, or one value-level ItemDef OID, stop the generation with a `SpecError` (c1-570).
+- `predecessor:` takes an optional condition (`DS.DSDECOD where DS.DSCAT='DISPOSITION EVENT'`). The semantic lint no longer flags a MethodOID on a variable that is not Derived, because the CDISC Define-XML 2.1 examples use it (c1-779).
+- A blank line inside a define text stays. A control character gives a `SpecError` that names the element and its OID, not a raw XML parser error (c1-573).
+- `DatasetChecker.check()` accepts whole Float32/Float64 values (an XPT numeric code) for an `integer` variable and compares `54.0` as the code `54`; 1.5 still fails (c1-770).
+- `validate_define_xml()` and `semantic_errors()` read a file given as a `Path` or as a string that does not start with `<`; `DatasetChecker.check()` collects a LazyFrame (c1-773).
+- The generated `codelists.py` has one attribute per term: a term that starts with a digit gets `T_` (`FREQ.T_2_TIMES_PER_WEEK`), a term with no letter or digit is `T_<term NCI code>`, and two terms with one name each end with their NCI code (c1-552).
+- `fleet check-rule` names a missing key ("Authorities.0: 'Category' is a required property"), not the whole anyOf block. All 67 shipped sdtmchecks rules and the docs sample rule have a `Category` block and pass `check_rule` (c1-687).
+- The descriptions of SDTMCHK-AE-002, 003, 004, 005, 015, 016 and 017 and their tracker rows say that they need a sponsor AEDTHDTC (not in SDTMIG 3.4 AE) and name CORE-000253, CORE-000254 and CORE-000841 for standard data (c2-881).
+- `fleet.compare` with `by`: the HTML report draws the summary statistics once per variable, above the group sections, with the caption "over all groups". (c1-722)
+- The text and HTML compare reports print statistics and differences with 12 significant digits, as a SAS BEST format does. (c1-730)
+- The text and HTML value listings quote an ambiguous value: `"M "` against `M`, `"null"` against `null`, `""` against `null`. JSON and parquet keep the raw values. (c1-729)
+- `_normalise_tolerance` and `_normalise_flag` moved from `comparison/report.py` to `comparison/engine.py`. No behaviour change. (c1-725)
+- `fleet migrate` renames `lookup` only with `dataset=`, and `assigned` and `dataset_level` only with `value=`; a leading positional argument of `merge`/`lookup` becomes `keep=` only with `dataset=`. So `codecs.lookup(...)` and `heapq.merge(...)` stay as they are, and a second run changes nothing. A folder walk skips hidden folders, `__pycache__`, `site-packages` and virtual environments. The `--write` help says that no backup is kept (c1-827).
+- `fleet migrate --spec` no longer stamps `fleet_spec_version: 2` while a block is left in the old vocabulary. It names each such block ("left as is, rewrite by hand: DM.DOMAIN") and exits 1. A quoted version (`"1"`) is bumped (c1-823).
+- `fleet tdd ctgov --write` writes nothing when no parameter is new (c1-271).
+- `fleet add-acrf` and `fleet tdd ctgov --write` edit the YAML file as text, so all comments stay. A layout that the text edit does not handle (a flow-style block) is written through YAML, with a warning that counts the lost comment lines (c1-271, c1-272).
+- `fleet doctor` exits 1 when the study config or the rules engine has a cross; an invalid config is a cross, and a define.yaml with a YAML error is a cross on the codelists line, not a traceback (c1-282).
+- One dataset extension constant (`fleet.io.DATASET_EXTENSIONS`) and one writer (`fleet.io.write_dataset`) serve `fleet run`, `fleet tdd build` and the validation sweep; the CLI no longer reads `args` with `getattr` (c1-305).
+- `fleet new STUDY01` creates the study in `./STUDY01`, as the docs and issue #52 expect; `--root .` keeps the current folder. A second `fleet init cfg` in one folder names `fleet init define`, `ct` or `rules` (with `--force`) in its message, not only a Python function (c1-309).
+- `fleet new --help` and `fleet init --help` say when to use each command (c1-310).
+- `DEFAULT_SDTM_CT` is the one source of the default SDTM CT package (CLI defaults and help, `CDISCClient.get_codelist`, `CodelistGenerator`); `fleet new` prints the CT package ("CT package: sdtmct-2023-12-15 (default)"). The default stays the one of ADR-0019 (c1-284).
+- `fleet validate` says in each engine run that the variable labels and the dataset label that CORE checks come from Fleet, not from the file; docs/concepts/validation-core.md states the limit. Passing the XPT labels to CORE is left for later (c1-280).
+- `scripts/regen_tlg_goldens.py` prints each changed cell (template, row keys, column, old, new) and each added or removed row before it writes a Parquet golden, so the review step of its docstring can be done. The `TestANL01FLAdmiralParity` docstring says "same rule as admiral", not "byte-for-byte parity": no admiral output is read (c1-698).
+- The `io` extra now needs `pyreadstat>=1.3.7`, and `uv.lock` holds 1.3.7. A SAS file with `E8601DA10.` or `E8601DT19.` formats now loads as Date and Datetime, not as a raw SAS number. A SAS7BDAT record that SAS marks as deleted is no longer read. (c1-151, c2-923)
+- Dependency floors now allow only releases that build and pass the tests: `polars>=1.41.1`, `pydantic>=2.11`, `pyyaml>=6.0.1`, `jsonschema>=4.20`, `weasyprint>=63`, `mcp>=1.26`. (c1-152)
+- Fleet now needs `certifi>=2026.10.19`, and the `tlg-pdf` extra needs `brotli>=1.2.1`. The older releases have critical advisories. (c2-976)
+- The sdist no longer holds `tests/`. Run the tests from the git tag. (c1-155)
+- A push to `main` deploys the docs as `dev`. Only a release tag writes `latest`, so the first tag no longer fails in mike. The devel docs step is gone. (c1-625)
+- The docs workflow has a read-only token at workflow level; only the deploy job can write. The pull request build checks out with no stored credentials. CI has a read-only token too. (c2-872)
+- The docs workflow takes no manual `version` input any more; a manual run redeploys `main`. (c2-873)
+- The publish job uploads `dist/` right after `uv build --build-constraints build-constraints.txt`, then checks the uploaded copy with a pinned twine. Its actions are pinned to commit SHAs, with an explicit uv version. (c2-874)
+- The publish workflow runs only on a tag of the form `vX.Y.Z...`. (c1-626)
+- The blacken-docs CI step fails on every non-zero exit code, so a code block with a syntax error now fails CI. (c1-622)
+- `assign(value=, ct=<codelist class>)` checks the literal against the class terms, with no CT loaded, as `source=` already did (c1-640).
+- `fleet tlg run <template id>` says that the argument is a template id and gives the one-line spec (c1-639).
+- `fleet add-ct`, `fleet tlg run`, `fleet tlg explore` and `fleet tlg export` take `--config`; the CLI reads `.env` from the folder of `--config` (c1-662).
+- `fleet lsp` publishes diagnostics only for files named `define*.yaml` / `define*.yml` (c1-665).
+- `output_format` (spec level and dataset level) accepts only `parquet`, `xpt` and `dataset-json`; `json` raises `SpecError` instead of a silent parquet path (c1-647).
+- `fleet migrate --spec` reports a flow-style derivation block with old names and does not raise `fleet_spec_version` while one remains (c1-647).
+- The verb summary keeps "e.g." and "i.e." inside the first sentence (c1-653).
+- mkdocs-material floor raised to 9.7.7 (GHSA-xvg9-69gf-fjrf); the lock file changes only this package (c2-877).
+- c1-180: the README namespace catalog is built from `.verbs()` of the live namespaces: one shared ADaM list, the specific verbs of each namespace, no counts. A test compares it with `.verbs()`.
+- c1-689: the golden define files moved to `tests/fixtures/goldens/define/` with a fixed CreationDateTime; `outputs/` is ignored and holds no tracked file; `define2-1.xsl` moved to `examples/cdiscpilot01/`, and `cdiscpilot01_spec_driven.py` passes it as `xsl_path=`.
+- c1-682: `full_pipeline_example.py` writes to `outputs/full_pipeline`, not to the pilot folder.
+- c1-589: `Epoch` holds the 13 terms of C99079; the codelist code is set after the class, so it is no longer a 14th member. The docs say seven Trial Design domains plus SV and SE.
+- c1-631: the root plan files have true status lines; `tmp_lineage_probe.py` is removed.
+- c1-349: `to_spec_yaml()` takes `dataset=` and `path=` as keywords only. A positional call raises `TypeError`. A dataset name that is not a valid dataset name (for example a file path) raises `VerbUsageError`. Before, the path became the dataset name and no file was written.
+- c1-499: `examples/r2r_ae_example.py` and `benchmark/fleet_adae_benchmark.py` derive ADY with `study_day(date_col=, ref_col=)`, the verb for a study day. The benchmark ADAE is equal on every row (114,688 rows).
+- c2-891: the weekly CORE workflow has a job that installs the pinned engine (v0.15) and runs `tests/unit/test_sdtmchecks_rules.py`. The test still skips locally without an engine.
+- c1-355: `df.adam.tte.param(stop_at=...)` is now a dict, ADSL date column -> `(CNSR, EVNTDESC)`. A censored subject takes the date (ADT, CNSDTDSC) from the last censor record before the stop, and CNSR and EVNTDESC from the stop: the earliest stop date, the first column in dict order on a tie. A subject without a stop date keeps the censor key. A list `stop_at` raises and shows the dict form. Stop codes must be distinct and differ from the `censors=` keys (FDA 2018 oncology endpoints guidance, EMA PFS appendix, ADaM BDS-TTE, admiral `end_dates`; ADR-0043).
+- **MCP `fleet_validate` lists a study-level finding once.** The finding is in `issues` with `dataset` `"STUDY"`. The `study_issues` key is removed: it repeated the same findings (ml2-misc task 1, follow-up to c1-267).
+- **Dependencies:** the lock file takes anyio 4.16.0, idna 3.20 and lxml 6.1.3 (typing-extensions 4.16.0 comes with anyio 4.16). The lxml floor is 6.1.0 (PYSEC-2026-87). `pip-audit` over `uv export --frozen --no-dev` finds no known advisory (ml2-misc task 3).
+
+#### Fixed
+
+- `to_spec_yaml()` writes a TODO stub and a warning for a variable whose frozen block cannot give the inline value: a variable changed after another step read it, or a variable whose last step reads itself after an earlier step wrote it (`AVAL` from `LBSTRESN`, then `AVAL.round(2)`). Frame order stays (c1-202, c1-737).
+- `df.adam.tte` keeps its dataset name ADTTE at run time, so `to_spec_yaml()` names the dataset; the `fleet.adam` and `PKNamespace` docstrings name the real accessors and the source of `seq` (c1-755).
+- A frame derivation or `transform` that changes the number of rows logs a NOTE with both counts (`derivation drop_rows: 2 -> 1 rows`); a declared target that the returned frame does not hold warns, and lineage records the columns the frame holds (the new columns when no target is declared) (c1-43).
+- `fleet init define`, `fleet add-ct` and `fetch_structure` accept an IG version written `3.4` as well as `3-4`: every CDISC Library path builder normalises it (c1-547).
+- The method text of `atoxgr` names the grading criteria (default `ctcae_v5`), and `combine_grades` states its sign rule (c1-172).
+- A variable block with `algorithm: whereclauses` or `group_by` warns in `from_spec` and `fleet define-xml`: a record filter goes to `row_steps:` (ADR-0034) (c1-173).
+- An unknown dotted or sub-namespace algorithm (`onco.best_overall_response`) gives a `SpecError` that says sub-namespace verbs are inline only in this release and points to `algorithm: derivation` with `callable:`; the docs state the limit (c1-174).
+- A dotted verb (`occds.treatment_emergent`) round-trips through `to_spec_yaml`, keeps `.occds` in `program_from_spec`, resolves in the define method resolver, and the `fleet lsp` algorithm pattern accepts the dot (c1-175).
+- The spec path is never looser than the verb: `nsv` with no label, `nsv` with both `source` and `value`, and an explicit `null` on an optional key (`assign` with `value: null`) give a `SpecError` (c1-176).
+- `fleet check` warns when a derivation `ct:` and the variable `codelist:` are two different NCI codelists (c1-37).
+
+- `study_day` takes the reference date from the pinned domain before a frame column of the same name, as its docstring says, so an explicit `ref_pin=` is never ignored (c1-8).
+- `study_day(ref_df=...)` records no pinned domain in lineage; `dm=` records DM and `adsl=` ADSL on both namespaces, and `ref_pin=` names the domain of a `ref_df=` frame (c1-11).
+- `trail()` reads the pin sources of each lineage node: a literal after a pinned derivation shows `(literal)`, and `join_adsl` columns show with their ADSL origin. `baseline_flag` records its arguments in lineage (c1-203).
+- Lineage capture no longer compares a Polars expression, frame or series with its default, so no false "Comparisons with None" warning comes from `lineage.py`; the CT invalid-value warning names the user line (c1-199, c1-200).
+- A pin read on one branch of a chain no longer appears on the parent and sibling branches: lineage replaces the node instead of changing it in place, also in `PipelineDAG.inject_lineage` (c1-201).
+- `PipelineDAG.inject_lineage` raises `KeyError` for an unknown dataset name and no longer tells the user to remove a declared input that has no pin evidence (c1-735).
+- The `PipelineDAG.trace` docstring states that a variable derived from itself shows its last step only (c1-737, part).
+
+- A Polars error at `to_frame()` (arithmetic on text, a comparison of text with a number, a join key type clash) is a `DerivationError` that names the verbs of the chain, not a raw Polars error (c1-26).
+- `case_when` refuses a branch key other than `condition` and `value` with the branch number and a did-you-mean (`else` points to `else_`). Inline, a branch `value` and `else_` can be a Polars expression. The define.yaml schema accepts only `condition` and `value` in a branch (c1-28).
+- `assign("X", value=None)` names the way to a typed null column (c1-34).
+- tests: `test_keep_last_descending` now tests `keep="last"` (c1-19). New tests pin `join_adsl` keeping a subject that is not in ADSL, `exists_before`, `flag_extreme` with `where=`, an expression flag with `where=`, and the inclusive and no-landmark cases of `flag_relative` (c1-217).
+- c1-25: `from_spec` resolves the plan schema inside the try block of each variable, so a schema error names file, dataset and variable; the docstring states that a type error the schema does not show appears only at `to_frame()`. `to_spec_yaml` raises `DerivationError` on a plan that does not resolve.
+- c1-29: `flag_exists`/`flag(criteria="exists"...)`, `first_date`, `last_date` and `count_events` raise `VerbUsageError` when `from_dataset` is a name, not a frame; `first_date` names an unknown `date_col`; `nodup(subset="USUBJID")` logs the column name, not its letters.
+- c1-41 c1-42: `to_spec_yaml` writes `codelist:` on a variable assigned with `ct=` and a `codelists:` entry with its terms (a TODO comment when no term is known), and writes the NSV `evaluator`, so QEVAL survives the round trip.
+- c1-45: `derivation()` raises `VerbUsageError` for a target that is not a name or a `Derivation`, and for a frame-kind `Derivation` given as `expression=`.
+- c1-46: the nodup, validation and comparison reports survive a switch to `.occds`, `.adsl` and the other ADaM sub-namespaces.
+- c1-48: `inspect()` and `explain()` raise the same `DerivationError` as `to_frame()` for a missing column.
+- c1-51: `compare()` and `validate()` continue from the frame they checked, so the chain runs once.
+- c1-52: `.validate()` raises `ValidationSetupError` in every `on_fail` mode when no rules engine is found.
+- c1-53: `from_spec` raises `SpecError` with a did-you-mean for a name in `only=`/`omit=` that is not a spec variable, and for a `dataset=` that a simplified spec does not describe; a define that declares one dataset twice is refused.
+- c1-540: `fleet init define` orders ADaM variables by the Library set ordinal, so STUDYID and USUBJID come first.
+- c1-59: `seq(check_uniqueness=True)` has tests: a tie on the key warns and names it, a unique key is silent.
+- c1-545 c1-742: a study config that is not UTF-8 text, or holds an impossible date, is a `StudyConfigError`; a define value its tag cannot read (`!!float abc`) or a recursive alias is one YAML diagnostic, not a crash.
+- c1-55: a spec in the pre-ADR-0008 vocabulary (an old key under an unchanged algorithm name, or `fleet_spec_version: 1`) names `fleet migrate --spec` in the `from_spec`, `fleet define-xml` and `fleet check` errors.
+- c1-731: `docstring_summary` does not cut after `e.g.`, `i.e.`, `etc.`, `vs.` or `cf.`.
+- c1-738: `build_dag` refuses a dataset declared in two defines, a raw input with two paths or with the name of a dataset, counts a repeated input once, and names the nodes of a cycle.
+- c1-57 c1-739 c1-740: docstrings and docs corrected: `SharedVerbsMixin` needs `PinMixin`; the DAG examples show the real output; `pipeline.md` names `from_spec`; `advanced.md` derives TRTEDT before `duration`; the NumPy and `Example::` docstrings of the DAG, define checker, generator, transforms and vaccine verbs use Google sections.
+- `pick()` raises a `DerivationError` with a did-you-mean hint when a `set` key is not a target, instead of a silent null (c1-126). The docstring and `docs/concepts/pick.md` say that an existing target column is replaced.
+- `pick()` raises when one event sets a target from a date and another from DTC text, instead of a text target; the `pick()` examples use date columns (c1-127).
+- `pick()` keeps the source dtype of a target when no event has a record, so a study with no deaths gets a `Date` DTHDT (c1-128).
+- `pick()` names `pl.lit()` when a `set` value is a missing column; `date()` raises for an `impute=` value other than first, mid, last or none; `derive_period()` raises with a did-you-mean hint for a missing treatment column (c1-140).
+- `derive_param()` warns when a `parameter_filter` PARAMCD has no record, with a did-you-mean hint (c1-322); raises for an expression in `set_values_to` (c1-326); the docstring says that a by group without every source parameter gives no record (c1-320).
+- `baseline()`, `seq()`, `derive_param()` and `derive_locf_records()` read a `by=` string as one column, so the duplicate check of `baseline()` runs (c1-327).
+- `atoxgr()` raises for a `signif_dig` that is not a positive integer (c1-331) and warns once with the terms that have no criteria in any direction (c1-332); the docstring example uses `term_var="ATOXDSCL"`, not PARAMCD (c1-331, c1-332).
+- `combine_grades()` raises a `DerivationError` that names the column for a numeric grade column or a grade other than "0" to "4" or null, instead of `-G3` or a Polars error (c1-391).
+- The grading example says "or" for the Creatinine G3 and G4 rules (CTCAE and DAIDS), and llms.txt lists `combine_grades` (c1-334).
+- A sub-namespace switch (`.occds`, `.adsl`, ...) keeps `last_comparison`, `last_validation` and `last_nodup_report`, so a gate that reads them after the switch sees the report (c1-336).
+- STRUCTURE.md says that `baseline` runs a side check and does not re-wrap a collected frame, and how a sub-namespace switch keeps the state (c1-338).
+- `tte.param(by=)`: a censor frame with none of the by columns (for example from ADSL) is crossed with the strata of the event frames, as admiral `derive_param_tte`; a frame with only some of them raises (c1-356). Under `by=`, the drop warning names this cross (c1-356, c1-363).
+- The `select_tte()` trace has a row per subject kept by `retain="censor_at_start"` ("censored at STARTDT: no record") and a row per record after the stop date ("after the stop date") (c1-364).
+- `select_tte()` and `tte.param()` raise for a `retain=` value other than "drop" or "censor_at_start" (c1-365).
+- The TTE tie warning checks the subject keys, ADT and SRCSEQ, also when SRCSEQ ties, and names these columns (c1-367).
+- `tte.param()` raises for a subject with two different ADSL rows, and `km_data()` counts a subject once when ADSL repeats a row (c1-369).
+- New tests pin the ADTM time part, SRCDOM and SRCVAR of a `retain="censor_at_start"` row, and the SRCSEQ tie-break for an event and a censor (c1-370).
+- `neuro.mmse_category()` and `neuro.moca_category()` give null for a score above 30, as for a score below 0 (c1-716).
+- `metabolic.bmi_category_adult(labels=)` raises when the bounds do not strictly ascend (c1-162).
+- The `pk.cmt()` docstring says that `conc_cmt` applies to all non-dose records, and the ADNCA example says that its plasma-only data reduce the admiral PCSPEC rule to this call (c1-399).
+- `DefineSpecGenerator` (`fleet define-xml`) on a `fleet_spec_version: 1` spec names `fleet migrate --spec <define.yaml> --write`, as `from_spec`; one `check_spec_version()` in `fleet.core.define_spec` serves both (c1-142).
+- New boundary tests: the `treatment_emergent` end window includes its last day, an event that ends on TRTSDT has not ended before, `offset_days` moves the start later, and `study_day` from a pinned ADSL gives 1 on the reference day (c1-149).
+- New tests run the `t_abnormal` on-treatment prefilter, `flag(criteria="exists_after")` and the literal and column imputation of `impute_dtc_to_date` (c1-86).
+- c1-373: `adam.tte.param(explain=True)` now prints the decision trace in a plain script; it attaches the default console handler as other diagnostic verbs do.
+- c1-377: `adam.tte.aval()` gives a null AVALU where AVAL is null (admiral `derive_vars_duration`).
+- c1-378: `adam.tte.param()` with `by=` and no event or censor record left raises a `DerivationError` that names the by columns and the sources. `km_data()` selects the ADSL pin join key (for example SUBJID), not a literal USUBJID. `param()` refuses CNSR, ADT, ADTM, STARTDT and STARTDTM in `set_values_to`.
+- c1-372: the PARAMCD collision guard of `adam.tte.param()` compares every PARAMCD value of the new rows, also one from `set_values_to` or a `by=` expression.
+- c1-374: `adam.tte.km_data()` raises when `paramcd` is not in the PARAMCD values (or the frame has no PARAMCD), and warns with the count and the first subjects when AVAL is null.
+- c1-376: `adam.tte.param()` records one lineage node per new output column (STARTDT, ADT, CNSR, EVNTDESC, PARAMCD, PARAM, ...) with the start and stop_at dates as sources, not a node named after the PARAMCD.
+- c1-401: `adam.pk.nominal_time()` computes `x * scale_in / scale_out`, so 23 minutes gives the correctly rounded `23 / 60`.
+- c1-397: `adam.pk.amt()` and `cmt()` treat EVID 1 and 4 as doses; `cmt()` gives null on EVID 2 and 3; `mdv(evid_col=)` gives 1 on every EVID other than 0 (and on a null EVID).
+- c1-398: `adam.pk.mdv()` reads `evid_col="EVID"` and `conc_col="DV"` by default and raises when a column is missing (no silent MDV 0). A text DV that is not a number (".") counts as missing.
+- c1-413: `adam.onco.filter_pd()` and `confirmed_response_flag()` raise a `DerivationError` that names the verb for a missing column and for a text date that is not complete (`2024-01-01T10:30`, `2024-01`). A Null dtype response column gives null in `aval_resp()` and MISSING in `best_overall_response()`.
+- c1-409: `adam.onco.best_overall_response()` gives `MISSING` when no row of the group holds a known response (null, ND, UNK). The docstring says the denominator comes from ADSL.
+- c1-410: `adam.onco.best_overall_response()`, `confirmed_response_flag()` and `filter_pd()` raise on unknown response values (for example `'CR '` or `'Partial'`) and name them. ND and UNK are accepted as no response; iRECIST codes are not supported.
+- c1-411: the onco module and verb examples use a vertical ADRS filtered to PARAMCD OVRLRESP with `source="AVALC"`, and say that the verbs read every row.
+- c1-717: `adam.neuro.centiloid()` gives null for a SUVR of zero or below, and raises when only one of `slope` and `intercept` is given.
+- c1-714: `adam.neuro.panss_total()` raises when a subscale column is not numeric (a String column was joined as text).
+- c1-715: `adam.neuro.cdrsob_total()` raises unless `domain_cols` names the 6 CDR boxes (an empty list gave a raw AttributeError).
+- c1-713: `load_raw_data()` reads a float NaN in a CSV or Parquet file as null. `neuro.mmse_category`, `neuro.moca_category`, `metabolic.visceral_fat_flag` and `ophtha.bcva_criterion` treat NaN as missing.
+- c1-707: the therapeutic-area verbs round half away from zero (SAS `ROUND`, ADR-0025): `metabolic.waist_hip_ratio`, `waist_height_ratio`, `body_fat_pct`, `ophtha.etdrs_to_logmar`, `logmar_to_etdrs`, `vaccine.aval_adis`, `neuro.centiloid`, `cdrsob_total`, `peds.corrected_age` and the `peds` BMI z-score. The default digits do not change.
+- c1-718: the `ophtha.study_eye` docstring says that the input is the SC FOCID records and shows the filter and an `adam.merge(..., validate="m:1")` into ADSL.
+- c1-421: the `vaccine.seroresponse_flag` docstring says it is a threshold rule on AVAL only, points to `seroconversion_flag` for a fold rise, and has a `References:` section.
+- c1-415: new tests pin the ophtha default digits and the bilateral study eye, the metabolic default digits, the vaccine event cut-off and the `aval_adis` LLOQ/2 rule without ULOQ.
+- c1-390: `adam.atoxgr()` reads a NaN in a float column as null, so a NaN AVAL, limit or BASE gives a null grade, as admiral's NA. The input columns keep their values.
+- c1-700: a custom grading criteria file with an unknown key (for example `filtr`) raises a pydantic `ValidationError` at load; a file that is not valid JSON raises a `ValueError` that names the file, the line and the column.
+- c1-701: a custom grading criteria file is read again on every call, so an edit in the same session takes effect. The bundled files stay cached.
+- c1-703: docs/validation-strategy.md names the CTCAE v5 GGT boundary: AVAL = 2 x BASE with a high baseline gives grade 0, as admiral; the CTCAE text gives grade 1.
+- c1-80: the `adam.pchg` docstring says that the ADaMIG formula differs in sign from admiral `derive_var_pchg` on a negative baseline; a test pins PCHG -20 for AVAL -2, BASE -2.5.
+- c1-82: `adam.bsa(method="DuBois-DuBois")` (admiral's name) gives the DuBois value.
+- c1-83: `adam.adsl.age_years()` divides WEEKS by 365.25/7 and HOURS by 8766, as admiral `compute_age_years` (ADR-0048), and warns with the count of rows whose AGEU is not a known unit.
+- c1-85: new tests pin the PCHG zero-baseline guard, the age divisors, `derive_summary_records(stat="min"/"median")` and the no-row rule of `derive_param`.
+- c1-71: `adam.date(value=...)` and `sdtm.date(value=...)` raise on a literal that is not ISO 8601 (it gave a null column, or wrote the text to a --DTC target). `YYYY-MM-DDThh:mm[:ss]` works on a DT and a DTM target; a partial --DTC literal stays valid.
+- c1-73: the `adam.date` docstring and ADR-0045 say that an hh:mm time gives TMF S, where admiral gives NA by default.
+- c1-721: the transform registry docs say `algorithm: derivation`, GUIDE.md says `merge` with `on=`, the ADaM module docstring says only `df.adam` is registered, and `fleet migrate` rewrites `algorithm: transform` to `derivation` (the spec error now gives that hint).
+- c1-434: a NaN analysis value counts as missing, with one warning that gives the count; an infinite value raises with the column and the count; the renderer no longer stops on a NaN statistic (ADR-0050).
+- c1-443: a duplicate USUBJID + arm record in ADSL raises; a subject in two arms gives a warning; DM `check()` reports the duplicate (ADR-0050).
+- c1-448: a numeric arm column (TRTAN) stops at once with a message that names TRTA and `column_order`.
+- c1-437: a `decimals` key that is not an ARD stat name, or a pattern that is not `xx.x`, raises (on the spec and on `Row`).
+- c1-446: `summarize_ard(prefilter=...)` accepts an expression string.
+- c1-455: a count cell with `decimals={"pct": "xx.x%"}` shows one percent sign, and a zero count with decimals shows no percentage.
+- c1-457: an unknown `page_by` raises with the row variables of the table; `fleet tlg run --page-by` on a listing is a usage error.
+- c1-459: `rows_per_page` below 1 raises in `paginate` and `paginate_listing`; `--rows-per-page` must be 1 or more.
+- c1-461: an ARD without `group2` renders.
+- c1-462: two header rows, or two interactive options, with one label raise.
+- c1-467: a listing prints each column through `Column.format` (a Python format string for a number, strftime for a date); a null or NaN prints empty.
+- c1-802: a listing sorts before it selects, so a hidden sort key sorts; an unknown sort key raises and `check()` reports it.
+- c2-869: a numeric row level or listing value prints as SAS BEST. does (`2`, `13.566`), and `label_col` maps a Float64 code.
+- c1-502: the lab listing falls back from PARAM to PARAMCD for its default column and sort key.
+- c1-505: `t_shift` raises on a statistic other than n.
+- c1-506: `label_col` raises when one code has two labels.
+- c1-510: `t_abnormal` keeps an arm emptied by the population filter, with N=0.
+- c1-513: `t_abnormal` compares `low_values` and `high_values` in any case.
+- c1-809: a prefilter that keeps no record warns with the values of its columns (EX `PARCAT1` = "Overall"); `ex.check()` reads the spec prefilter and reports a missing row field once.
+- c1-815: an HTML wrapper with no `{table}` placeholder raises; `fleet tlg export --wrap` with RTF or PPTX is a usage error.
+- c1-818: a WeasyPrint install without Pango gives an `ImportError` that names the libraries, and `fleet doctor` reports WeasyPrint as not usable.
+- c1-821: RTF writes a character above U+FFFF as a UTF-16 surrogate pair.
+- c1-811: a non-default explorer variant prints "Exploratory view, not the batch output" with its selections.
+- c1-792: the `register_template` example sets `spec_cls`, so it gives the AE table.
+- c1-793, c2-868: docstrings of `Row.label`, `rows()`, DS `t_summary` and the ARD `warning`/`error` columns match the code.
+- c1-450, c1-508: tests for the header-row statistics, adjacent worst-case ranks, two lab parameters, the LOW/HIGH rank, LOW LOW and HIGH HIGH, mixed-case and null ANRIND, and the lab listing.
+- c1-108: `ae_aerel` matches map keys with upper-case letters; `aerel_map={}` maps nothing.
+- c1-114: `ae_aerel` trims an unmapped value before it is upper-cased.
+- c1-113: `export_supp` raises when DOMAIN holds more than one value and `domain=` is not given, takes RDOMAIN from the non-null DOMAIN values, and raises when STUDYID or USUBJID is absent.
+- c1-116: `epoch_assign(epoch_ranges=)` accepts a Date column.
+- c2-953: `epoch_assign(se=)` raises a named DerivationError when SE has no EPOCH.
+- c1-253: an empty TDD section gives a 0-row frame with all columns; VISITDY is Int64 when every value is null.
+- c1-256, c1-260: `Epoch` has the 13 C99079 terms; `_concept_id` is no longer a member, so `to_spec_yaml` with `ct=Epoch` works. `cdrsob_total(domain_cols=[])` raises a DerivationError.
+- c1-790: the TDD audit does not crash on a null or absent TSVAL or a TA with no ELEMENT, and reports an ETCD not in TE with no false SD0067 on a null ELEMENT.
+- c1-92: an expression with `and`, `or` or a chained comparison raises a message that shows the `(A) & (B)` form.
+- c1-106: `multiple_responses` says it is not for DM RACE; docs/concepts/advanced.md gives the RACE = "MULTIPLE" recipe.
+- c1-97: docs/concepts/advanced.md says not to change a frame in place after a namespace call.
+- c1-115: the `nsv` docstring no longer names "IG 3.5+"; the inline example exports a sponsor flag, not ARM.
+- c1-789: docs/concepts/tdd.md says that TS coded values are not checked.
+- c2-953: docs say that `TrialElement.epoch` drives TA, not SE.
+- c1-231: vaccine verbs, `derive_param`, `derive_summary_records`, `ex.t_summary` and `mh.check` follow the docstring convention.
+- `ValidationService.validate_sdtm`, `validate_adam` and `validate_datasets` refuse an IG version Fleet does not support (`banana`, `3.1.3`) with `ValidationSetupError`, not a valid NOT ASSESSED result. `DatasetChecker.validate_core` uses the run setup: the study's engine, custom rules and timeout. (c1-838)
+- A `validation.engine_path` that names no file stops validation with a message that names the path; Fleet no longer falls back to another engine. `fleet check` and `fleet doctor` warn with the pinned path. (c1-523)
+- An engine report whose rule says "issue reported" but has no `Issue_Details` rows is "could not run", not a pass. (c1-265)
+- A finding on a split pair (`LBCH.JSON, LBHM`) is attached once, to the first given dataset, and names the other in its message; `Issue_Summary` no longer adds findings; `fleet validate` counts only the datasets it was given. (c1-267)
+- The Variable field of a finding no longer holds a template name, a value or a metadata column name. (c1-831)
+- A `fleet validate` directory sweep takes upper-case suffixes (`AE.XPT`) and Dataset-JSON files, and names each file it skips. (c1-834, c1-241)
+- A data folder that both standards share is swept once, and a nested ADaM folder names ADaM. (c1-836)
+- `fleet install-engine` checks the download against the GitHub digest, extracts a tar with the `data` filter, keeps the installed engine when the new bundle has no executable, and turns a network or archive error into a clear message. (c1-522, c1-524)
+- `fleet install-engine --version 0.15.0` installs tag v0.15; with an engine installed, it says the requested version was not installed. (c1-525)
+- `fleet add-rule` never replaces a file: it counts file names and `.yml` files, and refuses an ID, prefix or domain with a path or space character. `fleet check` fails on two rule files with one Core.Id. (c1-527, c1-528, c1-532)
+- `fleet check-rule` fails on a scaffold that still holds `VARIABLE_NAME`, and accepts a rule scoped with `Domains: Exclude`. (c1-529, c1-530)
+- `fleet init define` with a dotted IG version (`3.4`) asks the CDISC Library for the dashed path. (c1-532)
+- The engine path docstrings name `~/.fleet/cdisc-rules-engine/core/core`. (c1-839)
+- `read_dataset_json` refuses a file whose `records` is not the number of rows, or a row with too many or too few cells. (c1-580)
+- `save_dataset_json` writes a `pl.Decimal` column as `decimal`, and a Float32 value with the digits it shows. (c1-581)
+- `save_dataset_json` and `read_dataset_json` refuse an `.ndjson` path. (c1-582)
+- `load_raw_data` reads the named file when its name holds glob characters (`adsl[1].parquet`). (c1-240)
+- `load_study_context`, `download_raw_data`, `save_parquet` and `save_xpt` take a text path. (c1-243)
+- `load_raw_data(file_type="xpt")` uses the XPORT reader for a file with another suffix. (c2-948)
+- docs/concepts/comparison.md says that SAS special missing values read as null, so `.A` against `.R` compares equal. (c1-239)
+- A codelist definition with triple quotes, a backslash or a final double quote no longer makes `codelists.py` invalid Python (c1-554).
+- `program_from_spec` (the MCP `fleet_spec_to_code` tool) writes a TODO comment for a `callable:` that is not a dotted Python name, not an import line with its text (c1-555).
+- `import_codelists()` leaves `sys.modules` as it was when the file fails (c1-759).
+- The CDISC API key is not in the `CDISCClientConfig` repr. The client does not follow a redirect, so the key never goes to another host; a 3xx or a non-JSON answer (a sign-in page) raises `CTError` that names the host (c1-760, c1-761).
+- A CT file keeps every term as exact text (YAML `0` and `Yes`, CSV `01`). An empty file or a codelist that is not a term mapping raises `CTError`, and the validator cache stays as it was (c1-764).
+- A CT file from a URL is downloaded into a private temporary folder, not a fixed path in the shared temp folder; a local `http_ct.yaml` is not a URL (c1-765).
+- The CORE engine input writes a null text value as "", as a SAS transport file does, so SDTMCHK-DS-001 runs when one DEATH record has a null DSSTDTC (c2-887).
+- New tests pin value-level where clauses on AVISIT (`def:ItemOID`, Mandatory, SoftHard), checker types, Dataset-JSON types and ISO text, `dtc_text` seconds and unparsable dates, and SE element ends per subject (c1-574).
+- `fleet.compare(..., pairs={"AVAL": "RESULT"})` reports a candidate `AVAL` as a candidate-only variable. A pair target that an unpaired base variable also matches by name is refused; a swap stays legal. (c1-515)
+- A difference on a Duration column is listed in ISO 8601 (`P1D` against `P3D`); it no longer stops the compare. (c1-518)
+- A BY variable named `matched`, `base_only`, `candidate_only` or `observations_with_differences` no longer stops the compare with a DuplicateError. (c1-519)
+- Under `allow_duplicates`, the HTML block header counts the same observations as the chip. (c1-723)
+- `save_json`, `save_html_report` and `save_listing` make a missing parent folder. (c1-724)
+- `fleet lsp`: an unexpected key is reported on its own line, once per key; a refused `derivation:` block gets the text of `from_spec()` on the line of its key ("sorce: Extra inputs are not permitted"). (c1-608)
+- `fleet lsp`: a completion after a bare `algorithm:` inserts `" assign"`, so the YAML stays valid; `:` is no longer a trigger character. (c1-609)
+- `fleet lsp`: a key that only `fleet define-xml` needs (a study key, a dataset or variable `label`, `structure`, `keys`, `type`) is a warning "(needed by fleet define-xml)", and the root anyOf text is replaced by "A spec needs datasets: with study:, or variables:". (c1-610)
+- `fleet lsp`: parameter completion reads the YAML block by indent: a quoted `algorithm: "duration"` works, keys of a nested `when:` or `ct_map` do not leak, and keys the block already holds are left out. (c1-611)
+- `fleet lsp`: U+2028, U+2029 and U+0085 no longer shift line numbers; the server uses full document sync and converts positions with the negotiated encoding. (c1-612)
+- `fleet lsp`: closing a file clears its diagnostics. (c1-613)
+- The standard of a spec with no `study.standard` comes from the nearest `sdtm` or `adam` folder, the same in `fleet lsp`, `fleet spec-to-code` and `fleet define-xml`. (c1-614)
+- `fleet lsp`: `algorithm: CHG` gets "Did you mean 'chg'?"; a pre-ADR-0008 name and `fleet_spec_version: 1` name `fleet migrate --spec`. (c1-615)
+- A recursive YAML anchor, an alias bomb or a very deep nesting in a define.yaml gives one error ("the file nests too deep or expands too much"); `from_spec`, `fleet check`, `fleet define-xml` and the language server stay alive. (c1-616)
+- `fleet mcp`: an error inside a tool reaches the assistant with its reason on mcp 2.x too (`ToolError`). (c1-599)
+- `fleet mcp`: `fleet_tlg_run` refuses a table that uses ADSL when no `adsl_path` is given, as `fleet tlg run` refuses it; the rule is `fleet.tlg.resolve_population`, shared by both. (c1-601)
+- `fleet mcp`: `fleet_validate` lists the study-level CORE findings (dataset `STUDY`) as information; each issue carries an additive `dataset` key. (c1-602)
+- `fleet mcp`: the handshake gives Fleet's version in `serverInfo`. (c1-603)
+- `fleet mcp`: `fleet_ct_terms` with a `ct_path` that does not hold the codelist names the file and its codelists. (c1-604)
+- `fleet mcp`: `fleet_lineage` refuses a JSON file with no `nodes` key, so it no longer returns values of any JSON file. (c1-605)
+- `fleet mcp`: `fleet_ct_terms` refuses a URL as `ct_path`; the CT loader treats only `http://` and `https://` as a URL; the IDE page has a "Trust model" note. (c1-606)
+- `fleet migrate` (Python and `--spec`) reports a file that cannot be read, decoded, parsed or written on one line and goes on with the batch; it exits 1 and no longer prints "Nothing to migrate." after a failure (c1-824).
+- `fleet migrate` rewrites `assign_dtc(input_format=)` to `date(format=)` and reports `remove_dup` for a rewrite by hand (c1-826).
+- `fleet migrate` keeps the comma and the comment of a moved `keep` list, moves a name (`lookup(cols, dataset=...)`) to `keep=`, and reports an old verb name used as a value (`fn = df.sdtm.assign_no_ct`) (c1-828).
+- `fleet migrate --write` keeps CRLF line endings (c1-829).
+- `fleet compare` turns an unexpected exception into exit 2, "internal error in fleet compare: ...", not exit 1 ("the datasets differ"); `FLEET_DEBUG=1` keeps the traceback. stderr escapes characters that the console cannot encode, as stdout does (c1-275).
+- `fleet compare --pairs` refuses an item with more than one `=` and a base name given twice (exit 2). A corrupt or ragged input file is named with its side and path ("cannot read the candidate b.parquet: ...") (c1-276, c1-277).
+- `ComparisonReport.save_json`, `save_html_report` and `save_listing` create a missing parent folder (c1-277).
+- `fleet compare` refuses (exit 2) an `--out` or `--report` that names the base or the candidate file, and an `--out` equal to `--report` (c1-278).
+- `fleet tdd audit` and `fleet tdd build` print one line for a model error ("invalid TrialVisits: Duplicate VISITNUM values", an ARMCD with a hyphen) and name an empty design file; `fleet tdd ctgov --write` on an empty file no longer ends in a traceback (c1-270).
+- `fleet` prints one line, not a traceback, for a YAML error (with its line and column), a pydantic error, an `OSError` (a folder that cannot be written), a `UnicodeDecodeError` and a Polars error; `fleet run` names the dataset of a Polars error. `FLEET_DEBUG=1` keeps the traceback (c1-296, c1-315).
+- `DatasetChecker` reads a variable with no `label:` as an empty label, so `fleet run` does not stop with `KeyError: 'label'` (c1-315).
+- A `study_config.yaml` that is found but invalid is an error in every command, also in `fleet add-ct` and `fleet tlg`; before, they took it as "no study" (c1-300).
+- `fleet run` prints the row count of each input and the start and end time. Keep a log with `fleet run > run.log 2>&1` (docs/getting-started/cli.md). A `--log` option is left for later (c1-294).
+- `fleet run` stops with "no dataset to build in metadata/sdtm/define.yaml" when the plan is empty (`datasets: []`, the simplified single-dataset format), not "0 dataset(s) written" with exit 0 (c1-295).
+- `fleet check` validates each derivation block with the calls of `from_spec`, so a block that `fleet run` refuses (`assign` with `source:` and `value:`, `ct_map` with no codelist) fails the gate (c1-299).
+- `fleet validate <folder>` finds a dataset whose extension is in upper case (`DM.PARQUET`) on a case-sensitive disk (c1-289).
+- `sdtm.ig_version: 3.4` and `adam.ig_version: 1.3` are stored as `3-4` and `1-3`, so `fleet new --ig 3.4` works. `fleet init rules` exits 1 when no rule file is cached, and `--sdtm-only` with `--adam-only` is a usage error on `init rules` and `init define` (c1-311).
+- `fleet add-ct` reads the CT package of an existing `codelists.py` first: outside a study it uses that package, and it refuses a package (from `--package` or the study pin) that differs from the file (c1-283).
+- `fleet validate` reads each file before the engine run: a corrupt, empty or unsupported file is "could not run: cannot read the file" (exit 2) and the other datasets are still validated. An `--report` path that cannot be written gives one line and exit 2. `fleet_validate` of the MCP server returns "could not run" for a file it cannot read (c1-279).
+- `fleet tlg run/export --rows-per-page` takes a whole number of at least 1 (usage error otherwise). `--wrap` is refused for RTF and PPTX and for a template with no `{table}`; `render_html` and `render_listing_html` raise `ValueError` for such a wrapper. A `--page-by` that matches no group row gives a warning (c1-312).
+- `derivations_module: programs.derivations` imports from any working directory: the import uses the study root (the folder of the first `study_config.yaml` above the spec), appended to `sys.path`. An error raised inside the module is a one-line `SpecError` that names the spec, not a traceback (c1-293).
+- Parameter texts in the define schema and in editor hovers no longer end at "(e.g.". A codelist hover with no terms no longer shows an empty "Terms:" line. (c1-780)
+- `fleet.spec_algorithms("SDTM")` returns the SDTM list; an unknown standard raises a ValueError that names "sdtm" and "adam", not a raw KeyError. (c1-699)
+- The CDISC Library client raises a `CTError` when an answer is not JSON (a proxy or sign-in page), not a raw decoding error. (c1-844)
+- A NaN score gets no `bcva_criterion` flag and no `mmse_category` or `moca_category` category. Before, NaN compared above every cut-off and gave "Y" or "Normal". (c1-855)
+- `adam.tte.param(..., by=[...])` accepts a censor frame with none of the `by` columns, such as an ADSL frame. It applies to every stratum of the events, as admiral `derive_param_tte` Test 5. Before, it raised "column not found". (c1-861)
+- API pages: every mkdocstrings option block and admonition body is indented, so the options apply; ADSL and OCCDS pages list inherited verbs (c1-636, c1-637).
+- `pipeline.md`: verb tables name real verbs and keywords (`flag_first`, `flag_exists`, `derive_period(periods=)`, `derive_param(by=)`); the plan drawing shows one LazyFrame (c1-637, c1-652, c1-653, c1-669).
+- `ct.md`: one validation rule, the real class form, the real loader and its file format; the example runs in a test (c1-640).
+- `troubleshooting.md`: real messages (`UserWarning`, `DerivationError`, `SpecError`) and `.explain()` / `.trail()` instead of a private attribute; the page runs in a test (c1-668, c1-669, c1-670).
+- `tdd.md`: the SE and EPOCH examples define their inputs and run in a test (c1-654).
+- Removed the broken spec-driven notebook; the quickstart points to `examples/cdiscpilot01_spec_driven.py`; notebook 01 runs in a test (c1-655).
+- Real trail and CORE output in `full_pipeline.md`, the real rule id in `custom-rules.md`, the tracker command, and `version=` in the `ValidationService` sample of `llms.txt` (c1-659).
+- Compare docs: the verb is on the SDTM and ADaM namespaces; `on_fail="ignore"` still prints the report; the truncation hint names `--all`; the pyreadr install line (c1-643).
+- `xsd.py`, `STRUCTURE.md`, `installation.md`: no `fleet install-xsd`; the real `load_datasets` signature; the `io` extra reads SAS files and writes XPT (c1-644, c1-645).
+- Introspect docstrings name `spec_verb()` and drop aliases; ADR-0001 notes the later names (c1-641).
+- `define-yaml.md`: the schema does not catch every `from_spec` error; the old-key message; the define writes `duration(start=, end=)` (c1-646, c1-647).
+- `transforms.py` and `advanced.md`: no `algorithm: transform`; AGEGR1 keeps a missing AGE missing (c1-647, c1-653).
+- `examples/full_pipeline_example.py` takes TRTSDT from EX, not from AE (c1-652).
+- `exports.md` no longer promises graphs; `Row.label` says that no label gives no heading (c1-649).
+- `ide-tooling.md` and `quickstart.md`: loads are wrapped with `fleet.frame`; a plain Polars step needs a re-wrap; `inject_lineage` before `generate` for `fleet_lineage`; the LSP scope (c1-597, c1-664, c1-665, c1-666).
+- `validation-strategy.md`, `test-status.md`, `index.md`, `validation-core.md`, `why-fleet.md`: five pillars, eight examples, no static test tree or coverage badge, goals labelled, sourced admiral and CORE statements (c1-672, c1-673).
+- c1-587: the GUIDE and full-pipeline baseline recipes flag the last pre-dose record (`criteria="last"`, `where=`), so `baseline` no longer stops on two pre-dose records.
+- c1-679, c2-879, c1-683: the inline ADSL recipe gives EOSSTT "ONGOING" to a subject with no disposition record, no EOSDT to a screen failure, ACTARMCD on the ARMCD codes, and ITTFL from a non-null ARMCD; `full_pipeline_example.py` takes TRTSDT from EX and ABLFL from a date rule.
+- c1-685: `r2r_ae_example.py` sends the planted AESER "YES" only to the SDTM validation, so the AE table counts the serious AE; `r2r_strategy.md` shows the real report.
+- c1-681: the CBOR example follows admiralonco `derive_param_confirmed_bor` and ADR-0030 (stop at first PD, NON-CR/NON-PD, MISSING from ADSL); a grid test holds the admiralonco 1.4.1 results.
+- c1-676: the ADNCA example states that its data is synthetic, has PK samples only for active subjects, sets TRTSDT at the first dose, and adds STUDYID, PARAMCD and PARAM.
+- c1-686: the VS example header row states `statistics=[N_SUBJECTS]`, so it counts subjects instead of pooling SYSBP and DIABP.
+- c1-588, c1-590, c1-840: GUIDE, STRUCTURE, CONTRIBUTING and docs lines match the API (no `.by2`, `check_rule`, `programs/derivations`, the SE block with ETCD runs in a test, the TestPyPI line, extras tables, `spec_verb`, `MultiRowMixin`, the `transform` YAML form, `df.adam.pk`/`tte` in the package docstring).
+- c1-188, c1-190: docs-site links carry `/latest/`; the LICENSE link is absolute; the README migrate paragraph is removed.
+- c1-630: benchmark/REPORT.md no longer names the wrong date of the earlier report.
+- c1-353: the validation log says `(1 occurrence)` for one occurrence, not `(1 occurrences)`.
+- c1-498: `.rows(["AEBODSYS", "AEDECOD"])` with plain names takes the row labels of the template's default rows. The ARD is equal to the `t_summary()` shortcut, and the stub header is "System Organ Class / Preferred Term". `Row(field=..., label="")` still asks for no label.
+- **Validation text report:** the label of the row numbers is `Row:` for one row and `Rows:` for a list such as `2-4, 7`, not `Rows affected:`. The occurrence count stays (ml2-misc task 2).
+- **Tests:** the c1-616 deep-nesting test of `load_spec_yaml` nests 101 levels, not 3,000. At 3,000 levels the parser hit the Python recursion limit, so the test never reached the depth-100 limit. A separate test covers the recursion guard (ml2-misc task 4).
+
+#### Removed
+
+- `source(target, from_col=...)`: rename with `assign(target, source=...)`, the one assignment vocabulary that `fleet migrate` already writes. `source(*names)` still carries columns through (c1-755).
+- `depends_on:` in a define.yaml derivation block: it had no effect, because every verb checks its own columns. `fleet migrate --spec` removes it; `from_spec` refuses it (c1-54).
+- c1-753: dead code: `fleet.core.seq`, `_DOMAIN_ADD_VERBS`, the `first_sentence` aliases, the `_FLAG_CRITERIA_KEYWORDS` re-export, the empty `MultiRowMixin`, `SDTMDomainSpec`, `ADAMDatasetSpec`, the unread `_sas_labels` attribute and `tmp_lineage_probe.py`.
+- c1-548 c1-747: `SDTMError` and `ADAMError`, which nothing raised.
+- The `ADAMAlgorithm` and `SDTMAlgorithm` enums, the `ADAMVariableSpec` and `SDTMVariableSpec` factories, the `ADAMDatasetSpec` and `SDTMDomainSpec` classes and the two variable-spec unions, with their exports in `fleet`, `fleet.adam` and `fleet.sdtm` (ADR-0008). `fleet.core.spec_registry.algorithm_names()` names the verbs; `NSVMeta` stays (c1-711).
+- c1-87: the dead `fleet.core.seq` module and `fleet.adam.utils.study_day` (no caller, false docstrings). The study-day rule (no day 0) is one helper, `fleet.core.dtc.cdisc_day`, used by `duration`, `study_day` and the SDTM TDD study day.
+- c2-965: `DMSummarySpec.age_var` (use `continuous_vars`).
+- c1-819: the PPTX theme key `bold_header_rows` and the unused `indent` argument of the slide cell helper.
+- `CTValidator.get_decode_map`, `CTValidator.apply_ct_mapping`, `CTValidator.load_codelist` and `fleet.ct.create_ct_lookup`: nothing called them, and `get_decode_map` gave M to M on a flat CT file. Use `get_valid_values` or the define.yaml decodes (c1-769).
+- `CDISCClient.get_packages`: it had no caller and ignored its product argument (c1-761).
+- The `DatasetChecker` core aliases `Required` and `Expected`: the define schema refuses them (c1-574).
+- `fleet.tools.migrate.migrate_file`, `fleet.tools.migrate_spec.migrate_spec_file` and `fleet.tools.migrate_spec.migrate_block`: no caller used them; `migrate_source` and `migrate_spec_text` stay (c1-825).
+- The Codecov upload, the `fleet-dev.pth` setup step, the `specs/**` docs path and the scratch file `tmp_lineage_probe.py`. (c1-623)
+
 ### Alpha audit: high findings
 
 The high findings of the alpha audit (`HIGH-REMAINING.md`), fixed with the decisions of 4 November 2026. ADR-0021 to ADR-0046 record the changed defaults.

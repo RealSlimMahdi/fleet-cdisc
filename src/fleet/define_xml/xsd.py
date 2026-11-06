@@ -9,7 +9,7 @@ Schema location is resolved in the same order Fleet uses for the rules
 engine, so a site can override the packaged copy without reinstalling:
 
 1. ``FLEET_DEFINE_XSD`` environment variable.
-2. ``~/.fleet/xsd/`` (populated by ``fleet install-xsd``).
+2. ``~/.fleet/xsd/`` (placed there by hand).
 3. The copy shipped inside this package.
 
 The files must keep the directory layout CDISC publishes them in:
@@ -110,7 +110,8 @@ def validate_define_xml(xml: str | bytes | Path) -> list[str]:
     separate layer; see :meth:`fleet.sdtm.SDTMNamespace.validate`.
 
     Args:
-        xml: Define-XML document as a string, bytes, or a path to a file.
+        xml: Define-XML document as a string, bytes, or a path to a file
+            (a ``Path``, or a string that does not start with ``<``).
 
     Returns:
         list[str]: Validation errors, each naming line and message.
@@ -144,8 +145,9 @@ def validate_define_xml(xml: str | bytes | Path) -> list[str]:
     if isinstance(xml, Path):
         doc = etree.parse(str(xml))
     else:
-        data = xml.encode("utf-8") if isinstance(xml, str) else xml
-        doc = etree.fromstring(data).getroottree()
+        from fleet.define_xml.semantic_checks import read_define_xml_bytes
+
+        doc = etree.fromstring(read_define_xml_bytes(xml)).getroottree()
 
     with xsd_dir() as d:
         schema = etree.XMLSchema(etree.parse(str(d / ROOT_XSD)))

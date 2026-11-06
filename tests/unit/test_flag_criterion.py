@@ -3,13 +3,14 @@
 Covers all criteria modes: first/last, max/min, exists, before/after,
 exists_after/exists_before, and the criterion() triple-output verb.
 
-Test cases ported from admiral's MIT-licensed test suite.
+Test cases ported from admiral's Apache-2.0-licensed test suite (see src/fleet/THIRD_PARTY_NOTICES).
 """
 
 import polars as pl
 import pytest
 
 import fleet  # noqa: F401
+from fleet.core.exceptions import VerbUsageError
 
 # ====================================================================== #
 # 1. Extreme Flag — First / Last                                          #
@@ -389,7 +390,7 @@ class TestFlagExists:
 └─────────┘
 """)
         with pytest.raises(ValueError, match="requires from_dataset and on"):
-            df.adam.flag("FL", criteria="exists", by=["USUBJID"]).to_frame()
+            df.adam.flag("FL", criteria="exists").to_frame()
 
 
 # ====================================================================== #
@@ -595,7 +596,6 @@ class TestFlagExistsAfter:
                 "FL",
                 criteria="exists_after",
                 condition=pl.col("AVALC") == "PR",
-                by=["USUBJID"],
             ).to_frame()
 
 
@@ -633,7 +633,7 @@ class TestFlagExpression:
 └─────────┴──────┘
 """)
         with pytest.raises(ValueError):
-            df.adam.flag("FL", criteria="not_a_valid_expr!!!", by=["USUBJID"]).to_frame()
+            df.adam.flag("FL", criteria="not_a_valid_expr!!!").to_frame()
 
 
 # ====================================================================== #
@@ -730,7 +730,7 @@ class TestCriterion:
         assert result["CRIT2FN"].to_list() == [1, 0, 0]
 
     def test_criterion_no_description(self):
-        """criterion without description produces null CRITy."""
+        """c1-205: a criterion without description raises (ADaMIG CRITy is text)."""
         df = pl.from_repr("""\
 ┌──────┐
 │ AVAL │
@@ -741,10 +741,8 @@ class TestCriterion:
 │ 15.0 │
 └──────┘
 """)
-        result = df.adam.criterion(1, condition=pl.col("AVAL") > 10).to_frame()
-        assert result["CRIT1"].to_list() == [None, None]
-        assert result["CRIT1FL"].to_list() == ["N", "Y"]
-        assert result["CRIT1FN"].to_list() == [0, 1]
+        with pytest.raises(VerbUsageError, match="description= is required"):
+            df.adam.criterion(1, condition=pl.col("AVAL") > 10, description=" ")
 
     def test_null_condition_gives_null_flags_as_admiral(self):
         """c1-204: a missing AVAL is not 'criterion not met' (admiral derive_vars_crit_flag)."""
@@ -767,13 +765,14 @@ class TestCriterion:
         assert result["CRIT1FN"].to_list() == [1, None, 0]
 
         not_met = adlb.adam.criterion(
-            1, condition=(pl.col("AVAL") >= 10).fill_null(False)
+            1, condition=(pl.col("AVAL") >= 10).fill_null(False), description="AVAL >= 10"
         ).to_frame()
         assert not_met["CRIT1FL"].to_list() == ["Y", "N", "N"]
         assert not_met["CRIT1FN"].to_list() == [1, 0, 0]
 
-    def test_criterion_custom_prefix(self):
-        """Custom prefix works."""
+    @pytest.mark.parametrize("number", [0, -1])
+    def test_criterion_number_below_one_raises(self, number):
+        """c1-205: CRIT0 and CRIT-1 are not ADaM names."""
         df = pl.from_repr("""\
 ┌──────┐
 │ AVAL │
@@ -781,13 +780,10 @@ class TestCriterion:
 │ f64  │
 ╞══════╡
 │ 1.0  │
-│ 20.0 │
 └──────┘
 """)
-        result = df.adam.criterion(1, condition=pl.col("AVAL") > 10, prefix="MCRIT").to_frame()
-        assert "MCRIT1" in result.columns
-        assert "MCRIT1FL" in result.columns
-        assert "MCRIT1FN" in result.columns
+        with pytest.raises(VerbUsageError, match="positive integer"):
+            df.adam.criterion(number, condition=pl.col("AVAL") > 10, description="x")
 
     def test_criterion_on_adsl(self):
         """criterion() available on ADSL namespace."""

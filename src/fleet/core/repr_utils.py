@@ -17,6 +17,8 @@ from __future__ import annotations
 
 import polars as pl
 
+from fleet.core.exceptions import DerivationError
+
 
 def to_repr(
     df: pl.DataFrame | pl.LazyFrame,
@@ -27,18 +29,26 @@ def to_repr(
 ) -> str:
     """Return a ``pl.from_repr()``-ingestible table string for *df*.
 
-    Temporarily adjusts Polars display settings so that wide tables and
-    long strings are never truncated, then restores original settings.
+    Temporarily widens the Polars display settings up to the given caps and
+    prints floats in full, then checks that ``pl.from_repr`` gives back an
+    equal frame.  When it does not (more columns than *max_cols*, a text
+    longer than *max_str_len*, a table wider than *max_width*, or a value
+    that holds the column separator), it raises instead of returning a
+    table that makes a different frame.
 
     Args:
         df: A Polars DataFrame or LazyFrame to render.
         max_cols: Maximum number of columns to display (avoids ``…``).
-        max_width: Maximum character width for the table.
+        max_width: Maximum character width for the table (at most 65535).
         max_str_len: Maximum string length before truncation.
 
     Returns:
         str: A Unicode box-drawing table string that can be pasted directly
             into ``pl.from_repr(...)`` to recreate the DataFrame.
+
+    Raises:
+        DerivationError: When ``pl.from_repr`` of the table does not give
+            back a frame equal to *df*.
 
     Examples:
         Generate a pasteable repr and use it to recreate the DataFrame::
@@ -82,8 +92,21 @@ def to_repr(
 
     with pl.Config(
         tbl_cols=max_cols,
-        tbl_width_chars=max_width,
+        tbl_width_chars=min(max_width, 65535),
         fmt_str_lengths=max_str_len,
+        fmt_float="full",
         tbl_rows=-1,
     ):
-        return str(df)
+        text = str(df)
+    try:
+        same = pl.from_repr(text).equals(df)
+    except pl.exceptions.PolarsError:
+        same = False
+    if not same:
+        raise DerivationError(
+            f"to_repr(): pl.from_repr of the table does not give back the frame of shape "
+            f"{df.shape}. Widen max_cols (now {max_cols}), max_str_len (now {max_str_len}) "
+            f"or max_width (now {max_width}); a value that holds the column separator "
+            "cannot be written as a table."
+        )
+    return text

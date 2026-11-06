@@ -9,7 +9,7 @@ import polars as pl
 import pytest
 
 from fleet.core.define_spec import DefineSpec
-from fleet.core.exceptions import IOError as FleetIOError
+from fleet.core.exceptions import FleetIOError
 from fleet.core.oids import item_oid
 from fleet.io.dataset_json import (
     DATASET_JSON_SCHEMA_PATH,

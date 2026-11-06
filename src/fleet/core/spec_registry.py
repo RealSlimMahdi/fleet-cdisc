@@ -25,9 +25,8 @@ kept out of the spec, the ones that exclude each other, the ones the spec
 requires although the verb has a default, which argument is the input
 column, and the Define-XML method text.
 
-The ``SDTMAlgorithm`` / ``ADAMAlgorithm`` enums remain literal source
-code in ``fleet.sdtm.models`` / ``fleet.adam.models`` for import
-stability; a sync test asserts they always match this registry.
+The registry names the verbs: :func:`algorithm_names` lists the
+``algorithm:`` values of each standard.  There is no separate enum.
 
 Examples:
     Validate and execute one spec variable::
@@ -53,7 +52,18 @@ import re
 import types
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
-from typing import Annotated, Any, ClassVar, Literal, Union, get_args, get_origin
+from typing import (
+    Annotated,
+    Any,
+    ClassVar,
+    Literal,
+    TypedDict,
+    Union,
+    get_args,
+    get_origin,
+    get_type_hints,
+    is_typeddict,
+)
 
 import polars as pl
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, create_model, model_validator
@@ -74,6 +84,7 @@ __all__ = [
     "parse_variable_spec",
     "render_formal_expression",
     "render_method_text",
+    "spec_algorithms",
     "spec_verb",
     "suggest_algorithm",
     "variable_spec_union",
@@ -192,8 +203,27 @@ class SpecVariableBase(BaseModel):
 
     @model_validator(mode="after")
     def _check_argument_groups(self) -> SpecVariableBase:
-        """Enforce the ``exclusive`` and ``one_of`` groups of the declaration."""
+        """Enforce the ``exclusive`` and ``one_of`` groups of the declaration.
+
+        An explicit ``null`` on an optional key is refused: it reads as the
+        key left out, so ``assign`` with ``value: null`` would copy the
+        column, while the verb refuses ``assign(value=None)`` (ADR-0007).
+        A required key that takes ``None`` (``end_date: null``) keeps it.
+        """
         algo = type(self)._algo
+        nulls = sorted(
+            f.name
+            for f in algo.params
+            if not f.required
+            and f.kwarg in self.model_fields_set
+            and getattr(self, f.kwarg, None) is None
+        )
+        if nulls:
+            raise ValueError(
+                f"{', '.join(nulls)}: null is not a value. Remove the key; to set a "
+                "missing value use algorithm: derivation with expression: "
+                "pl.lit(None).cast(pl.String)."
+            )
         given = {f.kwarg for f in algo.params if getattr(self, f.kwarg, None) is not None}
         if algo.exclusive and len(given & set(algo.exclusive)) > 1:
             raise ValueError(f"{', '.join(algo.exclusive)} exclude each other; give one of them.")
@@ -222,9 +252,6 @@ def _build_model(algo: SpecAlgorithm) -> type[SpecVariableBase]:
         )
     for meta in _META_FIELDS:
         fields.setdefault(meta, (str | None, Field(None)))
-    if algo.standard == "adam":
-        # depends_on drives the auto-flush staging in from_spec().
-        fields.setdefault("depends_on", (list[str] | None, Field(None)))
     model = create_model(_model_name(algo), __base__=SpecVariableBase, **fields)
     model._algo = algo
     return model
@@ -236,6 +263,8 @@ def _build_model(algo: SpecAlgorithm) -> type[SpecVariableBase]:
 
 _SECTION_RE = re.compile(r"^[A-Z][A-Za-z ]*:\s*$")
 _ARG_RE = re.compile(r"^(\*{0,2}\w+)(?:\s*\([^)]*\))?:\s*(.*)$")
+# A full stop then a space ends a sentence, unless it closes "e.g.", "i.e.", "etc." or "vs.".
+_SENTENCE_END_RE = re.compile(r"(?<!\be\.g)(?<!\bi\.e)(?<!\betc)(?<!\bvs)\. ")
 _FRAME_TYPES: tuple[type, ...] = (pl.DataFrame, pl.LazyFrame)
 
 
@@ -331,8 +360,8 @@ def _docstring_arg_descriptions(fn: Any) -> dict[str, str]:
         elif current is not None:
             out[current] = f"{out[current]} {stripped}".strip()
     for name, text in out.items():
-        head, sep, _ = text.partition(". ")
-        out[name] = f"{head}." if sep else text
+        end = _SENTENCE_END_RE.search(text)
+        out[name] = text[: end.start() + 1] if end else text
     return out
 
 
@@ -355,6 +384,12 @@ def _yaml_type(tp: Any) -> tuple[Any, str | None]:
         return str, "pin"
     if tp is type:
         return str, None
+    if is_typeddict(tp):
+        # A dict of fixed keys (a case_when branch): each key gets its YAML type.
+        keys = {k: _yaml_type(v)[0] for k, v in get_type_hints(tp).items()}
+        yaml_dict = TypedDict(tp.__name__, keys)  # type: ignore[misc]
+        yaml_dict.__pydantic_config__ = ConfigDict(extra="forbid")  # type: ignore[attr-defined]
+        return yaml_dict, None
     origin = get_origin(tp)
     if origin in (Union, types.UnionType):
         members: list[Any] = []
@@ -547,6 +582,31 @@ def algorithm_names(standard: str) -> list[str]:
     return sorted(_DECLARED[standard])
 
 
+def spec_algorithms(standard: str) -> list[str]:
+    """Return the sorted ``algorithm:`` values a ``define.yaml`` accepts for *standard*.
+
+    Args:
+        standard: ``"sdtm"`` or ``"adam"``, in any letter case.
+
+    Returns:
+        list[str]: The algorithm names, sorted.
+
+    Raises:
+        ValueError: If *standard* is not ``"sdtm"`` or ``"adam"``.
+
+    Examples:
+        List the SDTM algorithms::
+
+            import fleet
+
+            names = fleet.spec_algorithms("SDTM")
+    """
+    key = standard.lower() if isinstance(standard, str) else standard
+    if key not in _DECLARED:
+        raise ValueError(f"Unknown standard {standard!r}: use 'sdtm' or 'adam'.")
+    return algorithm_names(key)
+
+
 def model_for(standard: str, name: str) -> type[SpecVariableBase]:
     """Return the generated Pydantic model for the verb *name*."""
     algo = get_algorithm(standard, name)
@@ -598,9 +658,31 @@ def parse_variable_spec(standard: str, data: Mapping[str, Any]) -> SpecVariableB
     return _adapter(standard).validate_python(dict(data))
 
 
+def is_sub_namespace_verb(standard: str, name: str) -> bool:
+    """Whether *name* is dotted or a verb of a sub-namespace (``onco``, ``pk``, ...).
+
+    Such a verb has no define.yaml form in this release unless it is
+    registered (issues #89, #90).
+    """
+    from fleet.core.lineage import sub_namespace_class
+
+    if "." in name:
+        return True
+    cls = _namespace_class(standard)
+    if cls is None:
+        return False
+    for attr in dir(cls):
+        if attr.startswith("_") or not isinstance(getattr(cls, attr, None), property):
+            continue
+        sub = sub_namespace_class(cls, attr)
+        if sub is not None and sub is not cls and callable(getattr(sub, name, None)):
+            return True
+    return False
+
+
 def suggest_algorithm(standard: str, name: str) -> str | None:
-    """Return the closest registered algorithm name to *name*, if any."""
-    matches = difflib.get_close_matches(name, list(_DECLARED[standard]), n=1, cutoff=0.6)
+    """Return the closest registered algorithm name to *name*, if any; case is ignored."""
+    matches = difflib.get_close_matches(name.lower(), list(_DECLARED[standard]), n=1, cutoff=0.6)
     return matches[0] if matches else None
 
 
@@ -633,6 +715,41 @@ def with_codelist(standard: str, block: Mapping[str, Any], codelist: str | None)
             "ct_map needs a codelist: give ct: in the derivation, or codelist: on the variable."
         )
     return dict(block)
+
+
+def pinned_datasets(standard: str, derivations: list[Any]) -> list[str]:
+    """Return the datasets that *derivations* read through a pin, in first-use order.
+
+    A parameter the registry converts as a pin (``from_dataset: EX`` of
+    ``first_date``) names a dataset the step reads, as an ``inputs:`` entry
+    does.
+
+    Args:
+        standard: ``"sdtm"`` or ``"adam"``.
+        derivations: The ``derivation:`` blocks of a dataset (non-mappings
+            are skipped).
+
+    Returns:
+        list[str]: The pinned dataset names.
+
+    Examples:
+        The pilot ADSL reads EX for TRTSDT::
+
+            names = pinned_datasets(
+                "adam", [{"algorithm": "first_date", "from_dataset": "EX", "date_col": "EXSTDTC"}]
+            )
+            assert names == ["EX"]
+    """
+    pinned: list[str] = []
+    for derivation in derivations:
+        if not isinstance(derivation, Mapping):
+            continue
+        algo = get_algorithm(standard, str(derivation.get("algorithm", "")))
+        for param in algo.params if algo else ():
+            value = derivation.get(param.name)
+            if param.convert == "pin" and isinstance(value, str) and value not in pinned:
+                pinned.append(value)
+    return pinned
 
 
 # --------------------------------------------------------------------- #
@@ -696,11 +813,20 @@ def _default_dispatch(ns: Any, var: SpecVariableBase) -> Any:
     spec_ct_validate = getattr(ns, "_spec_ct_validate", None)
     if spec_ct_validate is not None and "ct" in kwargs:
         kwargs.setdefault("validate_values", spec_ct_validate)
+    method = _method(ns, algo.verb)
+    # The spec's own ct.file validator, for an ID it holds; another ID uses the global one.
+    private = getattr(ns, "_spec_ct_validator", None)
+    if (
+        private is not None
+        and isinstance(kwargs.get("ct"), str)
+        and private.has_codelist(kwargs["ct"])
+        and "ct_validator" in inspect.signature(method).parameters
+    ):
+        kwargs["ct_validator"] = private
     # from_spec put the study's codelists.py classes here; an ID they lack stays a string.
     codelists = getattr(ns, "_spec_codelists", None)
     if codelists and isinstance(kwargs.get("ct"), str):
         kwargs["ct"] = codelists.get(kwargs["ct"], kwargs["ct"])
-    method = _method(ns, algo.verb)
     if algo.takes_target:
         return method(var.target, **kwargs)
     return method(**kwargs)
@@ -820,6 +946,21 @@ def _build_block(algo: SpecAlgorithm, captured: dict[str, Any], node: Any) -> di
     return {"algorithm": algo.name, **fields}
 
 
+def _dotted_algorithm(standard: str, node: Any) -> SpecAlgorithm | None:
+    """The dotted algorithm (``occds.treatment_emergent``) whose method the node records."""
+    from fleet.core.lineage import defining_method_path
+
+    cls = _namespace_class(standard)
+    for algo in algorithms(standard):
+        if (
+            "." in algo.verb
+            and algo.verb.rsplit(".", 1)[1] == node.verb
+            and defining_method_path(cls, algo.verb) == node.method
+        ):
+            return algo
+    return None
+
+
 def derivation_from_lineage(standard: str, node: Any) -> tuple[str, dict | None, dict]:
     """Reverse-map one lineage ``VariableNode`` to a spec derivation block.
 
@@ -888,7 +1029,7 @@ def derivation_from_lineage(standard: str, node: Any) -> tuple[str, dict | None,
     if any(v is UNSERIALISABLE for v in captured.values()):
         return ("stub", None, meta)
 
-    algo = get_algorithm(standard, node.verb)
+    algo = get_algorithm(standard, node.verb) or _dotted_algorithm(standard, node)
     if algo is not None:
         block = _build_block(algo, captured, node)
         if block is not None:
@@ -905,10 +1046,16 @@ _TEMPLATE_KEYS_RE = re.compile(r"{(\w+)}")
 
 
 def _fmt_value(value: Any) -> str:
-    """Render one value as reviewer-readable prose (no Python reprs)."""
+    """Render one value as reviewer-readable prose (no Python reprs).
+
+    A list of ``case_when`` branches reads "if <condition> then <value>";
+    an expression stays verbatim.
+    """
     if isinstance(value, dict):
         return "; ".join(f"{k} → {v}" for k, v in value.items())
     if isinstance(value, (list, tuple)):
+        if value and all(isinstance(v, dict) and set(v) == {"condition", "value"} for v in value):
+            return "; ".join(f"if {v['condition']} then {v['value']}" for v in value)
         return ", ".join(str(v) for v in value)
     return str(value)
 
@@ -1023,7 +1170,7 @@ def render_formal_expression(
             for target-taking verbs.
 
     Returns:
-        str | None: e.g. ``fleet...SharedVerbsMixin.assign('AEREL',
+        str | None: e.g. ``fleet.sdtm.namespace.SDTMNamespace.assign('AEREL',
         source='AEREL_')``, or ``None`` for an unregistered algorithm.
     """
     algo = get_algorithm(standard, algorithm)
@@ -1031,12 +1178,9 @@ def render_formal_expression(
         return None
     from fleet.core.lineage import defining_method_path
 
-    # The class from_spec runs on, so the path is the one lineage records.
-    if "." in algo.verb:
-        fn = _namespace_method(standard, algo.verb)
-        dotted = f"{fn.__module__}.{fn.__qualname__}"
-    else:
-        dotted = defining_method_path(_namespace_class(standard), algo.verb)
+    # The public class from_spec runs on, so the path is the one lineage records
+    # and stays stable when Fleet moves a verb between its internal mixins.
+    dotted = defining_method_path(_namespace_class(standard), algo.verb)
     args: list[str] = []
     if target and algo.takes_target:
         args.append(repr(target))
@@ -1099,7 +1243,7 @@ def _dispatch_pick(ns: Any, var: SpecVariableBase) -> Any:
         var.targets or [var.target],
         events=events,
         by=var.by,
-        order=var.order,
+        order_by=var.order_by,
         mode=var.mode,
     )
 
@@ -1200,6 +1344,7 @@ spec_verb(
     "nsv",
     standard="sdtm",
     exclude=("label", "origin", "evaluator"),
+    exclusive=("source", "value"),
     identity="source",
     dispatch=_dispatch_nsv,
     description="Declare a Non-Standard Variable (SUPPQUAL qualifier).",
@@ -1367,12 +1512,30 @@ spec_verb(
     ),
 )
 
-spec_verb("atoxgr", standard="adam", description="Toxicity grade via criteria-file grading.")
+spec_verb(
+    "atoxgr",
+    standard="adam",
+    description="Toxicity grade via criteria-file grading.",
+    method_text=(
+        (
+            set(),
+            "Toxicity grade from {term_var} using the criteria {system}, direction {direction}.",
+        ),
+    ),
+)
 
 spec_verb(
     "combine_grades",
     standard="adam",
     description="Combine directional toxicity grades into one column.",
+    method_text=(
+        (
+            set(),
+            "Signed toxicity grade from {low_var} and {high_var}: a low grade of 1 or more "
+            "is negative and takes precedence over the high grade; 0 when neither direction "
+            "has a grade.",
+        ),
+    ),
 )
 
 spec_verb(
@@ -1445,8 +1608,10 @@ spec_verb(
 # --------------------------------------------------------------------- #
 
 #: Namespace verbs that deliberately have **no** spec form, with the
-#: reason.  The parity test asserts every public verb is either registered
-#: above or listed here — nothing falls through the cracks silently.
+#: reason.  The parity test asserts every public verb of the top-level
+#: namespaces is either registered above or listed here.  The verbs of the
+#: sub-namespaces (onco, pk, occds and others) are not swept: they are
+#: inline only, except the dotted verbs registered above (issues #89, #90).
 SPEC_UNSUPPORTED: dict[str, set[str]] = {
     "sdtm": {
         "study_day",  # pin-based reference join; no spec form yet (duration gives a day 0)

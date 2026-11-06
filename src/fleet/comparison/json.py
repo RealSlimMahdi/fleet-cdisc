@@ -99,6 +99,7 @@ def _values(report: ComparisonReport) -> dict[str, Any]:
         "observations_with_differences": values.observations_with_differences,
         "total_differences": values.total_differences,
         "per_group": values.per_group.to_dicts(),
+        "within_tolerance": values.within_tolerance,
     }
 
 

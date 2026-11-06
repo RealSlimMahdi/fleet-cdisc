@@ -8,7 +8,7 @@ import pytest
 
 from fleet.cli import main as cli_main
 from fleet.core.define_spec import load_spec_yaml
-from fleet.tools.migrate_spec import migrate_block, migrate_spec_text
+from fleet.tools.migrate_spec import migrate_block, migrate_spec_text, unmigrated_blocks
 
 OLD_DEFINE = """\
 # yaml-language-server: $schema=define_spec_schema.json
@@ -46,28 +46,42 @@ datasets:
 """
 
 
-class TestMigrateBlock:
+SEX_FRAGMENT = """\
+- name: SEX
+  codelist: C66731
+  derivation:
+    algorithm: assign_ct
+    source: sex
+    ct_codelist: C66731
+"""
+
+
+def _block(text: str) -> dict:
+    return load_spec_yaml(text)["derivation"]
+
+
+class TestOneBlock:
     def test_the_dm_sex_block_of_adr_0008(self):
-        new, changes = migrate_block(
-            {"algorithm": "assign_ct", "source": "sex", "ct_codelist": "C66731"},
-            codelist="C66731",
-        )
-        assert new == {"algorithm": "assign", "source": "sex"}
+        new, changes = migrate_spec_text(SEX_FRAGMENT, set_version=False)
+        assert load_spec_yaml(new)[0]["derivation"] == {"algorithm": "assign", "source": "sex"}
         assert changes
 
     def test_a_block_in_the_verb_vocabulary_is_left_alone(self):
-        block = {"algorithm": "assign", "source": "sex", "ct": "C66731"}
-        assert migrate_block(block) == (block, [])
+        text = "derivation:\n  algorithm: assign\n  source: sex\n  ct: C66731\n"
+        assert migrate_spec_text(text, set_version=False) == (text, [])
 
     def test_study_day_becomes_duration_with_start_and_end(self):
-        new, _ = migrate_block(
-            {"algorithm": "study_day", "analysis_date": "ADT", "reference_date": "TRTSDT"}
+        text = (
+            "derivation:\n  algorithm: study_day\n  analysis_date: ADT\n  reference_date: TRTSDT\n"
         )
-        assert new == {"algorithm": "duration", "end": "ADT", "start": "TRTSDT"}
+        new, _ = migrate_spec_text(text, set_version=False)
+        assert _block(new) == {"algorithm": "duration", "end": "ADT", "start": "TRTSDT"}
 
     def test_an_existing_new_key_wins_over_the_old_one(self):
-        new, _ = migrate_block({"algorithm": "seq", "groups": ["A"], "by": ["B"]})
-        assert new == {"algorithm": "seq", "groups": ["A"], "by": ["B"]}
+        text = "derivation:\n  algorithm: seq\n  groups: [A]\n  by: [B]\n"
+        new, changes = migrate_spec_text(text, set_version=False)
+        assert _block(new) == {"algorithm": "seq", "groups": ["A"], "by": ["B"]}
+        assert any("resolve by hand" in c for c in changes)
 
 
 class TestMigrateSpecText:
@@ -188,3 +202,94 @@ class TestReviewFindings:
         assert any("resolve by hand" in c for c in changes)
         _, block_changes = migrate_block({"algorithm": "assign_ct", "ct_codelist": "A", "ct": "B"})
         assert any("resolve by hand" in c for c in block_changes)
+
+
+FLOW_DEFINE = """\
+datasets:
+  - name: DM
+    variables:
+      - name: DOMAIN
+        derivation: {algorithm: hardcode_no_ct, value: DM}
+"""
+
+
+def _migrate_cli(*argv: str) -> int:
+    with pytest.raises(SystemExit) as exc:
+        cli_main(["migrate", "--spec", *argv])
+    return exc.value.code
+
+
+class TestAuditFindings:
+    def test_c1_823_a_flow_block_is_named_and_the_version_is_not_stamped(self, tmp_path, capsys):
+        new, changes = migrate_spec_text(FLOW_DEFINE)
+        assert (new, changes) == (FLOW_DEFINE, [])
+        assert unmigrated_blocks(new) == ["DM.DOMAIN"]
+        spec = tmp_path / "define.yaml"
+        spec.write_text(FLOW_DEFINE, encoding="utf-8")
+        assert _migrate_cli(str(spec), "--write") == 1
+        err = capsys.readouterr().err
+        assert "left as is, rewrite by hand: DM.DOMAIN" in err
+        assert "Nothing to migrate" not in err
+        assert spec.read_text(encoding="utf-8") == FLOW_DEFINE
+
+    def test_c1_823_a_quoted_version_is_bumped(self):
+        new, _ = migrate_spec_text('fleet_spec_version: "1"\ndatasets: []\n')
+        assert new == 'fleet_spec_version: "2"\ndatasets: []\n'
+        assert migrate_spec_text(new) == (new, [])
+
+    def test_c1_824_one_bad_file_does_not_stop_the_batch(self, tmp_path, capsys):
+        (tmp_path / "a_ok.yaml").write_text(OLD_DEFINE, encoding="utf-8")
+        (tmp_path / "b_latin1.yaml").write_bytes("study:\n  id: \xc9TUDE\n".encode("latin-1"))
+        (tmp_path / "c_ok.yaml").write_text(OLD_DEFINE, encoding="utf-8")
+        assert _migrate_cli(str(tmp_path), "--write") == 1
+        err = capsys.readouterr().err
+        assert "b_latin1.yaml: cannot read" in err
+        assert "Nothing to migrate" not in err
+        for name in ("a_ok.yaml", "c_ok.yaml"):
+            assert "hardcode_no_ct" not in (tmp_path / name).read_text(encoding="utf-8")
+
+    def test_c1_829_crlf_line_endings_are_kept(self, tmp_path):
+        spec = tmp_path / "define.yaml"
+        spec.write_bytes(OLD_DEFINE.replace("\n", "\r\n").encode("utf-8"))
+        assert _migrate_cli(str(spec), "--write") == 0
+        data = spec.read_bytes()
+        assert b"fleet_spec_version: 2\r\n" in data
+        assert data.count(b"\n") == data.count(b"\r\n")
+
+    def test_c1_827_hidden_folders_and_venvs_are_not_walked(self, tmp_path, capsys):
+        for folder in (".venv/lib", "env/lib", "specs"):
+            (tmp_path / folder).mkdir(parents=True)
+            (tmp_path / folder / "define.yaml").write_text(OLD_DEFINE, encoding="utf-8")
+        (tmp_path / "env" / "pyvenv.cfg").write_text("home = /usr\n", encoding="utf-8")
+        assert _migrate_cli(str(tmp_path)) == 0
+        out = capsys.readouterr().out
+        assert "specs/define.yaml" in out
+        assert ".venv" not in out
+        assert "env/lib" not in out
+
+
+def test_an_old_flow_style_block_is_reported_and_keeps_the_version():
+    """c1-647: a flow block with old names is reported; the version is not raised."""
+    text = (
+        "datasets:\n"
+        "  - name: DM\n"
+        "    variables:\n"
+        "      - name: SEX\n"
+        "        derivation: {algorithm: assign_ct, source: sex, ct_codelist: C66731}\n"
+    )
+    new_text, changes = migrate_spec_text(text)
+    assert (new_text, changes) == (text, [])
+    assert unmigrated_blocks(text) == ["DM.SEX"]
+
+
+def test_a_current_flow_style_block_is_not_reported():
+    text = (
+        "datasets:\n"
+        "  - name: DM\n"
+        "    variables:\n"
+        "      - name: SEX\n"
+        "        derivation: {algorithm: assign, source: sex}\n"
+    )
+    new_text, changes = migrate_spec_text(text)
+    assert "fleet_spec_version: 2" in new_text
+    assert not any("flow-style" in c for c in changes)

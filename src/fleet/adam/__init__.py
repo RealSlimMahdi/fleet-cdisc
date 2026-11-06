@@ -1,12 +1,11 @@
 """ADaM module — imports trigger Polars namespace registration for df.adam."""
 
-from fleet.adam._mixins import FlagCriterionMixin, MultiRowMixin, SharedADaMVerbsMixin
+from fleet.adam._mixins import FlagCriterionMixin, SharedADaMVerbsMixin
 from fleet.adam.adsl_namespace import ADSLNamespace  # accessed via df.adam.adsl
 
 # Grading sub-package
 from fleet.adam.grading import GradingSystem
 from fleet.adam.metabolic_namespace import MetabolicNamespace
-from fleet.adam.models import ADAMAlgorithm, ADAMDatasetSpec, ADAMVariableSpec
 from fleet.adam.namespace import AdamNamespace
 from fleet.adam.neuro_namespace import NeuroNamespace
 from fleet.adam.occds_namespace import OCCDSNamespace  # accessed via df.adam.occds
@@ -29,11 +28,6 @@ __all__ = [
     # Mixins
     "FlagCriterionMixin",
     "SharedADaMVerbsMixin",
-    "MultiRowMixin",
-    # Spec models
-    "ADAMAlgorithm",
-    "ADAMDatasetSpec",
-    "ADAMVariableSpec",
     "AdamNamespace",
     "ADSLNamespace",
     "OCCDSNamespace",

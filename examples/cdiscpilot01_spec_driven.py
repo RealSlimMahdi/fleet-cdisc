@@ -255,7 +255,7 @@ print(f"   {adsl.shape[0]} subjects × {adsl.shape[1]} variables")
 
 # ════════════════════════════════════════════════════════════════════════════
 # 6. ADaM ADVS — spec-driven
-#    depends_on: in the spec triggers auto-flush between dependent batches:
+#    The variables run in spec order, so each one reads the columns above it:
 #      ADT → ADY,  ABLFL → BASE,  BASE → CHG / PCHG
 #    The define declares `inputs: [VS, ADSL]`: the subject-level variables it
 #    lists (SUBJID … ITTFL) are merged in from the ADSL built above, exactly
@@ -379,8 +379,9 @@ for checker, df, ds in [
 # a gap: a Derived variable with no method text, a numeric item with no
 # Length or a float with no SignificantDigits.
 # XSD validation + the semantic lint run automatically on the way out.
-DefineSpecGenerator(SDTM_SPEC, strict=True).generate(OUT / "define_sdtm.xml")
-DefineSpecGenerator(ADAM_SPEC, strict=True).generate(OUT / "define_adam.xml")
+XSL = SPECS / "define2-1.xsl"  # the CDISC stylesheet for the HTML preview
+DefineSpecGenerator(SDTM_SPEC, strict=True).generate(OUT / "define_sdtm.xml", xsl_path=XSL)
+DefineSpecGenerator(ADAM_SPEC, strict=True).generate(OUT / "define_adam.xml", xsl_path=XSL)
 print(f"\nDefine-XML written to {OUT}/")
 print("  Serve with: python -m http.server 8080 --directory outputs/cdiscpilot01")
 

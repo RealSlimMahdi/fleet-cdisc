@@ -27,6 +27,11 @@ if TYPE_CHECKING:
     from fleet.validation.models import ValidationResult
 
 
+#: A finding that names more variables than this gets no producing verb:
+#: the list is a rule's context, not the variable the programmer must fix.
+_MAX_NAMES = 5
+
+
 def enrich_with_lineage(
     result: ValidationResult,
     lineage: list[VariableNode],
@@ -35,10 +40,13 @@ def enrich_with_lineage(
 ) -> ValidationResult:
     """Annotate validation issues with the verb that produced each variable.
 
-    Mutates *result* in-place (and returns it for chaining).  Issues whose
-    ``variable`` matches a lineage entry by name receive the
-    ``producing_verb``, ``verb_method``, and ``spec_ref`` fields.  Issues
-    without a matching lineage entry are left untouched.
+    Mutates *result* in-place (and returns it for chaining).  The
+    ``variable`` of an issue can name one variable or several
+    (``"AESEQ, USUBJID, POOLID"``); each name is looked up in the lineage.
+    One matched variable gives ``producing_verb`` its verb (``"assign"``).
+    Several give each distinct verb with its variables
+    (``"assign (AESEQ, USUBJID)"``).  An issue that names more than five
+    variables, or none the chain made, is left untouched.
 
     Args:
         result: A populated ``ValidationResult`` from a CDISC rules run.
@@ -53,11 +61,23 @@ def enrich_with_lineage(
     by_name = {entry.name: entry for entry in lineage}
     for bucket in (result.errors, result.warnings, result.infos):
         for issue in bucket:
-            entry = by_name.get(issue.variable or "")
-            if entry is None:
+            names = [n.strip() for n in (issue.variable or "").split(",") if n.strip()]
+            if len(names) > _MAX_NAMES:
                 continue
-            issue.producing_verb = entry.verb
-            issue.verb_method = entry.method
+            entries = [by_name[n] for n in names if n in by_name]
+            if not entries:
+                continue
+            if len(names) == 1:
+                issue.producing_verb = entries[0].verb
+                issue.verb_method = entries[0].method
+            else:
+                by_verb: dict[str, list[str]] = {}
+                for entry in entries:
+                    by_verb.setdefault(entry.verb, []).append(entry.name)
+                issue.producing_verb = "; ".join(
+                    f"{verb} ({', '.join(variables)})" for verb, variables in by_verb.items()
+                )
+                issue.verb_method = ", ".join(dict.fromkeys(e.method for e in entries))
             if spec_ref and not issue.spec_ref:
                 issue.spec_ref = spec_ref
     return result

@@ -26,7 +26,7 @@ class Arm(BaseModel):
         then: Grade ``"0"`` to ``"4"``, or ``None`` for a null grade.
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     when: Any
     then: Literal["0", "1", "2", "3", "4"] | None
@@ -51,7 +51,7 @@ class TermCriteria(BaseModel):
         source: The admiral text the arms come from.
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     term: str
     direction: Literal["L", "H"]
@@ -80,7 +80,7 @@ class CriteriaFile(BaseModel):
         criteria: Per-term criteria.
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     schema_version: Literal[2]
     version: str

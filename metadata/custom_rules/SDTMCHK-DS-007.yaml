@@ -66,3 +66,6 @@ Authorities:
       - Cited Guidance: check_ds_ae_discon
         Document: pharmaverse sdtmchecks
         Section: DS Domain
+  Category:
+    Purpose: Data quality check from sdtmchecks
+    Keywords: [DS]

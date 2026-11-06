@@ -10,6 +10,10 @@ Key derivations, inspired by pharmaverse/admiralvaccine (not ports; values can d
   - ``aval_adis``           — AVAL derivation with LLOQ/ULOQ handling (ADIS)
   - ``event_flag``          — group-level reactogenicity event flag
 
+A float NaN compares above every threshold in Polars.  ``load_raw_data``
+reads a CSV ``NaN`` cell as null, but a NaN from a user expression (for
+example 0/0) passes as a number: fill it with ``fill_nan(None)`` first.
+
 Usage
 -----
     import fleet  # triggers registration
@@ -46,6 +50,7 @@ from typing import Literal, Self
 import polars as pl
 
 from fleet.adam._mixins import SharedADaMVerbsMixin
+from fleet.adam.utils import sas_round
 from fleet.core.exceptions import DerivationError
 
 
@@ -78,10 +83,26 @@ class VaccineNamespace(SharedADaMVerbsMixin):
         such as FDA grade 4 (> 40.0 °C).  With ``inclusive=False`` and the
         default threshold, a record of 38.0 °C gets no flag.
 
-        Example::
+        Args:
+            target: Name of the output flag column.
+            temp_col: Column with the body temperature in °C.
+            threshold: Fever limit in °C (default ``38.0``).
+            inclusive: ``True`` flags at or above *threshold*, ``False``
+                strictly above.
+            flag_value: Value of the flag (default ``"Y"``).
 
-            .fever_flag("FEVFL", temp_col="TEMP")
-            .fever_flag("G4FEVFL", temp_col="TEMP", threshold=40.0, inclusive=False)
+        Returns:
+            Self: The namespace with *target* appended.
+
+        Examples:
+            Flag fever and grade 4 fever::
+
+                adface = (
+                    face_df.adam.vaccine
+                    .fever_flag("FEVFL", temp_col="TEMP")
+                    .fever_flag("G4FEVFL", temp_col="TEMP", threshold=40.0, inclusive=False)
+                    .to_frame()
+                )
 
         References:
             FDA, Guidance for Industry: Toxicity Grading Scale for Healthy Adult and
@@ -130,12 +151,31 @@ class VaccineNamespace(SharedADaMVerbsMixin):
 
         Rows that do not meet the rule get null.
 
-        Example::
+        Args:
+            target: Name of the output flag column.
+            aval_col: Post-vaccination titre column.
+            base_col: Baseline titre column.
+            lloq_col: LLOQ column of the baseline record, or ``None`` for
+                the plain ratio.
+            fold_rise: Rise from baseline that counts (default ``4.0``).
+            seronegative_fold: Multiple of the LLOQ for a baseline below the
+                LLOQ (default *fold_rise*).
+            flag_value: Value of the flag (default ``"Y"``).
 
-            .seroconversion_flag("SRCONVFL", aval_col="AVAL", base_col="BASE",
-                                  lloq_col="ISLLOQ")
-            .seroconversion_flag("SRCONV2FL", aval_col="AVAL", base_col="BASE",
-                                  lloq_col=None, fold_rise=2.0)
+        Returns:
+            Self: The namespace with *target* appended.
+
+        Examples:
+            Flag seroconversion with the LLOQ rule and with a plain ratio::
+
+                adis = (
+                    is_df.adam.vaccine
+                    .seroconversion_flag("SRCONVFL", aval_col="AVAL", base_col="BASE",
+                                         lloq_col="ISLLOQ")
+                    .seroconversion_flag("SRCONV2FL", aval_col="AVAL", base_col="BASE",
+                                         lloq_col=None, fold_rise=2.0)
+                    .to_frame()
+                )
 
         References:
             FDA CBER, Guidance for Industry: Clinical Data Needed to Support the
@@ -175,12 +215,37 @@ class VaccineNamespace(SharedADaMVerbsMixin):
         threshold: float,
         flag_value: str = "Y",
     ) -> Self:
-        """
-        Set *target* to *flag_value* when *aval_col* ≥ *threshold*.
+        """Set *target* to *flag_value* when *aval_col* ≥ *threshold*.
 
-        Example::
+        A threshold rule on AVAL only, not a response to vaccination: a
+        subject at the threshold before the dose is flagged too. Study
+        definitions of seroresponse differ (a fold rise, a threshold); use
+        :meth:`seroconversion_flag` for a fold rise. Take the threshold from
+        the SAP.
 
-            .seroresponse_flag("SRSFL", aval_col="AVAL", threshold=40.0)
+        Args:
+            target: Name of the output flag column.
+            aval_col: Column containing the titer.
+            threshold: Titer at or above which the record is flagged.
+            flag_value: Value to assign (default ``"Y"``).
+
+        Returns:
+            Self: The namespace with *target* appended.
+
+        Examples:
+            Flag titers of 1:40 or more::
+
+                adis = (
+                    is_raw.adam.vaccine
+                    .seroresponse_flag("SRSFL", aval_col="AVAL", threshold=40.0)
+                    .to_frame()
+                )
+
+        References:
+            No standard fixes the rule; the caller supplies the threshold
+            (ADR-0009 keeps the verb as grandfathered). For influenza HI, EMA
+            CPMP/BWP/214/96 (1997) uses a titer of 1:40 as seroprotection and
+            a fourfold rise as seroconversion. Check the SAP.
         """
         return self._chain(
             pl.when(pl.col(aval_col) >= threshold)
@@ -222,11 +287,32 @@ class VaccineNamespace(SharedADaMVerbsMixin):
         *lloq_rule*: ``"half"`` (LLOQ ÷ 2) or ``"lloq"`` (retain LLOQ value).
         Any other text raises ``DerivationError``.
 
-        Example::
+        Args:
+            target: Name of the output column.
+            stresn_col: Numeric result column (default ``"ISSTRESN"``).
+            lloq_col: LLOQ column (default ``"ISLLOQ"``).
+            uloq_col: ULOQ column, or ``None`` when there is no upper limit.
+            orres_col: Original result column, read for ``<`` and ``>``
+                when *stresn_col* is null; ``None`` skips it.
+            lloq_rule: ``"half"`` or ``"lloq"``.
+            round_digits: Decimal places, or ``None`` for no rounding.
 
-            .aval_adis("AVAL", stresn_col="ISSTRESN",
-                       lloq_col="ISLLOQ", uloq_col="ISULOQ",
-                       orres_col="ISORRES")
+        Returns:
+            Self: The namespace with *target* appended.
+
+        Raises:
+            DerivationError: When *lloq_rule* is not ``"half"`` or ``"lloq"``.
+
+        Examples:
+            ADIS AVAL with the LLOQ and ULOQ rules::
+
+                adis = (
+                    is_df.adam.vaccine
+                    .aval_adis("AVAL", stresn_col="ISSTRESN",
+                               lloq_col="ISLLOQ", uloq_col="ISULOQ",
+                               orres_col="ISORRES")
+                    .to_frame()
+                )
 
         References:
             admiralvaccine ``derive_var_aval_adis`` (pharmaverse): the rule set this
@@ -278,10 +364,7 @@ class VaccineNamespace(SharedADaMVerbsMixin):
 
             expr = pl.when(stresn.is_not_null()).then(stresn_rule).otherwise(missing_rule)
 
-        if round_digits is not None:
-            expr = expr.round(round_digits)
-
-        return self._chain(expr.alias(target))
+        return self._chain(sas_round(expr, round_digits).alias(target))
 
     # ------------------------------------------------------------------ #
     # 5. event_flag — reactogenicity event occurrence flags               #
@@ -318,10 +401,28 @@ class VaccineNamespace(SharedADaMVerbsMixin):
 
         Based on ``admiralvaccine::derive_vars_event_flag`` (new_var1 behaviour).
 
-        Example::
+        Args:
+            target: Name of the output flag column.
+            aval_col: Numeric result column.
+            cutoff: A value above *cutoff* is an event.
+            by: Group columns, for example ``["USUBJID", "FAOBJ", "ATPTREF"]``.
+            severity_col: Severity column, or ``None`` to read *aval_col* only.
+            severity_values: Severity values that count as an event.
+            flag_value: Value for a group with an event (default ``"Y"``).
+            no_event_value: Value for a record with no event (default ``"N"``).
 
-            .event_flag("EVENTFL", aval_col="AVAL", cutoff=2.5,
-                        by=["USUBJID", "FAOBJ", "ATPTREF"])
+        Returns:
+            Self: The namespace with *target* appended.
+
+        Examples:
+            Flag any event per subject, object and time point::
+
+                adface = (
+                    face_df.adam.vaccine
+                    .event_flag("EVENTFL", aval_col="AVAL", cutoff=2.5,
+                                by=["USUBJID", "FAOBJ", "ATPTREF"])
+                    .to_frame()
+                )
 
         References:
             admiralvaccine ``derive_vars_event_flag`` (pharmaverse), ``new_var1``:

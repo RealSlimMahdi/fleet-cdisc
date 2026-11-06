@@ -59,3 +59,6 @@ Authorities:
       - Cited Guidance: check_ae_aestdtc_after_dd
         Document: pharmaverse sdtmchecks
         Section: AE Domain
+  Category:
+    Purpose: Data quality check from sdtmchecks
+    Keywords: [AE]

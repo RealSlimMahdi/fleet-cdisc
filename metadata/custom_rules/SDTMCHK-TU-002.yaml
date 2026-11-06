@@ -57,3 +57,6 @@ Authorities:
       - Cited Guidance: check_tu_tuloc_missing
         Document: pharmaverse sdtmchecks
         Section: TU Domain (ONC)
+  Category:
+    Purpose: Data quality check from sdtmchecks
+    Keywords: [TU]

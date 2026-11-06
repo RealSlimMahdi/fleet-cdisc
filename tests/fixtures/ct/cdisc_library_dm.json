@@ -1,0 +1,98 @@
+{
+  "/mdr/sdtmig/3-4/datasets": {
+    "_links": {
+      "self": {
+        "href": "/mdr/sdtmig/3-4/datasets",
+        "title": "Datasets",
+        "type": "SDTM Datasets"
+      },
+      "datasets": [
+        {
+          "href": "/mdr/sdtmig/3-4/datasets/DM",
+          "title": "Demographics",
+          "type": "SDTM Dataset"
+        },
+        {
+          "href": "/mdr/sdtmig/3-4/datasets/AE",
+          "title": "Adverse Events",
+          "type": "SDTM Dataset"
+        }
+      ]
+    }
+  },
+  "/mdr/sdtmig/3-4/datasets/DM": {
+    "name": "DM",
+    "label": "Demographics",
+    "datasetVariables": [
+      {
+        "name": "USUBJID",
+        "label": "Unique Subject Identifier",
+        "_links": {}
+      },
+      {
+        "name": "SEX",
+        "label": "Sex",
+        "_links": {
+          "codelist": [
+            {
+              "href": "/mdr/root/ct/sdtmct/codelists/C66731",
+              "title": "Version-agnostic anchor resource for codelist C66731",
+              "type": "Root Value Domain"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "/mdr/ct/packages/sdtmct-2023-12-15/codelists/C66731": {
+    "conceptId": "C66731",
+    "extensible": "false",
+    "name": "Sex",
+    "submissionValue": "SEX",
+    "preferredTerm": "CDISC SDTM Sex of Individual Terminology",
+    "definition": "A collection of terms that describe the sex of an individual.",
+    "synonyms": [
+      "Sex"
+    ],
+    "terms": [
+      {
+        "conceptId": "C16576",
+        "submissionValue": "F",
+        "preferredTerm": "Female",
+        "definition": "A person who belongs to the sex that normally produces ova.",
+        "synonyms": [
+          "Female"
+        ]
+      },
+      {
+        "conceptId": "C20197",
+        "submissionValue": "M",
+        "preferredTerm": "Male",
+        "definition": "A person who belongs to the sex that normally produces spermatozoa.",
+        "synonyms": [
+          "Male"
+        ]
+      },
+      {
+        "conceptId": "C17998",
+        "submissionValue": "U",
+        "preferredTerm": "Unknown",
+        "definition": "Not known, not observed, not recorded, or refused.",
+        "synonyms": [
+          "U",
+          "UNK",
+          "Unknown"
+        ]
+      },
+      {
+        "conceptId": "C45908",
+        "submissionValue": "UNDIFFERENTIATED",
+        "preferredTerm": "Intersex",
+        "definition": "A person (one of unisexual specimens) who is born with genitalia and/or secondary sexual characteristics of indeterminate sex, or which combine features of both sexes.",
+        "synonyms": [
+          "Intersex"
+        ]
+      }
+    ]
+  }
+}

@@ -16,8 +16,8 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-from fleet.io.dataset_json import save_dataset_json
 from fleet.validation.engine import find_engine
+from fleet.validation.official import OfficialCDISCValidator
 
 RULES = Path(__file__).resolve().parents[2] / "metadata" / "custom_rules"
 NUMERIC = {"AGE", "EXDOSE", "VISITNUM", "LBSTRESN", "LBSTNRLO", "LBSTNRHI", "VSSTRESN", "TRSTRESN"}
@@ -179,6 +179,9 @@ CASES: dict[str, list[tuple[str, str, dict]]] = {
         ("B1", "DS", {"DSDECOD": "DEATH", "DSSTDTC": ""}),
         ("G1", "DS", {"DSDECOD": "DEATH", "DSSTDTC": ""}),
         ("G1", "DS", {"DSDECOD": "DEATH", "DSSTDTC": "2020-01-01"}),
+        # c2-887: a null date (not "") must not stop the rule for the whole DS.
+        ("G2", "DS", {"DSDECOD": "DEATH", "DSSTDTC": None}),
+        ("G2", "DS", {"DSDECOD": "DEATH", "DSSTDTC": "2020-02-01"}),
     ],
     "DS-002": [
         ("B1", "DS", {"DSTERM": "DEATH DUE TO"}),
@@ -588,8 +591,8 @@ def _frames() -> dict[str, pl.DataFrame]:
             if col in NUMERIC:
                 data[col] = [None if v in (None, "") else float(v) for v in values]
             else:
-                # A missing character value is "", as in a SAS transport file.
-                data[col] = ["" if v is None else v for v in values]
+                # A missing text value stays null: the engine-input writer writes it as "".
+                data[col] = values
         frame = pl.DataFrame(
             data, schema={c: pl.Float64 if c in NUMERIC else pl.String for c in cols}
         )
@@ -614,7 +617,7 @@ def hits(tmp_path_factory) -> dict[str, set[str]]:
     data.mkdir()
     shutil.copytree(RULES, rules, ignore=shutil.ignore_patterns("*.md"))
     for domain, frame in _frames().items():
-        save_dataset_json(frame, data / f"{domain}.json", domain=domain)
+        OfficialCDISCValidator._write_dataset_json(frame, data / f"{domain}.json", domain=domain)
     out = tmp / "report"
     cmd = [
         str(exe),

@@ -125,9 +125,9 @@ ae = (
     .to_frame()
 )
 
-# Intentional corruption: AESER "Y" → "YES" violates CDISC CT (C66742).
-# The SDTM Rules Engine should flag this as a controlled-terminology error.
-ae = ae.with_columns(pl.col("AESER").replace("Y", "YES").alias("AESER"))
+# Intentional corruption for Layer 4 only: AESER "Y" → "YES" violates CDISC CT
+# (C66742). ADAE and the table use the clean AE frame.
+ae_bad = ae.with_columns(pl.col("AESER").replace("Y", "YES").alias("AESER"))
 print(f"  AE : {ae.shape[0]} records × {ae.shape[1]} variables")
 
 
@@ -159,7 +159,7 @@ _adae_base_ns = (
     # partial end to the last day. The SAP decides the rule.
     .date("ASTDT", source="AESTDTC", min_date="TRTSDT")
     .date("AENDT", source="AEENDTC", impute="last")
-    .duration("ADY", start="TRTSDT", end="ASTDT")
+    .study_day("ADY", date_col="ASTDT", ref_col="TRTSDT")
 )
 
 _adae_occds_ns = (
@@ -336,8 +336,10 @@ try:
     from fleet.validation.service import ValidationService
 
     svc = ValidationService()
-    sdtm_result = svc.validate_sdtm(ae, domain="AE", version="3.4")
+    sdtm_result = svc.validate_sdtm(ae_bad, domain="AE", version="3.4")
     sdtm_result.print_report(report_type="summary")
+    _planted = [i for i in sdtm_result.errors if i.rule_id == "CORE-000087"]
+    print(f"  Planted AESER 'YES' reported by CORE-000087: {'yes' if _planted else 'no'}")
     adam_result = svc.validate_adam(adae, dataset="ADAE", version="1.3")
     adam_result.print_report(report_type="full")
 except (FileNotFoundError, ImportError) as exc:

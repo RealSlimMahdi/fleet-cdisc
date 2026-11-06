@@ -27,7 +27,7 @@ def main() -> None:
     # CTCAE v5 thresholds (SI units):
     #   Anemia:     G3 <80 g/L · G2 <100 g/L · G1 <LLN
     #   ALT incr:   G4 >20×ULN · G3 >5×ULN · G2 >3×ULN · G1 >ULN
-    #   Creat incr: G4 >6×ULN · G3 >3×ULN & >3×BASE · G2 >1.5×ULN & >1.5×BASE · G1 >ULN
+    #   Creat incr: G4 >6×ULN · G3 >3×ULN or >3×BASE · G2 >1.5×ULN or >1.5×BASE · G1 >ULN
     adlb = fleet.frame(
         pl.from_repr("""\
 ┌─────────┬─────────┬──────────┬────────────────────────────────────┬───────┬───────┬───────┬──────┬────────┬───────┐
@@ -87,7 +87,7 @@ def main() -> None:
     # ── 3. DAIDS grading comparison ───────────────────────────────────
     # DAIDS uses different term names and thresholds.
     #   ALT, High:        G4 ≥10×ULN · G3 ≥5×ULN · G2 ≥2.5×ULN · G1 ≥1.25×ULN
-    #   Creatinine, High: G4 ≥3.5×ULN & ≥2×BASE · G3 >1.8×ULN & ≥1.5×BASE · …
+    #   Creatinine, High: G4 ≥3.5×ULN or ≥2×BASE · G3 >1.8×ULN or ≥1.5×BASE · …
     daids_df = fleet.frame(
         pl.from_repr("""\
 ┌─────────┬─────────┬──────────────────┬───────┬───────┬──────┬────────┐

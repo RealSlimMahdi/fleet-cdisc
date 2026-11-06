@@ -26,60 +26,101 @@ items = [
 ## algorithms
 
 ::: fleet.introspect.algorithms
-options:
-show_root_heading: true
-heading_level: 3
+    options:
+        show_root_heading: true
+        heading_level: 3
 
 ## get_algorithm
 
 ::: fleet.introspect.get_algorithm
-options:
-show_root_heading: true
-heading_level: 3
+    options:
+        show_root_heading: true
+        heading_level: 3
 
 ## suggest_algorithm
 
 ::: fleet.introspect.suggest_algorithm
-options:
-show_root_heading: true
-heading_level: 3
+    options:
+        show_root_heading: true
+        heading_level: 3
+
+## renamed_algorithm
+
+::: fleet.introspect.renamed_algorithm
+    options:
+        show_root_heading: true
+        heading_level: 3
+
+## check_derivation
+
+::: fleet.introspect.check_derivation
+    options:
+        show_root_heading: true
+        heading_level: 3
+
+## standard_of
+
+::: fleet.introspect.standard_of
+    options:
+        show_root_heading: true
+        heading_level: 3
 
 ## algorithm_doc
 
 ::: fleet.introspect.algorithm_doc
-options:
-show_root_heading: true
-heading_level: 3
+    options:
+        show_root_heading: true
+        heading_level: 3
 
 ## define_schema
 
 ::: fleet.introspect.define_schema
-options:
-show_root_heading: true
-heading_level: 3
+    options:
+        show_root_heading: true
+        heading_level: 3
+
+## load_spec_yaml
+
+::: fleet.introspect.load_spec_yaml
+    options:
+        show_root_heading: true
+        heading_level: 3
+
+## Standard
+
+`Standard` is the type of the *standard* argument: `Literal["sdtm", "adam"]`.
+Any other value raises `ValueError`.
 
 ---
 
 ## AlgorithmInfo
 
 ::: fleet.introspect.AlgorithmInfo
-options:
-show_root_heading: true
-heading_level: 3
-filters: ["!^_"]
+    options:
+        show_root_heading: true
+        heading_level: 3
+        filters: ["!^_"]
 
 ## ParamInfo
 
 ::: fleet.introspect.ParamInfo
-options:
-show_root_heading: true
-heading_level: 3
-filters: ["!^_"]
+    options:
+        show_root_heading: true
+        heading_level: 3
+        filters: ["!^_"]
 
 ## AlgorithmDoc
 
 ::: fleet.introspect.AlgorithmDoc
-options:
-show_root_heading: true
-heading_level: 3
-filters: ["!^_"]
+    options:
+        show_root_heading: true
+        heading_level: 3
+        filters: ["!^_"]
+
+## DerivationProblem
+
+::: fleet.introspect.DerivationProblem
+    options:
+        show_root_heading: true
+        heading_level: 3
+        filters: ["!^_"]

@@ -19,6 +19,7 @@ from ._specs import (
     Row,
     Statistic,
     SummarySpecBase,
+    resolve_filter,
 )
 
 
@@ -34,7 +35,8 @@ class EXSummarySpec(SummarySpecBase):
     so only ``PARCAT1`` = OVERALL records are kept and per-interval dose
     records are not averaged into subject-level statistics.  ``PARCAT1``
     is therefore a required column; ``prefilter=None`` switches the rule
-    off.
+    off.  When no record has ``PARCAT1`` = OVERALL in this spelling, the
+    table warns with the ``PARCAT1`` values it saw.
     """
 
     context: ClassVar[str] = "t_ex_summary"
@@ -113,12 +115,14 @@ class EXTLGNamespace(BuilderVerbsMixin):
         Examples:
             EX summary, ADSL arm in TRT01A::
 
+                from fleet.tlg import EXSummarySpec
+
                 spec = EXSummarySpec(adsl_group_col="TRT01A")
                 ard = adex.tlg.ex.t_summary(spec=spec, adsl=adsl)
 
             Custom spec with pooled arms::
 
-                from fleet.tlg import GroupPool
+                from fleet.tlg import EXSummarySpec, GroupPool
 
                 spec = EXSummarySpec(
                     pools=[GroupPool(label="Total", arms="*")],
@@ -153,20 +157,14 @@ class EXTLGNamespace(BuilderVerbsMixin):
         spec = spec or EXSummarySpec()
         diagnostics = spec.check(self._df)
 
-        available = set(self._df.columns)
-        for row_def in spec.rows:
-            if row_def.field not in available:
-                diagnostics.append(
-                    f"WARNING: Column '{row_def.field}' not present — "
-                    f"'{row_def.label or row_def.field}' sub-analysis will be skipped."
-                )
-
         # Continuous stats assume one record per subject × parameter; with
         # duplicates the mean is record-weighted while n counts subjects.
+        available = set(self._df.columns)
         if {"USUBJID", "PARAMCD"} <= available:
             df = self._df
-            if "PARCAT1" in available:
-                df = df.filter(pl.col("PARCAT1") == "OVERALL")
+            prefilter = resolve_filter(spec.prefilter)
+            if prefilter is not None and set(spec.prefilter_columns()) <= available:
+                df = df.filter(prefilter)
             dup = df.group_by(["USUBJID", "PARAMCD"]).len().filter(pl.col("len") > 1)
             if dup.height > 0:
                 diagnostics.append(

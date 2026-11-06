@@ -19,6 +19,7 @@ from typing import Literal, Self
 import polars as pl
 
 from fleet.core.exceptions import DerivationError, VerbUsageError
+from fleet.core.joins import require_frames
 
 #: Built-in shortcut keywords accepted by ``flag(criteria=...)``.
 _FLAG_CRITERIA_KEYWORDS: frozenset[str] = frozenset(
@@ -39,6 +40,7 @@ _FLAG_CRITERIA_KEYWORDS: frozenset[str] = frozenset(
 #: parameter passed with a non-default value outside its modes raises
 #: ``VerbUsageError`` instead of being silently ignored.
 _FLAG_MODE_PARAMS: dict[str, frozenset[str]] = {
+    "by": frozenset({"first", "last", "max", "min", "before", "after"}),
     "order_by": frozenset({"first", "last", "before", "after", "exists_after", "exists_before"}),
     "value_col": frozenset({"max", "min"}),
     "where": frozenset({"first", "last", "max", "min", "expression"}),
@@ -56,6 +58,7 @@ _FLAG_MODE_PARAMS: dict[str, frozenset[str]] = {
 
 #: Defaults used to detect explicitly-passed parameters (identity check).
 _FLAG_PARAM_DEFAULTS: dict[str, object] = {
+    "by": None,
     "order_by": None,
     "value_col": None,
     "where": None,
@@ -101,8 +104,8 @@ class FlagCriterionMixin:
         where: str | pl.Expr | None = None,
         from_dataset: pl.DataFrame | list[pl.DataFrame] | None = None,
         on: list[str] | None = None,
-        source_filter: pl.Expr | None = None,
-        condition: pl.Expr | None = None,
+        source_filter: str | pl.Expr | None = None,
+        condition: str | pl.Expr | None = None,
         inclusive: bool = True,
         flag_no_ref_groups: bool = True,
         flag_all: bool = False,
@@ -131,7 +134,10 @@ class FlagCriterionMixin:
                 ``"last"``, ``"max"``, ``"min"``, ``"exists"``,
                 ``"before"``, ``"after"``, ``"exists_after"``,
                 ``"exists_before"``.
-            by: Partition columns (default ``["USUBJID"]``).
+            by: Partition columns (default ``["USUBJID"]``) for
+                ``"first"``/``"last"``, ``"max"``/``"min"`` and
+                ``"before"``/``"after"``.  An expression flags each row
+                on its own, so *by* raises there and in the exists modes.
             order_by: Sort column(s) required for ``"first"``/``"last"``
                 and ``"before"``/``"after"``.  On a tie among candidates,
                 ``"last"`` takes the last input record and ``"first"`` the
@@ -151,8 +157,9 @@ class FlagCriterionMixin:
                 ``"exists_after"``/``"exists_before"`` criteria.
             on: Join key columns for ``"exists"`` criteria.
             source_filter: Filter applied to *from_dataset* before key
-                extraction or join.
-            condition: Boolean expression identifying landmark rows for
+                extraction or join; an expression string is parsed as
+                *where* is.
+            condition: Boolean expression (or expression string) identifying landmark rows for
                 ``"before"``/``"after"`` or the current-row condition for
                 ``"exists_after"``/``"exists_before"``.
             inclusive: Whether the landmark row itself is included in the
@@ -241,6 +248,7 @@ class FlagCriterionMixin:
             criteria,
             mode,
             {
+                "by": by,
                 "order_by": order_by,
                 "value_col": value_col,
                 "where": where,
@@ -258,6 +266,11 @@ class FlagCriterionMixin:
         where_expr: pl.Expr | None = None
         if where is not None:
             where_expr = where if isinstance(where, pl.Expr) else parse_expression(str(where))
+        # A string condition or source filter is parsed as where= is.
+        if isinstance(condition, str):
+            condition = parse_expression(condition, self._lazy.collect_schema())
+        if isinstance(source_filter, str):
+            source_filter = parse_expression(source_filter)
 
         false_lit = pl.lit(false_value) if false_value is not None else pl.lit(None)
 
@@ -479,7 +492,7 @@ class FlagCriterionMixin:
         *,
         from_dataset: pl.DataFrame | list[pl.DataFrame],
         on: list[str],
-        source_filter: pl.Expr | None = None,
+        source_filter: str | pl.Expr | None = None,
         flag_value: str = "Y",
         false_value: str | None = None,
     ) -> Self:
@@ -524,7 +537,7 @@ class FlagCriterionMixin:
         target: str,
         *,
         when: Literal["before", "after"],
-        condition: pl.Expr,
+        condition: str | pl.Expr,
         order_by: str | list[str],
         by: list[str] | None = None,
         inclusive: bool = True,
@@ -736,6 +749,7 @@ class FlagCriterionMixin:
         """Handle exists set-membership flag criteria."""
         if from_dataset is None or on is None:
             raise DerivationError("flag criteria='exists' requires from_dataset and on.")
+        require_frames(f"flag('{target}', criteria='exists')", from_dataset)
         datasets = from_dataset if isinstance(from_dataset, list) else [from_dataset]
         key_frames: list[pl.DataFrame] = []
         for ds in datasets:
@@ -767,17 +781,26 @@ class FlagCriterionMixin:
         flag_value,
         false_value,
     ) -> Self:
-        """Handle before/after relative-to-landmark flag criteria (window exprs)."""
+        """Handle before/after relative-to-landmark flag criteria (one window).
+
+        The condition is evaluated into a temporary column first, so a
+        condition with its own ``.over()`` is not nested in the window;
+        the row position and the landmark then come from one
+        ``over(by, order_by=...)``.  Lineage keeps the condition columns.
+        """
+        import dataclasses
+
         if condition is None:
             raise DerivationError(f"flag criteria='{criteria_lower}' requires condition.")
         if not order_cols:
             raise DerivationError(f"flag criteria='{criteria_lower}' requires order_by.")
 
-        pos = pl.int_range(pl.len()).over(grps, order_by=[pl.col(c) for c in order_cols])
-        cond_bool = condition.cast(pl.Boolean)
-        landmark = pl.when(cond_bool).then(pos).otherwise(None).min().over(grps)
+        tmp = "__flag_landmark__"
+        staged = self._with_lazy(self._lazy.with_columns(condition.cast(pl.Boolean).alias(tmp)))
+        pos = pl.int_range(pl.len())
+        landmark = pl.when(pl.col(tmp)).then(pos).otherwise(None).min()
 
-        norm_false = pl.lit(false_value) if false_value else pl.lit(None)
+        norm_false = pl.lit(false_value) if false_value else pl.lit(None, dtype=pl.String)
         no_ref = pl.lit(flag_value) if flag_no_ref_groups else norm_false
         if criteria_lower == "before":
             flagged = (pos <= landmark) if inclusive else (pos < landmark)
@@ -790,9 +813,18 @@ class FlagCriterionMixin:
             .when(flagged)
             .then(pl.lit(flag_value))
             .otherwise(norm_false)
+            .over(grps, order_by=[pl.col(c) for c in order_cols])
             .alias(target)
         )
-        return self._chain(expr, verb="flag")
+        out = staged._chain(expr, verb="flag")
+        lineage = list(out._lineage)
+        node = lineage[-1]
+        roots = [c for c in condition.meta.root_names() if c not in node.sources]
+        lineage[-1] = dataclasses.replace(
+            node, sources=[*(s for s in node.sources if s != tmp), *roots]
+        )
+        out._lineage = lineage
+        return out._with_lazy(out._lazy.drop(tmp))
 
     def _flag_temporal_exists(
         self,
@@ -819,6 +851,7 @@ class FlagCriterionMixin:
             )
         if on is None:
             raise DerivationError(f"flag criteria='{criteria_lower}' requires on.")
+        require_frames(f"flag('{target}', criteria='{criteria_lower}')", from_dataset)
 
         src = from_dataset if isinstance(from_dataset, pl.DataFrame) else pl.concat(from_dataset)
         if source_filter is not None:
@@ -895,17 +928,16 @@ class FlagCriterionMixin:
         self,
         number: int,
         *,
-        condition: pl.Expr,
-        description: str | None = None,
-        prefix: str = "CRIT",
+        condition: str | pl.Expr,
+        description: str,
     ) -> Self:
         """Derive criterion flag triple: CRITy, CRITyFL, CRITyFN.
 
         Produces three columns following CDISC ADaM conventions:
 
-        - ``{prefix}{number}`` — the criterion description (constant string).
-        - ``{prefix}{number}FL`` — ``"Y"`` if condition is met, ``"N"`` if not.
-        - ``{prefix}{number}FN`` — ``1`` if met, ``0`` if not.
+        - ``CRIT{number}`` — the criterion description (constant string).
+        - ``CRIT{number}FL`` — ``"Y"`` if condition is met, ``"N"`` if not.
+        - ``CRIT{number}FN`` — ``1`` if met, ``0`` if not.
 
         When the condition is null (for example AVAL is missing), FL and FN are
         null, as admiral ``derive_vars_crit_flag()``. For a SAP rule "missing is
@@ -913,18 +945,24 @@ class FlagCriterionMixin:
 
         References:
             admiral ``derive_vars_crit_flag(values_yn = TRUE,
-            create_numeric_flag = TRUE)``; ADR-0033.
+            create_numeric_flag = TRUE)``, which asserts a positive
+            ``crit_nr`` and a description; ADaMIG 1.3 CRITy (text, y a
+            positive integer); ADR-0033.
 
         Args:
-            number: Criterion number (e.g. 1 → CRIT1, CRIT1FL, CRIT1FN).
-            condition: Boolean Polars expression defining the criterion.
-            description: Human-readable description stored in CRITy column.
-                If ``None``, the column is still created with null values.
-            prefix: Column name prefix (default ``"CRIT"``).
+            number: Criterion number, 1 or more (e.g. 1 → CRIT1, CRIT1FL,
+                CRIT1FN).
+            condition: Boolean Polars expression defining the criterion, or
+                an expression string as for ``where=``.
+            description: Human-readable description stored in CRITy.
 
         Returns:
             Self: The namespace with three new columns appended; call
                 ``.to_frame()`` to materialise.
+
+        Raises:
+            VerbUsageError: When *number* is below 1 or *description* is
+                blank.
 
         Examples:
             Flag records where AVAL >= 10::
@@ -936,15 +974,24 @@ class FlagCriterionMixin:
                     .to_frame()
                 )
         """
-        col_crit = f"{prefix}{number}"
-        col_fl = f"{prefix}{number}FL"
-        col_fn = f"{prefix}{number}FN"
+        if isinstance(number, bool) or not isinstance(number, int) or number < 1:
+            raise VerbUsageError(
+                f"criterion({number!r}): the criterion number is a positive integer "
+                "(ADaMIG CRITy), for example criterion(1, ...)."
+            )
+        if not isinstance(description, str) or not description.strip():
+            raise VerbUsageError(
+                f"criterion({number}): description= is required; CRIT{number} holds it."
+            )
+        if isinstance(condition, str):
+            from fleet.sdtm.utils import parse_expression
 
-        desc_expr = (
-            pl.lit(description).alias(col_crit)
-            if description is not None
-            else pl.lit(None).cast(pl.String).alias(col_crit)
-        )
+            condition = parse_expression(condition, self._lazy.collect_schema())
+        col_crit = f"CRIT{number}"
+        col_fl = f"CRIT{number}FL"
+        col_fn = f"CRIT{number}FN"
+
+        desc_expr = pl.lit(description).alias(col_crit)
         fl_expr = (
             pl.when(condition).then(pl.lit("Y")).when(~condition).then(pl.lit("N")).alias(col_fl)
         )

@@ -4,6 +4,7 @@ import polars as pl
 import pytest
 
 import fleet  # noqa: F401 — triggers namespace registration
+from fleet.core.exceptions import DerivationError
 
 # ---------------------------------------------------------------------------
 # Shared fixtures
@@ -148,7 +149,7 @@ class TestMergeAdsl:
 
 
 # ---------------------------------------------------------------------------
-# TestSeq — seq() sourced from MultiRowMixin
+# TestSeq — seq() shared by every namespace
 # ---------------------------------------------------------------------------
 
 
@@ -271,12 +272,12 @@ class TestNominalTime:
 
 
 # ---------------------------------------------------------------------------
-# TestActualTime
+# TestDuration
 # ---------------------------------------------------------------------------
 
 
-class TestActualTime:
-    def test_actual_time_hours(self, pc_frame):
+class TestDuration:
+    def test_duration_hours(self, pc_frame):
         result = pc_frame.adam.pk.duration(
             "ATIME", start="EXSTDTC", end="PCDTC", unit="hours", add_one=False
         ).to_frame()
@@ -284,7 +285,7 @@ class TestActualTime:
         row = result.filter((pl.col("USUBJID") == "01-001") & (pl.col("PCTPTNUM") == 1.0))
         assert row["ATIME"][0] == pytest.approx(1.0)
 
-    def test_actual_time_predose_negative(self, pc_frame):
+    def test_duration_predose_negative(self, pc_frame):
         """Subject 01-002 pre-dose sample at 07:55 → actual time = -5 min = -1/12 h."""
         result = pc_frame.adam.pk.duration(
             "ATIME", start="EXSTDTC", end="PCDTC", unit="hours", add_one=False
@@ -292,7 +293,7 @@ class TestActualTime:
         row = result.filter((pl.col("USUBJID") == "01-002") & (pl.col("PCTPTNUM") == 0.0))
         assert row["ATIME"][0] == pytest.approx(-5 / 60)
 
-    def test_actual_time_unit_minutes(self, pc_frame):
+    def test_duration_unit_minutes(self, pc_frame):
         result = pc_frame.adam.pk.duration(
             "ATIME", start="EXSTDTC", end="PCDTC", unit="minutes", add_one=False
         ).to_frame()
@@ -604,7 +605,8 @@ class TestMdv:
         result = df.adam.pk.mdv("MDV", conc_col="DV", evid_col="EVID").to_frame()
         assert result["MDV"].to_list() == [0, 1, 1]
 
-    def test_mdv_no_condition(self):
+    def test_mdv_no_dv_column_raises(self):
+        """c1-398: the default conc_col DV must exist; no silent MDV 0."""
         df = pl.from_repr("""\
 ┌──────┐
 │ EVID │
@@ -615,8 +617,10 @@ class TestMdv:
 │ 1    │
 └──────┘
 """)
-        result = df.adam.pk.mdv("MDV").to_frame()
-        assert result["MDV"].to_list() == [0, 0]
+        with pytest.raises(DerivationError, match=r"mdv\(\): column\(s\) \['DV'\]"):
+            df.adam.pk.mdv("MDV")
+        result = df.adam.pk.mdv("MDV", conc_col=None).to_frame()
+        assert result["MDV"].to_list() == [0, 1]
 
 
 # ---------------------------------------------------------------------------

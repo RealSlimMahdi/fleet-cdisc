@@ -10,6 +10,7 @@ built in ``tmp_path``.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import polars as pl
@@ -112,7 +113,7 @@ def tlg_data(tmp_path: Path) -> tuple[Path, Path]:
     adsl = pl.DataFrame(
         {
             "USUBJID": [f"S{i:03d}" for i in range(1, 9)],
-            "TRTA": (["Placebo"] * 4) + (["Drug A"] * 4),
+            "TRT01A": (["Placebo"] * 4) + (["Drug A"] * 4),
             "SAFFL": ["Y"] * 8,
         }
     )
@@ -369,7 +370,7 @@ def test_run_writes_the_format_the_define_declares(
 
     assert (study / "data" / "sdtm" / "dm.xpt").is_file()
     assert not (study / "data" / "sdtm" / "dm.parquet").exists()
-    assert "Format:  DM xpt" in capsys.readouterr().out
+    assert re.search(r"Format:\s+DM xpt", capsys.readouterr().out)
 
 
 def test_run_warns_when_the_format_flag_differs_from_the_define(
@@ -450,7 +451,7 @@ def test_checker_write_xpt_carries_the_define_labels(study: Path) -> None:
 
 
 def test_checker_write_xpt_refuses_a_file_named_after_another_dataset(study: Path) -> None:
-    from fleet.core.exceptions import IOError as FleetIOError
+    from fleet.core.exceptions import FleetIOError
     from fleet.define_xml import DatasetChecker
 
     checker = DatasetChecker(study / "metadata" / "sdtm" / "define.yaml")
@@ -529,6 +530,8 @@ def test_tlg_run_happy_path(
             str(adae_path),
             "--adsl",
             str(adsl_path),
+            "--adsl-groupby",
+            "TRT01A",
             "-o",
             str(out_dir),
             "--format",
@@ -553,6 +556,8 @@ def test_tlg_run_rtf_format(tmp_path: Path, tlg_data: tuple[Path, Path]) -> None
             f"ADAE={adae_path}",
             "--adsl",
             str(adsl_path),
+            "--adsl-groupby",
+            "TRT01A",
             "-o",
             str(out_dir),
             "--format",
@@ -584,6 +589,8 @@ def test_tlg_explore_happy_path(
             str(adae_path),
             "--adsl",
             str(adsl_path),
+            "--adsl-groupby",
+            "TRT01A",
             "-o",
             str(out),
         ]
@@ -605,11 +612,13 @@ def test_tlg_explore_default_matches_tlg_run_output(
     spec = Path("examples/tlg_specs/aet01.yaml").resolve()
     run_dir = tmp_path / "run"
     out = tmp_path / "explorer.html"
-    common = ["--data", str(adae_path), "--adsl", str(adsl_path)]
+    common = ["--data", str(adae_path), "--adsl", str(adsl_path), "--adsl-groupby", "TRT01A"]
     assert _run(["tlg", "run", str(spec), *common, "-o", str(run_dir)]) == 0
     assert _run(["tlg", "explore", str(spec), *common, "-o", str(out)]) == 0
 
-    batch_html = (run_dir / "aet01.html").read_text(encoding="utf-8")
+    batch_doc = (run_dir / "aet01.html").read_text(encoding="utf-8")
+    assert batch_doc.startswith("<!DOCTYPE html>")  # c1-814: a complete document
+    batch_html = batch_doc.split("<body>\n", 1)[1].rsplit("\n</body>", 1)[0]
     explorer_html = out.read_text(encoding="utf-8")
     assert f'id="var-aet01-v0">\n{batch_html}' in explorer_html
 
@@ -832,6 +841,8 @@ trial_design:
        testrl: RANDOMIZATION}
   arms:
     A1: [SCRN, TRT]
+  arm_names:
+    A1: Treatment Arm
   parameters:
     - {tsparmcd: TITLE, tsparm: Trial Title, tsval: Demo}
     - {tsparmcd: SSTDTC, tsparm: Study Start Date, tsval: 2026-01-01}
@@ -934,7 +945,7 @@ def test_tlg_run_defaults_from_config(
     nested.mkdir(parents=True)
     monkeypatch.chdir(nested)
 
-    code = _run(["tlg", "run", str(spec), "--format", "html"])
+    code = _run(["tlg", "run", str(spec), "--format", "html", "--adsl-groupby", "TRT01A"])
     assert code == 0
     assert (study / "outputs" / "aet01.html").is_file()
     assert not list(nested.iterdir())  # nothing written to the cwd
@@ -1124,6 +1135,40 @@ def test_compare_different_csv_files_exit_1_and_list_the_difference(
     assert captured.err == ""
 
 
+def test_compare_a_duration_difference_exits_1_and_lists_it(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """c1-518: a Duration column is listed in ISO 8601, not a raw Polars error."""
+    base, candidate = tmp_path / "base.parquet", tmp_path / "candidate.parquet"
+    pl.from_repr("""\
+┌─────┬──────────────┐
+│ K   ┆ D            │
+│ --- ┆ ---          │
+│ i64 ┆ duration[μs] │
+╞═════╪══════════════╡
+│ 1   ┆ 1d           │
+│ 2   ┆ 1d           │
+└─────┴──────────────┘
+""").write_parquet(base)
+    pl.from_repr("""\
+┌─────┬──────────────┐
+│ K   ┆ D            │
+│ --- ┆ ---          │
+│ i64 ┆ duration[μs] │
+╞═════╪══════════════╡
+│ 1   ┆ 1d           │
+│ 2   ┆ 3d           │
+└─────┴──────────────┘
+""").write_parquet(candidate)
+
+    code = _run(["compare", str(base), str(candidate), "--keys", "K"])
+
+    captured = capsys.readouterr()
+    assert code == 1
+    assert "P1D" in captured.out and "P3D" in captured.out
+    assert captured.err == ""
+
+
 def test_compare_names_each_side_after_its_file(
     tmp_path: Path, capsys: pytest.CaptureFixture
 ) -> None:
@@ -1170,7 +1215,7 @@ def test_compare_accepts_composite_keys_with_spaces(
     code = _run(["compare", str(base), str(candidate), "--keys", "USUBJID, AESEQ"])
 
     assert code == 0
-    assert "Keys:      USUBJID, AESEQ" in capsys.readouterr().out
+    assert re.search(r"Keys:\s+USUBJID, AESEQ", capsys.readouterr().out)
 
 
 @pytest.mark.parametrize(
@@ -1738,17 +1783,18 @@ def test_compare_pairs_compare_a_renamed_variable_instead_of_reporting_it_missin
 
     captured = capsys.readouterr()
     assert code == 0
-    assert "Pairs:     AGE = AGEN" in captured.out
+    assert re.search(r"Pairs:\s+AGE = AGEN", captured.out)
     assert captured.err == ""
 
 
+@pytest.mark.parametrize("pairs", ["AGE", "AGE=A=B", "AGE=A,AGE=B"])
 def test_compare_pairs_that_are_not_pairs_exit_2(
-    tmp_path: Path, capsys: pytest.CaptureFixture
+    pairs: str, tmp_path: Path, capsys: pytest.CaptureFixture
 ) -> None:
     base = tmp_path / "adsl.parquet"
     _adsl().write_parquet(base)
 
-    code = _run(["compare", str(base), str(base), "--keys", "USUBJID", "--pairs", "AGE"])
+    code = _run(["compare", str(base), str(base), "--keys", "USUBJID", "--pairs", pairs])
 
     captured = capsys.readouterr()
     assert code == 2
@@ -1801,3 +1847,132 @@ def test_compare_json_settings_carry_the_pairs_and_the_restriction(
     assert code == 0
     assert settings["pairs"] == {"AGE": "AGEN"}
     assert settings["variables"] == ["AGE", "SEX"]
+
+
+# ------------------------------------------------------------------ #
+# First run: fleet new, then fleet check and fleet define-xml (c1-856) #
+# ------------------------------------------------------------------ #
+
+
+class _FakeCDISCLibrary:
+    """The CDISC Library for one SDTM codelist (SEX); no network."""
+
+    def __enter__(self) -> _FakeCDISCLibrary:
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        return None
+
+    def get_codelist(self, concept_id: str, *, package: str) -> dict:
+        from fleet.core.exceptions import CTNotFoundError
+
+        if concept_id != "C66731":
+            raise CTNotFoundError(f"Resource not found: {package}/{concept_id}")
+        return {
+            "conceptId": "C66731",
+            "name": "Sex",
+            "submissionValue": "SEX",
+            "terms": [
+                {"submissionValue": "F", "preferredTerm": "Female"},
+                {"submissionValue": "M", "preferredTerm": "Male"},
+            ],
+        }
+
+
+_NEW_DM = {
+    "name": "DM",
+    "label": "Demographics",
+    "structure": "One record per subject",
+    "keys": ["USUBJID"],
+    "variables": [
+        {
+            "name": "USUBJID",
+            "label": "Unique Subject Identifier",
+            "type": "text",
+            "length": 20,
+            "mandatory": True,
+            "origin": "Collected",
+        },
+        {
+            "name": "SEX",
+            "label": "Sex",
+            "type": "text",
+            "length": 2,
+            "mandatory": True,
+            "origin": "Collected",
+            "codelist": "C66731",
+        },
+    ],
+}
+
+
+def test_new_then_check_then_define_xml(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from fleet.core.scaffolder import DefineScaffolder
+
+    monkeypatch.setenv("CDISC_API_KEY", "test-key")
+    monkeypatch.setattr("fleet.ct.api.CDISCClient", _FakeCDISCLibrary)
+    monkeypatch.setattr(DefineScaffolder, "_fetch_sdtm_datasets", lambda *_: [_NEW_DM])
+    # The CORE rules cache needs the network; this test covers the define and CT steps.
+    monkeypatch.setattr(cli, "_run_init_rules", lambda args: None)
+    root = tmp_path / "s01"
+
+    argv = ["new", "S01", "--root", str(root), "--yes", "--domains", "DM"]
+    argv += ["--description", "Phase II study", "--company", "Pharma Inc"]
+    assert _run(argv) == 0
+    monkeypatch.chdir(root)
+
+    assert _run(["check"]) == 0
+    assert _run(["define-xml", "--no-preview"]) == 0
+
+    xml = next(root.rglob("define_sdtm.xml")).read_text(encoding="utf-8")
+    assert 'OID="IG.DM"' in xml
+    assert 'CodedValue="M"' in xml
+
+
+def test_tlg_run_with_a_template_id_says_how_to_write_the_spec(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    """c1-639: ``fleet tlg run aet02`` names the one-line spec, not only a missing path."""
+    monkeypatch.chdir(tmp_path)
+    assert _run(["tlg", "run", "aet02"]) != 0
+    err = capsys.readouterr().err
+    assert "aet02 is a template id" in err
+    assert "template: aet02" in err
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["add-ct", "--domains", "DM", "--output", "x.py"],
+        ["tlg", "run", "missing.yaml"],
+        ["tlg", "explore", "missing.yaml"],
+        ["tlg", "export", "--domain", "dm"],
+    ],
+)
+def test_study_commands_take_config_and_read_its_env(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture,
+    argv: list[str],
+) -> None:
+    """c1-662: --config is accepted, and the .env of the config folder is read."""
+    import contextlib
+    import os
+
+    study = tmp_path / "study"
+    study.mkdir()
+    (study / "study_config.yaml").write_text("study:\n  id: S1\n", encoding="utf-8")
+    (study / ".env").write_text("CDISC_API_KEY=from-study-env\n", encoding="utf-8")
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
+    env = {k: v for k, v in os.environ.items() if k != "CDISC_API_KEY"}
+    monkeypatch.setattr(os, "environ", env)
+    monkeypatch.setattr("fleet.ct.api.CDISCClient", None)
+
+    # The command itself fails (no data, no network); only the setup is checked.
+    with contextlib.suppress(Exception):
+        _run([*argv, "--config", str(study / "study_config.yaml")])
+
+    assert "unrecognized arguments" not in capsys.readouterr().err
+    assert env.get("CDISC_API_KEY") == "from-study-env"

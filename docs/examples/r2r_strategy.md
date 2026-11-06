@@ -290,7 +290,10 @@ adae = (
 )
 ```
 
-The report printed to stdout makes conformance issues immediately visible:
+The report printed to stdout makes conformance issues immediately visible.
+`examples/r2r_ae_example.py` gives this report (CORE engine 0.15.0). The
+example sends a copy of AE with a planted AESER `"YES"` to the SDTM check
+only, so CORE-000087 reports it; ADAE and the table use the clean AE.
 
 ```
 ======================================================================
@@ -298,30 +301,35 @@ CDISC Validation Report: AE
 ======================================================================
 Dataset Type: sdtmig v3.4
 Status: FAIL
-Rules executed: 93
-Total Issues: 2
-  Errors: 2, Warnings (accepted): 0, Info: 0
+Rules (engine run, official): 82 executed, 334 skipped, 14 could not run
+Total Issues: 13
+  Errors: 11, Warnings (accepted): 0, Info: 2
 ----------------------------------------------------------------------
 
-ERRORS (2 unique, 2 total):
-
-1. [CORE-000355] (official) At least one required variable is missing from dataset
-   Variable: AESEQ
-
-2. [CORE-000328] (official) The Study Day of Start of Observation (AESTDY) is not present in the dataset when Start Date/Time of Observation (AESTDTC) is present
+ERRORS (11):
+  [CORE-000087] (official) AESER: AESER is completed, but not equal to "N" or "Y"
+  [CORE-000266] (official) AESER, AESCAN, AESCONG, AESDISAB, AESDTH, AESHOSP, AESLIFE, AESOD, AESMIE: If AESER = "N" then none of the seriousness criteria (AESCAN, AESCONG, AESDISAB, AESDTH, AESHOSP, AESLIFE, AESOD, AESMIE) could be equal to "Y".
+  [CORE-000328] (official) AESTDTC: The Study Day of Start of Observation (AESTDY) is not present in the dataset when Start Date/Time of Observation (AESTDTC) is present.
+  [CORE-000334] (official) AEBDSYCD, AEBODSYS, AEHLGT, AEHLGTCD, AEHLT, AEHLTCD, AELLT, AELLTCD, AEPTCD, AESOC, AESOCCD: At least one expected variable is missing from dataset
+  [CORE-000355] (official) AEDECOD: At least one required variable is missing from dataset
+  [CORE-000701] (official) EPOCH: EPOCH is missing for clinical subject-level observation.
+  ... (CORE-000701 once per record, 5 in total)
+  [CORE-000776] (official) AEENDTC: Study Day of End of Observation (AEENDY) variable is missing when End Date/Time of Observation (AEENDTC) is present.
 
 ======================================================================
+  Planted AESER 'YES' reported by CORE-000087: yes
 
 ======================================================================
 CDISC Validation Report: ADAE
 ======================================================================
 Dataset Type: adamig v1.3
-Status: PASS
+Status: NOT ASSESSED
+Rules (engine run, official): 0 executed, 0 skipped, 0 could not run
 Total Issues: 0
   Errors: 0, Warnings (accepted): 0, Info: 0
 ----------------------------------------------------------------------
 
-  No issues found.
+  No rule executed, so nothing was assessed.
 
 ======================================================================
 ```
@@ -348,16 +356,19 @@ ae = (
 )
 ```
 
-The join is **name-exact**: `ValidationIssue.variable` is matched against
-`VariableNode.name`, so an issue only gains a `Producing verb` when the chain
-derived that same column. A finding on `AETERM` carries its origin — the verb
+The join is **name-exact**: each name in `ValidationIssue.variable` is matched
+against `VariableNode.name`, so an issue only gains a `Producing verb` when the
+chain derived that same column. A finding that names several variables
+(`AESEQ, USUBJID, POOLID`) gets each verb with the variables it made
+(`assign (AESEQ, USUBJID)`). A finding that names more than five variables
+gets none. A finding on `AETERM` carries its origin — the verb
 name plus the dotted path to its implementation:
 
 ```
 2. [SDTM.AE.R0004] AETERM must not be empty
    Variable: AETERM
-   Rows affected: 7 (1 occurrences)
-   Producing verb: assign (fleet.core._verb_mixin.SharedVerbsMixin.assign)
+   Row: 7 (1 occurrence)
+   Producing verb: assign (fleet.sdtm.namespace.SDTMNamespace.assign)
 ```
 
 `AEBODSYS` above stays bare: nothing in the chain derives it, so there is no

@@ -37,7 +37,10 @@ from ._registry import (
     OutputType,
     Status,
     TemplateMeta,
+    by_class,
+    by_namespace,
     catalog,
+    get,
     register_template,
     unregister_template,
 )
@@ -47,6 +50,7 @@ from ._runner import (
     detect_groupby,
     load_spec,
     resolve_groupby,
+    resolve_population,
     run_spec,
     spec_schema,
 )
@@ -178,6 +182,9 @@ __all__ = [
     "OutputType",
     "Status",
     "catalog",
+    "get",
+    "by_class",
+    "by_namespace",
     "register_template",
     "unregister_template",
     # YAML workflow
@@ -185,6 +192,7 @@ __all__ = [
     "GROUPBY_CANDIDATES",
     "detect_groupby",
     "resolve_groupby",
+    "resolve_population",
     "load_spec",
     "run_spec",
     "spec_schema",

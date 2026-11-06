@@ -23,8 +23,8 @@ import polars as pl
 import yaml
 
 from fleet.core.define_spec import load_spec_yaml
-from fleet.core.dtc import date_part, datetime_part, to_day
-from fleet.core.exceptions import DerivationError
+from fleet.core.dtc import cdisc_day, date_part, datetime_part, to_day
+from fleet.core.exceptions import CTError, DerivationError
 from fleet.sdtm.tdd import (
     Epoch,
     TrialArms,
@@ -58,7 +58,7 @@ _PACKAGED_IG_VERSION = "3-4"
 
 def _load_packaged_structure(domain: str, ig_version: str) -> dict[str, Any] | None:
     """Return the packaged IG metadata for *domain*, or None when unavailable."""
-    if ig_version != _PACKAGED_IG_VERSION:
+    if ig_version.replace(".", "-") != _PACKAGED_IG_VERSION:
         return None
     return yaml.safe_load(_PACKAGED_STRUCTURES.read_text(encoding="utf-8")).get(domain)
 
@@ -100,6 +100,11 @@ def _epoch_from_se(
 ) -> pl.DataFrame:
     """``__row_idx__`` and *target* for each row of *df* that falls in an SE element."""
     se_df = se.collect() if isinstance(se, pl.LazyFrame) else se
+    if "EPOCH" not in se_df.columns:
+        raise DerivationError(
+            f"epoch_assign({target}, se=): SE has no EPOCH. EPOCH is Permissible in SE: add "
+            "it by ETCD, for example with a join from TA; elements with no TA row stay null."
+        )
     end_raw = pl.col("SEENDTC").cast(pl.String).str.strip_chars()
     elements = se_df.select(
         pl.col(subject_col),
@@ -255,6 +260,7 @@ class TrialDesignMixin:
 
     # These attributes are set lazily; their absence means "not in TDD mode"
     _tdd_stage: int
+    _tdd_domain: str
     _domain_meta: dict[str, Any]
     _reconciliation_report: list[str]
 
@@ -305,19 +311,29 @@ class TrialDesignMixin:
         network access and no API key; the CDISC Library is only queried
         for other domains or IG versions.
 
-        Sets ``_domain_meta`` on the namespace for downstream validation
-        and performs schema reconciliation against the static Pydantic model.
+        Keeps the IG metadata on the namespace and compares it with the
+        static Pydantic model; each difference gives a warning.  The
+        requested domain is kept too: ``study_header`` and the ``add_*``
+        verb must name the same domain.
 
         Args:
             domain: SDTM domain code (e.g. ``"TE"``, ``"TA"``).
             ig_version: SDTM IG version slug (default ``"3-4"``).
-            save_to: Optional path to cache the fetched YAML.
+            save_to: Optional path to cache the fetched YAML.  A cache
+                that holds another domain or IG version raises.
             define_path: Optional path to a ``define.yaml``. When provided,
                 domain metadata is extracted from the spec (offline) before
                 falling back to the CDISC Library API.
 
         Returns:
             Self: The namespace at stage 1; call ``study_header()`` next.
+
+        Raises:
+            FileNotFoundError: When *define_path* is not a file.
+            ValueError: When the *save_to* cache holds another domain or
+                IG version.
+            CTError: When the CDISC Library cannot give the domain; the
+                message gives the cause (for example a missing API key).
 
         Examples:
             Fetch the TE structure from the CDISC Library::
@@ -338,11 +354,24 @@ class TrialDesignMixin:
         meta: dict[str, Any] | None = None
 
         if define_path is not None:
+            if not Path(define_path).is_file():
+                raise FileNotFoundError(f"fetch_structure('{domain}'): no file {define_path}")
             meta = _extract_domain_from_define(domain, Path(define_path))
 
         cache_path = Path(save_to) if save_to else None
         if meta is None and cache_path and cache_path.exists():
             meta = yaml.safe_load(cache_path.read_text(encoding="utf-8"))
+            cached = {k: (meta or {}).get(k) for k in ("domain", "ig_version")}
+            if cached["domain"] and str(cached["domain"]).upper() != domain:
+                raise ValueError(
+                    f"fetch_structure('{domain}'): the cache {cache_path} holds domain "
+                    f"{cached['domain']}, not {domain}."
+                )
+            if cached["ig_version"] and cached["ig_version"] != ig_version:
+                raise ValueError(
+                    f"fetch_structure('{domain}', ig_version='{ig_version}'): the cache "
+                    f"{cache_path} holds SDTM IG {cached['ig_version']}."
+                )
 
         if meta is None:
             meta = _load_packaged_structure(domain, ig_version)
@@ -350,8 +379,8 @@ class TrialDesignMixin:
                 try:
                     meta = self._fetch_ig_domain(domain, ig_version)
                 except Exception as exc:
-                    raise type(exc)(
-                        f"Domain '{domain}' not found in SDTM IG {ig_version}. "
+                    raise CTError(
+                        f"Could not get domain '{domain}' from SDTM IG {ig_version}: {exc}. "
                         f"If this is a company-specific domain, provide its structure "
                         f"via define_path= or a cached YAML via save_to=."
                     ) from exc
@@ -364,6 +393,7 @@ class TrialDesignMixin:
         # Propagate to the new namespace instance
         new = self._chain()  # type: ignore[attr-defined]
         new._domain_meta = meta
+        new._tdd_domain = domain
         new._tdd_stage = 1
         new._reconciliation_report = _reconcile_schema(domain, meta)
         for msg in new._reconciliation_report:
@@ -378,11 +408,15 @@ class TrialDesignMixin:
         """Hardcode ``STUDYID`` and ``DOMAIN`` columns.
 
         Args:
-            study_id: The study identifier value.
-            domain: The SDTM domain code.
+            study_id: The study identifier value (a non-empty string).
+            domain: The SDTM domain code; it must match ``fetch_structure``.
 
         Returns:
             Self: The namespace at stage 2; call an ``add_*()`` verb next.
+
+        Raises:
+            ValueError: When *study_id* is empty or not a string, or when
+                *domain* is not the domain of ``fetch_structure``.
 
         Examples:
             Set the study header for a TE domain::
@@ -396,6 +430,15 @@ class TrialDesignMixin:
                 )
         """
         self._check_stage("study_header", required=1)
+        if not isinstance(study_id, str) or not study_id.strip():
+            raise ValueError(
+                f"study_header(): study_id must be a non-empty string, got {study_id!r}"
+            )
+        fetched = getattr(self, "_tdd_domain", None)
+        if fetched is not None and domain.upper() != fetched:
+            raise ValueError(
+                f"study_header('{domain.upper()}') does not match fetch_structure('{fetched}')."
+            )
         new = self._chain(  # type: ignore[attr-defined]
             pl.lit(study_id).alias("STUDYID"),
             pl.lit(domain.upper()).alias("DOMAIN"),
@@ -428,7 +471,7 @@ class TrialDesignMixin:
                 )
         """
         self._check_stage("add_elements", required=2)
-        return self._materialise_collection(elements.to_polars())
+        return self._materialise_collection(elements.to_polars(), "add_elements")
 
     def add_arms(
         self,
@@ -464,7 +507,7 @@ class TrialDesignMixin:
                     raise ValueError(
                         f"TA.ETCD '{a.etcd}' not found in TE. Valid: {sorted(valid_etcds)}"
                     )
-        return self._materialise_collection(arms.to_polars())
+        return self._materialise_collection(arms.to_polars(), "add_arms")
 
     def add_visits(
         self,
@@ -501,7 +544,7 @@ class TrialDesignMixin:
                     raise ValueError(
                         f"TV.ARMCD '{v.armcd}' not found in TA. Valid: {sorted(valid_armcds)}"
                     )
-        return self._materialise_collection(visits.to_polars())
+        return self._materialise_collection(visits.to_polars(), "add_visits")
 
     def add_parameters(self, params: TrialParameters) -> Self:  # type: ignore[type-var]
         """Materialise a validated ``TrialParameters`` collection into the pipeline.
@@ -524,7 +567,7 @@ class TrialDesignMixin:
                 )
         """
         self._check_stage("add_parameters", required=2)
-        return self._materialise_collection(params.to_polars())
+        return self._materialise_collection(params.to_polars(), "add_parameters")
 
     def add_criteria(self, criteria: TrialCriteria) -> Self:  # type: ignore[type-var]
         """Materialise a validated ``TrialCriteria`` collection into the pipeline.
@@ -547,7 +590,7 @@ class TrialDesignMixin:
                 )
         """
         self._check_stage("add_criteria", required=2)
-        return self._materialise_collection(criteria.to_polars())
+        return self._materialise_collection(criteria.to_polars(), "add_criteria")
 
     def add_disease_assessments(self, assessments: TrialDiseaseAssessments) -> Self:  # type: ignore[type-var]
         """Materialise a validated ``TrialDiseaseAssessments`` collection.
@@ -570,7 +613,7 @@ class TrialDesignMixin:
                 )
         """
         self._check_stage("add_disease_assessments", required=2)
-        return self._materialise_collection(assessments.to_polars())
+        return self._materialise_collection(assessments.to_polars(), "add_disease_assessments")
 
     def add_milestones(self, milestones: TrialMilestones) -> Self:  # type: ignore[type-var]
         """Materialise a validated ``TrialMilestones`` collection.
@@ -593,7 +636,7 @@ class TrialDesignMixin:
                 )
         """
         self._check_stage("add_milestones", required=2)
-        return self._materialise_collection(milestones.to_polars())
+        return self._materialise_collection(milestones.to_polars(), "add_milestones")
 
     # ------------------------------------------------------------------ #
     # Subject-level derivation verbs                                       #
@@ -627,6 +670,10 @@ class TrialDesignMixin:
         ``VISIT`` ``UNSCHEDULED <VISITNUM>``.  A row with no study day gets
         a null.  One warning gives both counts.  With ``DOMAIN`` SV, one
         warning gives the ``USUBJID`` + ``VISITNUM`` keys that repeat.
+
+        With no *tolerance*, every dated record takes the nearest planned
+        visit, however far it is, so no record is unscheduled (ADR-0035).
+        One warning then gives the count and the largest distance.
 
         Args:
             target_num: Name of the output ``VISITNUM`` column.  An
@@ -727,8 +774,16 @@ class TrialDesignMixin:
             candidates.sort("__row_idx__", "__diff__", "__tv_num__")
             .group_by("__row_idx__", maintain_order=True)
             .first()
-            .select("__row_idx__", "__tv_num__", "__tv_name__")
+            .select("__row_idx__", "__tv_num__", "__tv_name__", "__diff__")
         )
+        if not tolerance and best.height:
+            warnings.warn(
+                f"{verb}: no tolerance=: {best.height} row(s) mapped to the nearest visit, the "
+                f"largest distance is {best['__diff__'].max()} study days. Give tolerance= to "
+                "make a record outside every window an unscheduled visit.",
+                stacklevel=2,
+            )
+        best = best.drop("__diff__")
         unscheduled = _unscheduled_visits(df, crossed, best, verb, tv_slim)
         best = pl.concat([best, unscheduled], how="vertical_relaxed").rename(
             {"__tv_num__": target_num, "__tv_name__": target_name}
@@ -776,7 +831,7 @@ class TrialDesignMixin:
             to_day(pl.col(date_col), ref.schema[date_col])
             - to_day(pl.col(ref_date), ref.schema[ref_date])
         ).dt.total_days()
-        return ref.select(pl.when(diff >= 0).then(diff + 1).otherwise(diff)).to_series()
+        return ref.select(cdisc_day(diff)).to_series()
 
     def element_boundaries(
         self,
@@ -883,7 +938,8 @@ class TrialDesignMixin:
                 "epoch": str}`` dicts, or a DataFrame with those columns.
             se: An SE domain frame with ``USUBJID``, ``SESTDTC``,
                 ``SEENDTC``, and ``EPOCH`` columns.  Mutually exclusive
-                with *epoch_ranges*.
+                with *epoch_ranges*.  EPOCH is Permissible in SE: an SE
+                with no EPOCH raises.
             subject_col: Subject key used to join *se* (default
                 ``"USUBJID"``).
             same_day: The rule for a record with no time on a transition
@@ -896,7 +952,8 @@ class TrialDesignMixin:
             ValueError: When neither or both of *epoch_ranges* and *se*
                 are provided.
             DerivationError: When ``same_day="by_class"`` and *date_col*
-                is neither a ``--DTC`` nor a ``--STDTC`` name.
+                is neither a ``--DTC`` nor a ``--STDTC`` name, or when *se*
+                has no ``EPOCH``.
 
         Examples:
             Stamp EPOCH onto any domain from the subject's SE intervals::
@@ -931,7 +988,7 @@ class TrialDesignMixin:
         if not ranges:
             return self._chain(pl.lit(None).alias(target))  # type: ignore[attr-defined]
 
-        day = date_part(pl.col(date_col))
+        day = to_day(pl.col(date_col), self._lazy.collect_schema().get(date_col))  # type: ignore[attr-defined]
         expr = pl.when(pl.lit(False)).then(pl.lit(None, dtype=pl.String))
         for r in ranges:
             start = date_part(pl.lit(str(r["start"])))
@@ -945,8 +1002,14 @@ class TrialDesignMixin:
     # Internal helpers                                                     #
     # ------------------------------------------------------------------ #
 
-    def _materialise_collection(self, df: pl.DataFrame) -> Self:  # type: ignore[type-var]
-        """Replace the lazy plan with *df*, preserving STUDYID/DOMAIN."""
+    def _materialise_collection(self, df: pl.DataFrame, verb: str) -> Self:  # type: ignore[type-var]
+        """Replace the lazy plan with *df*, with STUDYID and DOMAIN first."""
+        domain = getattr(self, "_tdd_domain", None)
+        expected = _DOMAIN_ADD_VERBS.get(domain or "")
+        if expected is not None and expected != verb:
+            raise ValueError(
+                f"{verb}() does not build {domain}: fetch_structure('{domain}') needs {expected}()."
+            )
         # Collect current header columns (STUDYID, DOMAIN)
         current = self._lazy.collect()  # type: ignore[attr-defined]
         header_cols = {}
@@ -954,9 +1017,12 @@ class TrialDesignMixin:
             if col in current.columns and current.height > 0:
                 header_cols[col] = current[col][0]
 
-        # Broadcast header onto the collection rows
+        # Broadcast the header onto the collection rows, in SDTMIG column order
         if header_cols:
-            df = df.with_columns([pl.lit(v).alias(k) for k, v in header_cols.items()])
+            df = df.select(
+                *[pl.lit(v).alias(k) for k, v in header_cols.items()],
+                pl.exclude(*header_cols),
+            )
 
         new = self._materialise_then(df)  # type: ignore[attr-defined]
         new._tdd_stage = 3
@@ -965,10 +1031,12 @@ class TrialDesignMixin:
     @staticmethod
     def _fetch_ig_domain(domain: str, ig_version: str) -> dict[str, Any]:
         """Fetch domain metadata from the CDISC Library IG."""
+        from fleet.core.rules_scaffolder import normalise_ig_version
         from fleet.ct.api import CDISCClient
 
         with CDISCClient() as client:
-            detail = client._get(f"/mdr/sdtmig/{ig_version}/datasets/{domain}")
+            path = f"/mdr/sdtmig/{normalise_ig_version(ig_version)}/datasets/{domain}"
+            detail = client.get(path)
 
         # Parse into a lightweight dict
         variables: list[dict[str, str]] = []
@@ -1023,12 +1091,10 @@ _DEFINE_CORE_TO_IG: dict[str, str] = {
 def _extract_domain_from_define(domain: str, define_path: Path) -> dict[str, Any] | None:
     """Try to extract domain metadata from a define.yaml.
 
-    Returns ``None`` when the file doesn't exist or the domain is not found,
-    so the caller can fall back to the online CDISC Library.
+    Returns ``None`` when the domain is not in the file, so the caller can
+    fall back to the packaged IG structure or the CDISC Library.  The
+    caller checks that the file exists.
     """
-    if not define_path.is_file():
-        return None
-
     data = load_spec_yaml(define_path.read_text(encoding="utf-8"))
     for ds in data.get("datasets", []):
         if ds.get("name", "").upper() == domain:

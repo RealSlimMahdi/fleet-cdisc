@@ -26,8 +26,8 @@ class TestSource:
         result = vs_frame.adam.source("USUBJID").to_frame()
         assert "USUBJID" in result.columns
 
-    def test_source_from_col(self, vs_frame):
-        result = vs_frame.adam.source("SUBJECT", from_col="USUBJID").to_frame()
+    def test_assign_renames_where_source_from_col_did(self, vs_frame):
+        result = vs_frame.adam.assign("SUBJECT", source="USUBJID").to_frame()
         assert result["SUBJECT"].to_list() == vs_frame["USUBJID"].to_list()
 
 
@@ -106,7 +106,7 @@ class TestBaseline:
             baseline_flag="ABLFL",
             by=["USUBJID", "PARAMCD"],
         ).to_frame()
-        assert "BASE" in result.columns
+        assert result["BASE"].to_list() == [120.0, 80.0, 118.0]
 
 
 class TestChg:
@@ -146,19 +146,30 @@ class TestFlag:
         result = vs_frame.adam.flag(
             "ABLFL2",
             criteria='pl.col("ABLFL") == "Y"',
-            by=["USUBJID", "PARAMCD"],
         ).to_frame()
         assert result["ABLFL2"][0] == "Y"
 
-    def test_max_criteria(self, vs_frame):
-        df = vs_frame.with_columns(pl.col("VSSTRESN").alias("AVAL"))
+    def test_max_criteria(self):
+        df = pl.from_repr("""
+        ┌─────────┬─────────┬───────┐
+        │ USUBJID ┆ PARAMCD ┆ AVAL  │
+        │ ---     ┆ ---     ┆ ---   │
+        │ str     ┆ str     ┆ f64   │
+        ╞═════════╪═════════╪═══════╡
+        │ S1      ┆ SYSBP   ┆ 120.0 │
+        │ S1      ┆ SYSBP   ┆ 135.0 │
+        │ S1      ┆ DIABP   ┆ 80.0  │
+        │ S2      ┆ SYSBP   ┆ 118.0 │
+        │ S2      ┆ SYSBP   ┆ 110.0 │
+        └─────────┴─────────┴───────┘
+        """)
         result = df.adam.flag(
             "AMXFL",
             criteria="max",
             value_col="AVAL",
             by=["USUBJID", "PARAMCD"],
         ).to_frame()
-        assert "AMXFL" in result.columns
+        assert result["AMXFL"].to_list() == [None, "Y", "Y", "Y", None]
 
     def test_max_requires_value_col(self, vs_frame):
         with pytest.raises(ValueError, match="value_col"):
@@ -310,7 +321,7 @@ class TestChaining:
 └─────────┴─────────┴──────┴──────┘
 """)
         advs = (
-            vs.adam.flag("ABLFL", criteria='pl.col("vsdy") <= 0', by=["USUBJID", "PARAMCD"])
+            vs.adam.flag("ABLFL", criteria='pl.col("vsdy") <= 0')
             .baseline("BASE", aval="AVAL", baseline_flag="ABLFL", by=["USUBJID", "PARAMCD"])
             .chg("CHG", aval="AVAL", base="BASE")
             .pchg("PCHG", aval="AVAL", base="BASE")

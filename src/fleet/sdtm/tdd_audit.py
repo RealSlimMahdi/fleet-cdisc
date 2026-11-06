@@ -77,6 +77,29 @@ def _to_df(frame: Any) -> pl.DataFrame | None:
     return frame.to_polars()
 
 
+def _required_findings(domain: str, frame: pl.DataFrame) -> list[tuple[str, str]]:
+    """(variable, message) for each Req variable that is absent or has a null or blank value."""
+    from fleet.sdtm._tdd_mixin import packaged_structure
+
+    structure = packaged_structure(domain) or {}
+    found = []
+    for var in structure.get("variables", []):
+        name = var["name"]
+        # STUDYID and DOMAIN come with the build (study_header, StudyDesign).
+        if var.get("core") != "Req" or name in ("STUDYID", "DOMAIN"):
+            continue
+        if name not in frame.columns:
+            found.append((name, f"{domain}.{name} is Req and the column is absent"))
+            continue
+        blank = pl.col(name).is_null()
+        if frame.schema[name] == pl.String:
+            blank = blank | (pl.col(name).str.strip_chars() == "")
+        n = frame.filter(blank).height
+        if n:
+            found.append((name, f"{domain}.{name} is Req and {n} record(s) are null or blank"))
+    return found
+
+
 def audit(
     *,
     te: Any = None,
@@ -85,12 +108,18 @@ def audit(
     ts: Any = None,
     ti: Any = None,
     dm: Any = None,
+    td: Any = None,
+    tm: Any = None,
 ) -> pl.DataFrame:
     """Cross-check Trial Design domains against published conformance rules.
 
     Every argument is optional — checks run only when the domains they need
     are present.  Inputs may be DataFrames, LazyFrames, or the TDD
-    collection models (``TrialElements``, ``TrialArms``, ...).
+    collection models (``TrialElements``, ``TrialArms``, ...).  For each
+    domain given, a Req variable (packaged SDTMIG 3.4 structure) that is
+    absent or has a null or blank value is an error (``FLEETTD08``).  TS
+    coded values (TSVAL against its codelist, TSPARM against TSPARMCD) are
+    not checked.
 
     Args:
         te: Trial Elements domain.
@@ -98,7 +127,9 @@ def audit(
         tv: Trial Visits domain.
         ts: Trial Summary domain.
         ti: Trial Inclusion/Exclusion domain.
-        dm: Demographics domain, for ARMCD cross-checks.
+        dm: Demographics domain, for ARMCD and ARM cross-checks.
+        td: Trial Disease Assessments domain.
+        tm: Trial Disease Milestones domain.
 
     Returns:
         pl.DataFrame: One row per finding with ``rule_id``, ``severity``
@@ -111,13 +142,20 @@ def audit(
             findings = fleet.sdtm.tdd_audit.audit(te=te, ta=ta, ts=ts)
             assert findings.filter(pl.col("severity") == "error").is_empty()
     """
-    te, ta, tv, ts, ti, dm = (_to_df(f) for f in (te, ta, tv, ts, ti, dm))
+    te, ta, tv, ts, ti, dm, td, tm = (_to_df(f) for f in (te, ta, tv, ts, ti, dm, td, tm))
     findings: list[dict[str, str]] = []
 
     def add(rule_id: str, severity: str, domain: str, message: str) -> None:
         findings.append(
             {"rule_id": rule_id, "severity": severity, "domain": domain, "message": message}
         )
+
+    # -- Req variables (CDISC CORE-000356) ------------------------------ #
+    required = (("TE", te), ("TA", ta), ("TV", tv), ("TI", ti), ("TD", td), ("TM", tm))
+    for domain, frame in required:
+        if frame is not None and frame.height:
+            for _, message in _required_findings(domain, frame):
+                add("FLEETTD08", "error", domain, message)
 
     # -- TE structural ------------------------------------------------- #
     if te is not None:
@@ -151,29 +189,53 @@ def audit(
 
     # -- TA ↔ TE consistency ------------------------------------------- #
     if ta is not None and te is not None:
-        te_pairs = te.select("ETCD", "ELEMENT").unique()
-        stray = (
-            ta.filter(pl.col("ETCD") != "UNPLAN")
-            .select("ETCD", "ELEMENT")
-            .unique()
-            .join(te_pairs, on=["ETCD", "ELEMENT"], how="anti")
-        )
-        for row in stray.iter_rows(named=True):
-            add(
-                "SD0067",
-                "error",
-                "TA",
-                f"(ETCD '{row['ETCD']}', ELEMENT '{row['ELEMENT']}') in TA does not match TE",
+        planned = ta.filter(pl.col("ETCD") != "UNPLAN")
+        for etcd in sorted(set(planned["ETCD"].drop_nulls().to_list()) - set(te["ETCD"])):
+            add("SD0067", "error", "TA", f"ETCD '{etcd}' in TA is not in TE")
+        if "ELEMENT" in ta.columns and "ELEMENT" in te.columns:
+            stray = (
+                planned.filter(
+                    pl.col("ELEMENT").is_not_null() & pl.col("ETCD").is_in(te["ETCD"].implode())
+                )
+                .select("ETCD", "ELEMENT")
+                .unique()
+                .join(te.select("ETCD", "ELEMENT").unique(), on=["ETCD", "ELEMENT"], how="anti")
             )
+            for row in stray.sort("ETCD").iter_rows(named=True):
+                add(
+                    "SD0067",
+                    "error",
+                    "TA",
+                    f"(ETCD '{row['ETCD']}', ELEMENT '{row['ELEMENT']}') in TA does not match TE",
+                )
         unused = te.join(ta.select("ETCD").unique(), on="ETCD", how="anti")["ETCD"].to_list()
         for etcd in unused:
             add("SD1378", "warning", "TE", f"Element '{etcd}' defined in TE but used by no arm")
 
     # -- TV ------------------------------------------------------------- #
     if tv is not None:
-        dup = tv.group_by("VISITNUM").len().filter(pl.col("len") > 1)["VISITNUM"].to_list()
-        for num in dup:
-            add("SD1064", "error", "TV", f"Duplicate VISITNUM {num} in TV")
+        # SDTMIG 3.4 TV: one record per planned visit per arm; a blank ARMCD means all arms.
+        arm = (
+            pl.col("ARMCD").cast(pl.String).fill_null("")
+            if "ARMCD" in tv.columns
+            else pl.lit("").alias("ARMCD")
+        )
+        keyed = tv.select(arm.alias("__arm__"), "VISITNUM")
+        dup = keyed.group_by("__arm__", "VISITNUM").len().filter(pl.col("len") > 1)
+        for armcd, num in dup.sort("__arm__", "VISITNUM").select("__arm__", "VISITNUM").rows():
+            where = f" for ARMCD '{armcd}'" if armcd else ""
+            add("FLEETTD06", "error", "TV", f"Duplicate VISITNUM {num}{where} in TV")
+        all_arms = keyed.filter(pl.col("__arm__") == "")["VISITNUM"]
+        both = keyed.filter(
+            (pl.col("__arm__") != "") & pl.col("VISITNUM").is_in(all_arms.implode())
+        )
+        for num in sorted(set(both["VISITNUM"].to_list())):
+            add(
+                "FLEETTD06",
+                "error",
+                "TV",
+                f"VISITNUM {num} has a blank-ARMCD row (all arms) and an arm row in TV",
+            )
         if "ARMCD" in tv.columns:
             for armcd in _RESERVED_ARMCDS:
                 if armcd in tv["ARMCD"].to_list():
@@ -187,9 +249,16 @@ def audit(
     # -- TI ------------------------------------------------------------- #
     if ti is not None:
         for code in ti.filter(
-            pl.col("IETESTCD").str.len_chars().gt(8) | pl.col("IETESTCD").str.contains(r"^\d")
+            pl.col("IETESTCD").str.len_chars().gt(8)
+            | ~pl.col("IETESTCD").str.contains(r"^[A-Z_][A-Z0-9_]*$")
         )["IETESTCD"].to_list():
-            add("SD0018", "error", "TI", f"IETESTCD '{code}' invalid (>8 chars or leading digit)")
+            add(
+                "SD0018",
+                "error",
+                "TI",
+                f"IETESTCD '{code}' invalid: at most 8 characters, upper-case letters, digits "
+                "and underscores, no digit first",
+            )
         vers = ["TIVERS"] if "TIVERS" in ti.columns else []
         dup = ti.group_by("IETESTCD", *vers).len().filter(pl.col("len") > 1)["IETESTCD"].to_list()
         for code in dup:
@@ -220,6 +289,20 @@ def audit(
             add("FLEETTD02", "error", "DM", f"DM.ARMCD '{armcd}' not defined in TA")
         for armcd in sorted(ta_arms - dm_arms):
             add("SD1354", "warning", "TA", f"ARMCD '{armcd}' in TA has no subjects in DM")
+        if "ARM" in dm.columns and "ARM" in ta.columns:
+            # CORE-000047: DM.ARM is a TA.ARM; a warning, because of multistage designs.
+            ta_pairs = set(ta.select("ARMCD", "ARM").unique().rows())
+            dm_pairs = dm.select("ARMCD", "ARM").drop_nulls().unique().sort("ARMCD", "ARM")
+            for armcd, arm in dm_pairs.rows():
+                if armcd in _RESERVED_ARMCDS or armcd not in ta_arms:
+                    continue
+                if (armcd, arm) not in ta_pairs:
+                    add(
+                        "FLEETTD07",
+                        "warning",
+                        "DM",
+                        f"DM (ARMCD '{armcd}', ARM '{arm}') is not an (ARMCD, ARM) pair of TA",
+                    )
 
     # -- TS FDA profile -------------------------------------------------- #
     if ts is not None:
@@ -227,10 +310,14 @@ def audit(
         # every required parameter is then missing.
         if "TSPARMCD" in ts.columns:
             present = set(ts["TSPARMCD"].to_list())
-            values = {
-                row["TSPARMCD"]: row["TSVAL"]
-                for row in ts.select("TSPARMCD", "TSVAL").iter_rows(named=True)
-            }
+            values = (
+                {
+                    row["TSPARMCD"]: row["TSVAL"]
+                    for row in ts.select("TSPARMCD", "TSVAL").iter_rows(named=True)
+                }
+                if "TSVAL" in ts.columns
+                else {}
+            )
         else:
             present, values = set(), {}
         for parm, rule in TS_REQUIRED.items():
@@ -238,7 +325,7 @@ def audit(
                 extra = " (FDA rejection criterion 1734)" if parm == "SSTDTC" else ""
                 add(rule, "error", "TS", f"Required TS parameter '{parm}' is missing{extra}")
         for trigger, value, required, rule in TS_CONDITIONAL:
-            if values.get(trigger, "").upper() == value and required not in present:
+            if (values.get(trigger) or "").upper() == value and required not in present:
                 add(
                     rule,
                     "error",

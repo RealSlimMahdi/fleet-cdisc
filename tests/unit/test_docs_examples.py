@@ -16,10 +16,10 @@ Marker convention
 -----------------
 A block is executed **by default**. To mark a block as intentionally
 illustrative (a fragment, or one that needs files/services not present
-in the harness), put the HTML comment ``<!-- docs:no-run -->`` on the
-line immediately before its opening fence::
+in the harness), put the HTML comment ``<!-- docs:no-run: <reason> -->`` on
+the line immediately before its opening fence; the reason is required::
 
-    <!-- docs:no-run -->
+    <!-- docs:no-run: reads the parquet files of a built study -->
 
     ```python
     # not executed by the guardrail
@@ -30,10 +30,15 @@ The same convention is documented at the top of ``docs/concepts/define-yaml.md``
 
 from __future__ import annotations
 
+import ast
+import importlib
+import importlib.util
 import re
+import textwrap
 from pathlib import Path
 
 import polars as pl
+import pytest
 import yaml
 
 import fleet  # noqa: F401 — registers the namespaces used by the doc blocks
@@ -43,7 +48,7 @@ DEFINE_YAML_DOC = REPO_ROOT / "docs" / "concepts" / "define-yaml.md"
 GUIDE = REPO_ROOT / "GUIDE.md"
 
 _FENCE_RE = re.compile(
-    r"(?P<marker><!--\s*docs:no-run\s*-->\s*\n\s*\n)?```(?P<lang>python|yaml)\n"
+    r"(?P<marker><!--\s*docs:no-run[^>]*-->\s*\n\s*\n)?```(?P<lang>python|yaml)\n"
     r"(?P<body>.*?)\n```",
     re.DOTALL,
 )
@@ -99,12 +104,16 @@ def _guide_namespace() -> dict:
 │ ---            ┆ ---         ┆ ---      ┆ ---                      ┆ ---     ┆ ---      ┆ ---        ┆ ---  │
 │ str            ┆ i64         ┆ str      ┆ str                      ┆ str     ┆ str      ┆ str        ┆ i64  │
 ╞════════════════╪═════════════╪══════════╪══════════════════════════╪═════════╪══════════╪════════════╪══════╡
+│ 01-701-1015    ┆ 701         ┆ SYSBP    ┆ Systolic Blood Pressure  ┆ 117     ┆ mmHg     ┆ 2013-12-26 ┆ -7   │
 │ 01-701-1015    ┆ 701         ┆ SYSBP    ┆ Systolic Blood Pressure  ┆ 121     ┆ mmHg     ┆ 2014-01-01 ┆ -1   │
 │ 01-701-1015    ┆ 701         ┆ SYSBP    ┆ Systolic Blood Pressure  ┆ 124     ┆ mmHg     ┆ 2014-01-16 ┆ 15   │
+│ 01-701-1015    ┆ 701         ┆ DIABP    ┆ Diastolic Blood Pressure ┆ 76      ┆ mmHg     ┆ 2013-12-26 ┆ -7   │
 │ 01-701-1015    ┆ 701         ┆ DIABP    ┆ Diastolic Blood Pressure ┆ 78      ┆ mmHg     ┆ 2014-01-01 ┆ -1   │
 │ 01-701-1015    ┆ 701         ┆ DIABP    ┆ Diastolic Blood Pressure ┆ 80      ┆ mmHg     ┆ 2014-01-16 ┆ 15   │
+│ 01-701-1023    ┆ 701         ┆ SYSBP    ┆ Systolic Blood Pressure  ┆ 112     ┆ mmHg     ┆ 2013-12-26 ┆ -7   │
 │ 01-701-1023    ┆ 701         ┆ SYSBP    ┆ Systolic Blood Pressure  ┆ 118     ┆ mmHg     ┆ 2014-01-01 ┆ -1   │
 │ 01-701-1023    ┆ 701         ┆ SYSBP    ┆ Systolic Blood Pressure  ┆ 115     ┆ mmHg     ┆ 2014-01-16 ┆ 15   │
+│ 01-701-1023    ┆ 701         ┆ DIABP    ┆ Diastolic Blood Pressure ┆ 71      ┆ mmHg     ┆ 2013-12-26 ┆ -7   │
 │ 01-701-1023    ┆ 701         ┆ DIABP    ┆ Diastolic Blood Pressure ┆ 74      ┆ mmHg     ┆ 2014-01-01 ┆ -1   │
 │ 01-701-1023    ┆ 701         ┆ DIABP    ┆ Diastolic Blood Pressure ┆ 73      ┆ mmHg     ┆ 2014-01-16 ┆ 15   │
 └────────────────┴─────────────┴──────────┴──────────────────────────┴─────────┴──────────┴────────────┴──────┘
@@ -220,6 +229,10 @@ def test_guide_pipeline_blocks_execute(tmp_path, monkeypatch):
     assert {"ABLFL", "BASE", "CHG", "PCHG", "ADY"}.issubset(advs.columns)
     baseline_rows = advs.filter(pl.col("ABLFL") == "Y")
     assert (baseline_rows["CHG"] == 0.0).all()  # CHG is 0 at baseline
+    # c1-587: two pre-dose records; the last one (day -1) is the baseline.
+    assert baseline_rows.height == 4
+    sysbp = advs.filter((pl.col("USUBJID") == "01-701-1015") & (pl.col("PARAMCD") == "SYSBP"))
+    assert sysbp["BASE"].unique().to_list() == [121.0]
     # Part 9 built ADAE with TRTEMFL + ASEQ.
     assert {"TRTEMFL", "ASEQ", "AESEVN"}.issubset(ns["adae"].columns)
     # Part 10 built the trial design domains offline (StudyDesign + pipeline).
@@ -403,10 +416,204 @@ def test_docstring_examples_are_valid_python():
 def test_no_run_marker_is_respected():
     """A ``docs:no-run`` block is not counted as runnable."""
     sample = (
-        "<!-- docs:no-run -->\n\n```python\nraise RuntimeError('should not run')\n```\n\n"
+        "<!-- docs:no-run: a test -->\n\n```python\nraise RuntimeError('should not run')\n```\n\n"
         "```python\nx = 1\n```\n"
     )
     blocks = list(_iter_blocks(sample))
     runnable = [b for lang, b, run in blocks if run]
     assert len(runnable) == 1
     assert "x = 1" in runnable[0]
+
+
+# --------------------------------------------------------------------------- #
+# Level 1 for every docs page (c1-848): compile, resolve imports, load YAML     #
+# --------------------------------------------------------------------------- #
+
+DOC_PAGES = sorted((REPO_ROOT / "docs").rglob("*.md"))
+
+#: Any fence, also one indented in a list item; the closing fence has the same indent.
+_ANY_FENCE_RE = re.compile(
+    r"(?P<marker><!--\s*docs:no-run(?P<reason>[^>]*)-->[ \t]*\n[ \t]*\n)?"
+    r"^(?P<indent>[ \t]*)```(?P<lang>python|yaml)\n(?P<body>.*?)\n(?P=indent)```",
+    re.DOTALL | re.MULTILINE,
+)
+
+
+def _page_blocks(page: Path):
+    """Yield ``(line, lang, body, marker, reason)`` for every fence of *page*."""
+    text = page.read_text(encoding="utf-8")
+    for m in _ANY_FENCE_RE.finditer(text):
+        body = textwrap.dedent(m["body"])
+        line = text.count("\n", 0, m.start("indent")) + 1
+        yield line, m["lang"], body, m["marker"] is not None, (m["reason"] or "").strip(" :")
+
+
+def _fleet_imports(tree: ast.AST):
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and not node.level and node.module:
+            if node.module.split(".")[0] == "fleet":
+                yield node.module, [a.name for a in node.names if a.name != "*"]
+        elif isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name.split(".")[0] == "fleet":
+                    yield alias.name, []
+
+
+def _ids(page: Path) -> str:
+    return str(page.relative_to(REPO_ROOT))
+
+
+def test_every_docs_page_is_scanned():
+    assert len(DOC_PAGES) > 30
+    assert sum(1 for p in DOC_PAGES for b in _page_blocks(p) if b[1] == "python") > 100
+
+
+@pytest.mark.parametrize("page", DOC_PAGES, ids=_ids)
+def test_every_python_block_compiles_and_its_fleet_imports_resolve(page: Path):
+    problems = []
+    for line, lang, body, _, _ in _page_blocks(page):
+        if lang != "python":
+            continue
+        try:
+            tree = ast.parse(body)
+        except SyntaxError as exc:
+            problems.append(f"line {line}: {exc}")
+            continue
+        for module_name, names in _fleet_imports(tree):
+            try:
+                module = importlib.import_module(module_name)
+            except ImportError as exc:
+                problems.append(f"line {line}: import {module_name}: {exc}")
+                continue
+            missing = [
+                n
+                for n in names
+                if not hasattr(module, n) and importlib.util.find_spec(f"{module_name}.{n}") is None
+            ]
+            if missing:
+                problems.append(f"line {line}: {module_name} has no {missing}")
+    assert not problems, f"{_ids(page)}:\n" + "\n".join(problems)
+
+
+@pytest.mark.parametrize("page", DOC_PAGES, ids=_ids)
+def test_every_yaml_block_loads(page: Path):
+    problems = []
+    for line, lang, body, no_run, _ in _page_blocks(page):
+        if lang != "yaml" or no_run:
+            continue
+        try:
+            list(yaml.safe_load_all(body))
+        except yaml.YAMLError as exc:
+            problems.append(f"line {line}: {exc}")
+    assert not problems, f"{_ids(page)}:\n" + "\n".join(problems)
+
+
+@pytest.mark.parametrize("page", DOC_PAGES, ids=_ids)
+def test_every_no_run_marker_gives_a_reason(page: Path):
+    bare = [line for line, _, _, no_run, reason in _page_blocks(page) if no_run and not reason]
+    assert not bare, f"{_ids(page)}: docs:no-run without a reason before lines {bare}"
+
+
+def _run_page(rel_path: str, tmp_path, monkeypatch) -> tuple[dict, int]:
+    """Run every python block of a docs page that is not marked no-run, in an empty folder.
+
+    Indented fences (generated-file samples inside list items) are output, not code.
+    The pilot ``codelists.py`` stands in for the study one.
+    """
+    text = (REPO_ROOT / "docs" / rel_path).read_text(encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.syspath_prepend(str(REPO_ROOT / "examples" / "cdiscpilot01" / "sdtm"))
+    ns: dict = {}
+    ran = 0
+    for lang, body, run in _iter_blocks(text):
+        if run and lang == "python" and not body[:1].isspace():
+            exec(compile(body, f"<{rel_path}>", "exec"), ns)  # noqa: S102 — trusted doc source
+            ran += 1
+    return ns, ran
+
+
+def test_ct_page_blocks_execute(tmp_path, monkeypatch):
+    """c1-640: the CT validation example of docs/api/ct.md runs and warns as the page shows."""
+    ns, ran = _run_page("api/ct.md", tmp_path, monkeypatch)
+    assert ran == 1
+    messages = [str(w.message) for w in ns["caught"]]
+    assert messages[0].startswith("SEX: column 'sex' contains values not in codelist 'C66731'")
+    assert messages[1].startswith("assign('AGEU'): value 'YRS' not in codelist 'C66781'")
+
+
+def test_troubleshooting_page_blocks_execute(tmp_path, monkeypatch, capsys):
+    """c1-668 c1-669: the debug snippets of troubleshooting.md run; no private attribute."""
+    ns, ran = _run_page("getting-started/troubleshooting.md", tmp_path, monkeypatch)
+    assert ran == 2
+    assert ns["debug_df"].columns == ["patient_id", "DOMAIN"]
+    out = capsys.readouterr().out
+    assert 'col("patient_id").alias("USUBJID")' in out
+    assert "Variable trail (2 derivation(s))" in out
+
+
+def test_full_pipeline_page_blocks_execute(tmp_path, monkeypatch):
+    """c1-594: reference dates from EX, a partial date, BNRIND and the --DTC type, as the page shows."""
+    import fleet.ct
+
+    monkeypatch.setattr(fleet.ct, "import_codelists", lambda *a, **k: None)
+    ns, ran = _run_page("examples/full_pipeline.md", tmp_path, monkeypatch)
+    assert ran == 9
+    assert ns["ex"]["EXSTDTC"].dtype == pl.String
+    assert ns["dm"]["RFXSTDTC"].to_list() == ["2023-01-01", None]
+    adsl = ns["adsl"]
+    assert adsl["TRTSDT"].cast(pl.String).to_list() == ["2023-01-01", "2023-01-01"]
+    assert adsl["TRTSDTF"].to_list() == [None, "D"]
+    assert ns["advs"]["BNRIND"].to_list() == [None, "NORMAL", None, "HIGH"]
+
+
+def test_tdd_page_blocks_execute(tmp_path, monkeypatch):
+    """c1-654: the SE and EPOCH blocks of tdd.md define their inputs and run."""
+    ns, ran = _run_page("concepts/tdd.md", tmp_path, monkeypatch)
+    assert ran == 7
+    se = ns["se"]
+    assert se["SESTDTC"].to_list() == ["2024-01-01", "2024-01-15"]
+    assert se["SEENDTC"].to_list() == ["2024-01-15", None]
+    assert se["SESEQ"].to_list() == [1, 2]
+    assert ns["ae"]["EPOCH"].to_list() == ["SCREENING", "TREATMENT"]
+
+
+def test_code_driven_notebook_cells_execute(tmp_path, monkeypatch):
+    """c1-655: every code cell of the kept notebook runs, in order, in an empty folder."""
+    import json
+
+    nb = json.loads(
+        (REPO_ROOT / "docs" / "examples" / "01_code_driven_pipeline.ipynb").read_text(
+            encoding="utf-8"
+        )
+    )
+    monkeypatch.chdir(tmp_path)
+    ns: dict = {}
+    cells = [c for c in nb["cells"] if c["cell_type"] == "code"]
+    for cell in cells:
+        exec(compile("".join(cell["source"]), "<notebook 01>", "exec"), ns)  # noqa: S102
+    assert len(cells) >= 3
+    assert "AGE40FL" in ns["adsl"].columns
+
+
+def test_coming_from_sas_page_blocks_execute(tmp_path, monkeypatch):
+    """c1-688: each SAS-trap sample of coming-from-sas.md runs and gives the value it states."""
+    ns, ran = _run_page("concepts/coming-from-sas.md", tmp_path, monkeypatch)
+    assert ran == 6
+    assert ns["crit"]["CRIT1FL"].to_list() == ["Y", None]
+    assert ns["worst"]["AESEVN"].to_list() == [2]
+    assert ns["apply_fmt_fn"](5 / 16 * 100, "xx.x") == "31.3"
+    assert ns["ae_dm"].columns == ["USUBJID", "AETERM", "AGE"]
+    assert ns["ex"]["EXSTDTC"].to_list() == ["2024-03-15", "2024-03"]
+
+
+def test_tdd_se_block_executes():
+    """c1-588: the SE block of docs/concepts/tdd.md runs and gives element boundaries."""
+    text = (REPO_ROOT / "docs" / "concepts" / "tdd.md").read_text(encoding="utf-8")
+    (body,) = [
+        b for lang, b, _ in _iter_blocks(text) if lang == "python" and ".element_boundaries(" in b
+    ]
+    ns: dict = {"pl": pl}
+    exec(compile(body, "<tdd.md>", "exec"), ns)  # noqa: S102 — trusted doc source
+    se = ns["se"]
+    assert se["SEENDTC"].to_list() == ["2024-01-15", None]
+    assert se["SESEQ"].to_list() == [1, 2]

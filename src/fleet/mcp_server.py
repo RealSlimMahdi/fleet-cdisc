@@ -23,14 +23,19 @@ Examples:
 
 from __future__ import annotations
 
+import functools
+import inspect
 import json
+from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 try:  # mcp >= 2 renamed FastMCP; the three calls made here are unchanged.
     from mcp.server.mcpserver import MCPServer as FastMCP
+    from mcp.server.mcpserver.exceptions import ToolError
 except ImportError:  # mcp 1.x
     from mcp.server.fastmcp import FastMCP
+    from mcp.server.fastmcp.exceptions import ToolError
 
 if TYPE_CHECKING:
     import polars as pl
@@ -90,10 +95,10 @@ def fleet_impacted_by(spec_paths: list[str], node: str) -> list[str]:
 def fleet_lineage(dag_json_path: str, dataset: str) -> dict[str, Any]:
     """Return one dataset's node record from a ``pipeline_dag.json`` file.
 
-    The file is written by ``build_dag(...).generate(path)`` after a
-    pipeline run; dataset records carry ``inputs``, ``path`` and — when
-    the pipeline was materialised — per-variable lineage (producing
-    verb, source columns, dotted method path).
+    The file is written by ``build_dag(...).generate(path)``; dataset
+    records carry ``inputs`` and ``path``.  A record carries per-variable
+    lineage (producing verb, source columns, dotted method path) only when
+    ``dag.inject_lineage(namespace, dataset)`` ran before ``generate``.
 
     Args:
         dag_json_path: Path to a generated ``pipeline_dag.json``.
@@ -102,9 +107,15 @@ def fleet_lineage(dag_json_path: str, dataset: str) -> dict[str, Any]:
     Returns:
         dict: The node record (``node_type``, ``path``, ``inputs``, and
             ``variables`` when runtime lineage was captured).
+
+    Raises:
+        ValueError: The file has no ``nodes`` mapping, so it is not a
+            ``pipeline_dag.json``, or *dataset* is not one of its nodes.
     """
     payload = json.loads(Path(dag_json_path).read_text(encoding="utf-8"))
-    nodes: dict[str, Any] = payload.get("nodes", payload)
+    nodes = payload.get("nodes") if isinstance(payload, dict) else None
+    if not isinstance(nodes, dict):
+        raise ValueError(f"{dag_json_path} is not a pipeline_dag.json (no 'nodes' key)")
     node = nodes.get(dataset)
     if node is None:
         raise ValueError(f"dataset {dataset!r} not in {dag_json_path}. Known: {sorted(nodes)}")
@@ -141,11 +152,14 @@ def fleet_validate(
     Returns:
         dict: ``{"outcome": "pass" | "fail", "status", "dataset", "standard",
             "is_valid", "setup": {input: {value, source}, ...},
-            "issues": [{severity, rule_id, message, variable, source, accepted}, ...]}``,
-            or ``{"outcome": "could not run", "reason"}`` when the run
-            setup is refused, no engine is found, or the engine crashed or
-            timed out.  ``status`` is ``PASS``, ``FINDINGS (n)``,
+            "issues": [{severity, rule_id, message, variable, source, accepted,
+            row, usubjid, seq, values, dataset}, ...]}``, or ``{"outcome":
+            "could not run", "reason"}`` when the run setup is refused, no
+            engine is found, or the engine crashed or timed out.  ``status`` is ``PASS``, ``FINDINGS (n)``,
             ``NOT ASSESSED`` or ``FAIL``; only ``FAIL`` gives ``"fail"``.
+            A study-level finding (``dataset`` ``"STUDY"``, such as a domain
+            the study lacks) is listed as information, as in ``fleet
+            validate``, and does not change ``is_valid``.
 
     Examples:
         Validate an ADaM dataset of a study from any working directory::
@@ -153,7 +167,12 @@ def fleet_validate(
             result = fleet_validate("/study/data/adam/adsl.parquet")
             result["setup"]["ig_version"]  # {"value": "1.3", "source": "study config"}
     """
-    from fleet.validation import ValidationService, ValidationSetupError, build_run_setup
+    from fleet.validation import (
+        Severity,
+        ValidationService,
+        ValidationSetupError,
+        build_run_setup,
+    )
 
     path = Path(dataset_path)
     if not path.is_file():
@@ -169,10 +188,9 @@ def fleet_validate(
     except ValidationSetupError as exc:
         return _could_not_run(str(exc))
     if setup.engine.value is None:
-        return _could_not_run(
-            "CDISC Rules Engine not found. Install it with `fleet install-engine` "
-            "or set validation.engine_path / FLEET_RULES_ENGINE."
-        )
+        from fleet.validation import missing_engine_reason
+
+        return _could_not_run(missing_engine_reason(setup).removeprefix("Could not run: "))
     if setup.engine.source == "study config" and not _TRUST_STUDY_ENGINE:
         return _could_not_run(
             f"{setup.study_config} names the engine {setup.engine.value}. The MCP server "
@@ -182,16 +200,30 @@ def fleet_validate(
         )
 
     name = path.stem.upper()
-    result = ValidationService(rules_engine_path=setup.engine.value).validate_datasets(
-        {name: _load_frame(dataset_path)},
+    try:
+        frame = _load_frame(dataset_path)
+    except Exception as exc:  # a reader error of any kind: the file cannot be read
+        return _could_not_run(f"cannot read the file {path}: {' '.join(str(exc).split())}")
+    results = ValidationService(rules_engine_path=setup.engine.value).validate_datasets(
+        {name: frame},
         standard=setup.standard.value,
         version=setup.ig_version.value,
         custom_rules=setup.custom_rules.value,
         timeout=setup.timeout.value,
-    )[name]
+    )
+    result = results[name]
     result.apply_setup(setup)
     if result.could_not_run is not None:
         return _could_not_run(result.could_not_run)
+    other_issues = []
+    for other, found in results.items():
+        if other == name:
+            continue
+        for issue in (*found.errors, *found.warnings, *found.infos):
+            if other.upper() == "STUDY":
+                issue.severity = Severity.INFO
+                issue.message += " (study-level rule: not assessable in a single-dataset run)"
+            other_issues.append(("STUDY" if other.upper() == "STUDY" else other, issue))
     inputs = {
         "standard": setup.standard,
         "ig_version": setup.ig_version,
@@ -214,16 +246,28 @@ def fleet_validate(
             "study_config": None if setup.study_config is None else str(setup.study_config),
         },
         "issues": [
-            {
-                "severity": issue.severity.value,
-                "rule_id": issue.rule_id,
-                "message": issue.message,
-                "variable": issue.variable,
-                "source": issue.source,
-                "accepted": issue.accepted,
-            }
-            for issue in (*result.errors, *result.warnings, *result.infos)
+            {**_issue_dict(issue), "dataset": dataset}
+            for dataset, issue in (
+                *((name, i) for i in (*result.errors, *result.warnings, *result.infos)),
+                *other_issues,
+            )
         ],
+    }
+
+
+def _issue_dict(issue: Any) -> dict[str, Any]:
+    """One finding as the MCP tool returns it, with the record the engine names."""
+    return {
+        "severity": issue.severity.value,
+        "rule_id": issue.rule_id,
+        "message": issue.message,
+        "variable": issue.variable,
+        "source": issue.source,
+        "accepted": issue.accepted,
+        "row": issue.row,
+        "usubjid": issue.usubjid,
+        "seq": issue.seq,
+        "values": issue.values,
     }
 
 
@@ -234,26 +278,44 @@ def _could_not_run(reason: str) -> dict[str, Any]:
 def fleet_ct_terms(codelist: str, ct_path: str | None = None) -> list[str]:
     """Return the valid submission values of a controlled-terminology codelist.
 
-    Uses the process-wide ``CTValidator`` cache; pass *ct_path* to load a
-    CT file (YAML/CSV) into the cache first.
+    Asks the process-wide ``CTValidator`` cache first, then the
+    ``codelists.py`` classes of the study found from the working
+    directory (``fleet init ct``).  Pass *ct_path* to load a CT file
+    (YAML/CSV) into the cache first.  *ct_path* must be a local file:
+    a URL is refused.
 
     Args:
-        codelist: Codelist name, alias, or NCI concept ID (e.g. ``C66731``).
+        codelist: NCI concept ID (e.g. ``C66731``), or the key the CT file
+            uses for the codelist.
         ct_path: Optional CT file to load before the lookup.
 
     Returns:
         list[str]: Sorted valid coded values.
+
+    Raises:
+        ValueError: *ct_path* is not a file, or the codelist is not loaded.
     """
+    from fleet.ct.terms import study_codelist_classes, terms_for
     from fleet.ct.validator import get_validator
 
     validator = get_validator()
     if ct_path:
+        if not Path(ct_path).is_file():
+            raise ValueError(f"ct_path must be a file: {ct_path}")
         validator.load_ct_file(ct_path)
-    if not validator.has_codelist(codelist):
+    terms = terms_for(codelist, validator=validator, study_classes=study_codelist_classes())
+    if terms is None:
+        if ct_path:
+            held = sorted(validator.get_cache_info()["codelists_loaded"])  # type: ignore[arg-type]
+            raise ValueError(
+                f"codelist {codelist!r} is not in {Path(ct_path).name}. "
+                f"It holds {len(held)} codelists: {', '.join(held)}"
+            )
         raise ValueError(
-            f"codelist {codelist!r} is not loaded. Pass ct_path=<CT yaml/csv> to load it."
+            f"codelist {codelist!r} is not loaded. Pass ct_path=<CT yaml/csv> to load it, "
+            "or run `fleet init ct` in the study."
         )
-    return validator.get_valid_values(codelist)
+    return sorted(terms)
 
 
 def fleet_tlg_catalog() -> list[dict[str, Any]]:
@@ -279,8 +341,9 @@ def fleet_tlg_run(
     Args:
         spec_path: Path to a ``template:``-carrying TLG spec YAML file.
         data_path: Primary analysis dataset file (e.g. ADAE for ``aet01``).
-        adsl_path: ADSL dataset file for population denominators
-            (tables only; defaults to *data_path* for ADSL templates).
+        adsl_path: ADSL dataset file for population denominators.  A table
+            that uses ADSL is refused without it, as ``fleet tlg run``
+            refuses it; an ADSL template uses *data_path*.
         groupby: Treatment-arm column (default: the spec's ``columns:``
             field when it declares one, else auto-detect
             TRTA → TRT01A → TRT01P).
@@ -289,6 +352,9 @@ def fleet_tlg_run(
 
     Returns:
         str: The rendered HTML table or listing.
+
+    Raises:
+        SchemaError: The table needs ADSL and *adsl_path* is not given.
     """
     from fleet.tlg import (
         GROUPBY_CANDIDATES,
@@ -301,6 +367,7 @@ def fleet_tlg_run(
         render_html,
         render_listing_html,
         resolve_groupby,
+        resolve_population,
         run_spec,
     )
 
@@ -310,9 +377,11 @@ def fleet_tlg_run(
     if adsl_groupby and not is_listing:
         spec = spec.model_copy(update={"adsl_group_col": adsl_groupby})
     df = _load_frame(data_path)
-    adsl = _load_frame(adsl_path) if adsl_path else None
-    if adsl is None and meta.domains and meta.domains[-1] == "ADSL":
-        adsl = df
+    given = _load_frame(adsl_path) if adsl_path else None
+    try:
+        adsl = resolve_population(meta, df, given)
+    except Exception as exc:  # SchemaError: the table needs ADSL
+        raise type(exc)(f"{exc} Pass adsl_path=<ADSL file>.") from None
     if not is_listing:
         groupby, source = resolve_groupby(spec, df.columns, groupby)
         if source == "none":
@@ -418,22 +487,51 @@ TOOLS = (
 )
 
 
+def _as_tool_error(fn: Callable[..., Any]) -> Callable[..., Any]:
+    """*fn*, with any exception raised as a ``ToolError`` that keeps its text.
+
+    mcp 2.x reports a plain exception as "Error executing tool <name>" and
+    drops the reason; a ``ToolError`` reaches the assistant as it is.
+    """
+
+    @functools.wraps(fn)
+    def tool(*args: Any, **kwargs: Any) -> Any:
+        try:
+            return fn(*args, **kwargs)
+        except ToolError:
+            raise
+        except Exception as exc:
+            raise ToolError(str(exc)) from exc
+
+    return tool
+
+
 def create_server() -> FastMCP:
     """Build the Fleet ``FastMCP`` server with every tool registered.
+
+    The handshake's ``serverInfo.version`` is Fleet's version, and a tool
+    error reaches the assistant with its reason.
 
     Returns:
         FastMCP: Server ready for ``.run(transport="stdio")``.
     """
-    server = FastMCP(
-        "fleet",
-        instructions=(
+    import fleet
+
+    options: dict[str, Any] = {
+        "instructions": (
             "Fleet CDISC toolkit: pipeline DAG queries, dataset validation, "
             "controlled-terminology lookups, TLG spec execution, and static "
             "conversion between inline programs and define.yaml derivations."
-        ),
-    )
+        )
+    }
+    if "version" in inspect.signature(FastMCP.__init__).parameters:
+        options["version"] = fleet.__version__
+    server = FastMCP("fleet", **options)
+    low_level = getattr(server, "_mcp_server", None)
+    if "version" not in options and hasattr(low_level, "version"):
+        low_level.version = fleet.__version__  # mcp 1.x: no constructor argument
     for fn in TOOLS:
-        server.tool()(fn)
+        server.tool()(_as_tool_error(fn))
     return server
 
 

@@ -15,7 +15,7 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-from fleet.core.exceptions import IOError as FleetIOError
+from fleet.core.exceptions import FleetIOError
 from fleet.io import load_raw_data, save_xpt
 
 pyreadstat = pytest.importorskip("pyreadstat")
@@ -114,6 +114,35 @@ def test_sas_date_and_time_formats_read_as_polars_temporals(tmp_path: Path) -> N
     out = load_raw_data(path).collect()
 
     assert out.row(0) == (dt.date(2014, 1, 2), dt.datetime(2014, 1, 2, 8, 30), dt.time(8, 30))
+
+
+def test_iso_8601_formats_read_as_polars_temporals(tmp_path: Path) -> None:
+    # c1-151: pyreadstat < 1.3.7 read E8601DA10. and E8601DT19. as raw SAS numbers.
+    adx = pl.from_repr("""
+    ┌────────────┬────────────┬─────────────────────┬──────────┬───────┐
+    │ ADT9       ┆ ASTDT      ┆ ADTM                ┆ ATM      ┆ DTHDT │
+    │ ---        ┆ ---        ┆ ---                 ┆ ---      ┆ ---   │
+    │ date       ┆ date       ┆ datetime[μs]        ┆ time     ┆ date  │
+    ╞════════════╪════════════╪═════════════════════╪══════════╪═══════╡
+    │ 2024-01-15 ┆ 2024-01-15 ┆ 2024-01-15 08:30:05 ┆ 08:30:05 ┆ null  │
+    └────────────┴────────────┴─────────────────────┴──────────┴───────┘
+    """)
+    path = _write_fixture(
+        adx,
+        tmp_path / "adx.xpt",
+        variable_format={
+            "ADT9": "DATE9.",
+            "ASTDT": "E8601DA10.",
+            "ADTM": "E8601DT19.",
+            "ATM": "TIME8.",
+            "DTHDT": "DATE9.",
+        },
+    )
+
+    out = load_raw_data(path).collect()
+
+    assert out.schema == adx.schema
+    assert out.row(0) == adx.row(0)
 
 
 def _latin1_xpt(tmp_path: Path) -> Path:

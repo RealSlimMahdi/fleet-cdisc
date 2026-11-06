@@ -21,6 +21,8 @@ import fleet  # noqa: F401 — registers namespaces and loads all verb classes
 from fleet.adam._mixins import SharedADaMVerbsMixin
 from fleet.sdtm._tdd_mixin import TrialDesignMixin
 from fleet.sdtm.namespace import SDTMNamespace
+from fleet.tlg import NAMESPACE_CLASSES
+from fleet.tlg.namespace import TLGNamespace
 
 #: Method name → allowed count of positional (positional-only or
 #: positional-or-keyword) parameters after ``self``.  Default is 1.
@@ -31,13 +33,6 @@ _POSITIONAL_ALLOWANCE: dict[str, int] = {
     # (name, frame) pairs — the pair IS the target; both positional-only.
     "pin": 2,
     "repin": 2,
-    # (dataset, path) — dataset selection plus optional output path.
-    "to_spec_yaml": 2,
-    # (path/spec, dataset-ish) legacy two-positional readers.
-    "from_spec": 2,
-    # Largest legacy deviation: 6 positional-or-keyword params, shipped shape.
-    # Candidate for keyword-only tightening in a future deprecation cycle.
-    "validate": 6,
     # (paramcd, param) — the PARAMCD/PARAM pair is the target of a TTE param.
     "param": 2,
     # TDD multi-target verbs: the target is a column pair, both positional.
@@ -48,8 +43,14 @@ _POSITIONAL_ALLOWANCE: dict[str, int] = {
 
 
 def _namespace_classes() -> list[type]:
-    """Every verb-bearing class: SDTM, TDD, and all ADaM (sub)namespaces."""
-    classes: set[type] = {SDTMNamespace, TrialDesignMixin, SharedADaMVerbsMixin}
+    """Every verb-bearing class: SDTM, TDD, all ADaM (sub)namespaces and TLG."""
+    classes: set[type] = {
+        SDTMNamespace,
+        TrialDesignMixin,
+        SharedADaMVerbsMixin,
+        TLGNamespace,
+        *NAMESPACE_CLASSES.values(),
+    }
     stack = [SharedADaMVerbsMixin]
     while stack:
         for sub in stack.pop().__subclasses__():
@@ -107,3 +108,58 @@ def test_keyword_only_after_target(qualname):
         f"if the shape is a deliberate decision — add it to _POSITIONAL_ALLOWANCE "
         f"with a reason."
     )
+
+
+_NAMESPACE_NAMES = {c.__name__ for c in _namespace_classes()}
+
+
+@pytest.mark.parametrize("qualname", sorted(_METHODS))
+def test_a_verb_returns_self_not_its_class(qualname):
+    """c1-335: a verb typed ``-> Self`` keeps a study subclass type in the chain."""
+    returns = _METHODS[qualname].__annotations__.get("return")
+    assert returns not in _NAMESPACE_NAMES, (
+        f"{qualname} is typed -> {returns}; type it -> Self, so a subclass keeps its type."
+    )
+
+
+# ------------------------------------------------------------------ #
+# The package root (c1-699)                                            #
+# ------------------------------------------------------------------ #
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "FleetError",
+        "DerivationError",
+        "SpecError",
+        "ValidationError",
+        "ComparisonError",
+        "PinError",
+        "PKNamespace",
+        "TTENamespace",
+    ],
+)
+def test_the_package_root_exports_the_name(name: str) -> None:
+    """``except fleet.DerivationError:`` works after a bare ``import fleet``."""
+    assert name in fleet.__all__
+    assert getattr(fleet, name) is not None
+
+
+def test_a_fleet_error_is_caught_through_the_package_root() -> None:
+    from fleet.core.exceptions import DerivationError
+
+    with pytest.raises(fleet.FleetError):
+        raise DerivationError("x")
+
+
+@pytest.mark.parametrize("standard", ["sdtm", "SDTM", "adam", "ADaM"])
+def test_spec_algorithms_takes_the_standard_in_any_case(standard: str) -> None:
+    from fleet.core.spec_registry import algorithm_names
+
+    assert fleet.spec_algorithms(standard) == algorithm_names(standard.lower())
+
+
+def test_spec_algorithms_names_the_valid_standards() -> None:
+    with pytest.raises(ValueError, match="'sdtm' or 'adam'"):
+        fleet.spec_algorithms("send")

@@ -41,13 +41,17 @@ def _is_file_path(value: str) -> bool:
     return "/" in value or value.endswith(".json")
 
 
-@lru_cache(maxsize=32)
 def _load_from_path(resolved: str) -> CriteriaFile:
-    """Load and validate a criteria JSON file (cached by resolved path)."""
+    """Load and validate a criteria JSON file; a custom file is read on every call."""
     path = Path(resolved)
     if not path.exists():
         raise FileNotFoundError(f"Criteria file not found: {path}")
-    raw = json.loads(path.read_text(encoding="utf-8"))
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as err:
+        raise ValueError(
+            f"{path}: not valid JSON (line {err.lineno}, column {err.colno})"
+        ) from None
     if isinstance(raw, dict) and "schema_version" not in raw:
         raise ValueError(
             f"{path} uses the grade-level criteria format of Fleet 0.2.0a1, which cannot "
@@ -70,8 +74,9 @@ def load_criteria(system: str | GradingSystem | Path) -> CriteriaFile:
         CriteriaFile: Validated criteria ready for the grading engine.
 
     Raises:
-        ValueError: If *system* is a string that does not match any
-            registered ``GradingSystem`` and is not a file path.
+        DerivationError: If *system* is a string that does not match any
+            registered ``GradingSystem`` and is not a file path.  It is a
+            ``ValueError`` too.
         FileNotFoundError: If the resolved JSON file does not exist.
 
     Examples:
@@ -91,8 +96,7 @@ def load_criteria(system: str | GradingSystem | Path) -> CriteriaFile:
         return _load_from_path(str(system.resolve()))
 
     if isinstance(system, GradingSystem):
-        path = _CRITERIA_DIR / _REGISTRY[system]
-        return _load_from_path(str(path.resolve()))
+        return _load_bundled(system)
 
     # Plain string — either a file path or a system name.
     if _is_file_path(system):
@@ -101,11 +105,20 @@ def load_criteria(system: str | GradingSystem | Path) -> CriteriaFile:
     try:
         gs = GradingSystem(system)
     except ValueError:
-        known = ", ".join(s.value for s in GradingSystem)
-        raise ValueError(f"Unknown grading system {system!r}. Available systems: {known}") from None
+        from fleet.core.exceptions import DerivationError
 
-    path = _CRITERIA_DIR / _REGISTRY[gs]
-    return _load_from_path(str(path.resolve()))
+        known = ", ".join(s.value for s in GradingSystem)
+        raise DerivationError(
+            f"Unknown grading system {system!r}. Available systems: {known}"
+        ) from None
+
+    return _load_bundled(gs)
+
+
+@lru_cache(maxsize=16)
+def _load_bundled(system: GradingSystem) -> CriteriaFile:
+    """Load a bundled criteria file once; the package data does not change."""
+    return _load_from_path(str((_CRITERIA_DIR / _REGISTRY[system]).resolve()))
 
 
 def list_systems() -> list[str]:

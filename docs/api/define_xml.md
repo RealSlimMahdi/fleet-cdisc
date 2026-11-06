@@ -5,10 +5,10 @@ Fleet generates and validates CDISC Define-XML 2.1 documents from `define.yaml` 
 ## DefineSpecGenerator
 
 ::: fleet.define_xml.DefineSpecGenerator
-options:
-show_root_heading: true
-heading_level: 3
-filters: ["!^_"]
+    options:
+        show_root_heading: true
+        heading_level: 3
+        filters: ["!^_"]
 
 ### Method definitions
 
@@ -89,7 +89,7 @@ derivation:
 ## DatasetChecker
 
 ::: fleet.define_xml.DatasetChecker
-options:
-show_root_heading: true
-heading_level: 3
-filters: ["!^_"]
+    options:
+        show_root_heading: true
+        heading_level: 3
+        filters: ["!^_"]

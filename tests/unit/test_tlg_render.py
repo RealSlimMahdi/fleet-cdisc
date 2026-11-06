@@ -449,7 +449,10 @@ class TestBuilderToHtml:
             .to_html(path=str(out))
         )
         assert out.exists()
-        assert out.read_text() == html
+        # c1-814: the file is a complete UTF-8 document around the fragment.
+        doc = out.read_text()
+        assert doc.startswith('<!DOCTYPE html>\n<html><head><meta charset="utf-8">')
+        assert html in doc
 
     def test_html_wrapper(self, adae: pl.DataFrame, adsl: pl.DataFrame) -> None:
         html = (

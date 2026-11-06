@@ -356,6 +356,29 @@ class TestCheck:
         assert "[WARN] rules engine" in out
         assert "0 failure(s)" in out
 
+    def test_a_missing_pinned_engine_warns_even_with_a_managed_engine(
+        self,
+        study: Path,
+        engine: FakeEngine,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture,
+    ) -> None:
+        """c1-543: the managed engine never stands in for a pinned one."""
+        (study / "bin" / "core").unlink()
+        managed = study / "managed"
+        (managed / "core").mkdir(parents=True)
+        (managed / "core" / "core").touch()
+        monkeypatch.setattr("fleet.validation.engine.ENGINE_DIR", managed)
+
+        assert _run(["check"]) == 0
+        out = capsys.readouterr().out
+        assert "[WARN] rules engine" in out
+        assert f"validation.engine_path names {study / 'bin' / 'core'}" in out
+
+        assert _run(["validate"]) == 2
+        assert "that file does not exist" in capsys.readouterr().err
+        assert engine.calls == []
+
 
 # ── Frozen real CORE 0.15.0 reports (c1-842) ────────────────────────────────
 #
@@ -558,3 +581,57 @@ class TestDefineXml:
 
         assert "nowhere.xml" in capsys.readouterr().err
         assert engine.calls == []
+
+
+class TestUnreadableFiles:
+    """c1-279: a file that cannot be read is "could not run"; the other datasets still run."""
+
+    def test_a_corrupt_file_does_not_stop_the_sweep(
+        self, study: Path, engine: FakeEngine, capsys: pytest.CaptureFixture
+    ) -> None:
+        (study / "data" / "sdtm" / "ae.parquet").write_bytes(b"PAR1 not parquet")
+
+        assert _run(["validate"]) == 2
+
+        assert engine.datasets[0] == ["DM.json", "VS.json"]
+        captured = capsys.readouterr()
+        assert "AE (" in captured.err and "could not run: cannot read the file" in captured.err
+        assert "Traceback" not in captured.err
+        assert "1 could not run" in captured.out
+
+    def test_a_report_that_cannot_be_written_exits_2(
+        self, study: Path, engine: FakeEngine, capsys: pytest.CaptureFixture
+    ) -> None:
+        blocker = study / "build"
+        blocker.write_text("a file where the folder should be", encoding="utf-8")
+
+        assert _run(["validate", "--report", str(blocker / "r.html")]) == 2
+
+        err = capsys.readouterr().err
+        assert "cannot write the HTML report" in err
+        assert "Traceback" not in err
+
+    def test_c1_280_the_label_limit_is_printed(
+        self, study: Path, engine: FakeEngine, capsys: pytest.CaptureFixture
+    ) -> None:
+        _run(["validate"])
+
+        assert "labels and the dataset label that CORE checks come from Fleet" in (
+            capsys.readouterr().out
+        )
+
+    def test_the_mcp_tool_names_a_corrupt_file(
+        self, study: Path, engine: FakeEngine, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        pytest.importorskip("mcp")
+        from fleet.mcp_server import fleet_validate
+
+        monkeypatch.setattr("fleet.mcp_server._TRUST_STUDY_ENGINE", True)
+
+        bad = study / "data" / "sdtm" / "ae.parquet"
+        bad.write_bytes(b"PAR1 not parquet")
+
+        result = fleet_validate(str(bad))
+
+        assert result["outcome"] == "could not run"
+        assert "cannot read the file" in json.dumps(result)

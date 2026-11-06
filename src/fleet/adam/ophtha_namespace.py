@@ -3,7 +3,7 @@ ADaM Ophthalmology namespace extension (admiralophtha-inspired).
 
 Accessed via ``df.adam.ophtha`` on any Polars DataFrame.
 
-Key derivations ported from pharmaverse/admiralophtha:
+Key derivations, inspired by pharmaverse/admiralophtha (not ports; values can differ):
   - ``etdrs_to_logmar``   — ETDRS score → LogMAR (Beck et al. formula)
   - ``logmar_to_etdrs``   — LogMAR → ETDRS (inverse)
   - ``study_eye``         — SC FOCID code (OS/OD/OU) → LEFT/RIGHT/BILATERAL
@@ -31,6 +31,7 @@ from typing import Self
 import polars as pl
 
 from fleet.adam._mixins import SharedADaMVerbsMixin
+from fleet.adam.utils import sas_round
 from fleet.core.exceptions import DerivationError
 
 
@@ -59,7 +60,8 @@ class OphthaNamespace(SharedADaMVerbsMixin):
         Args:
             target: Name of the output column.
             source: Column containing the ETDRS letter score.
-            round_digits: Decimal places to round to (default ``4``).
+            round_digits: Decimal places to round to (default ``4``), half
+                away from zero (SAS ``ROUND``, ADR-0025).
 
         Returns:
             Self: The namespace with *target* appended.
@@ -78,9 +80,7 @@ class OphthaNamespace(SharedADaMVerbsMixin):
             Ophthalmol. 2003;135(2):194-205. admiralophtha
             ``convert_etdrs_to_logmar`` (pharmaverse) applies the same formula.
         """
-        expr = -0.02 * pl.col(source) + 1.7
-        if round_digits is not None:
-            expr = expr.round(round_digits)
+        expr = sas_round(-0.02 * pl.col(source) + 1.7, round_digits)
         return self._chain(expr.alias(target))
 
     # ------------------------------------------------------------------ #
@@ -101,7 +101,8 @@ class OphthaNamespace(SharedADaMVerbsMixin):
         Args:
             target: Name of the output column.
             source: Column containing the LogMAR value.
-            round_digits: Decimal places to round to (default ``1``).
+            round_digits: Decimal places to round to (default ``1``), half
+                away from zero (SAS ``ROUND``, ADR-0025).
 
         Returns:
             Self: The namespace with *target* appended.
@@ -120,9 +121,7 @@ class OphthaNamespace(SharedADaMVerbsMixin):
             Ophthalmol. 2003;135(2):194-205. admiralophtha
             ``convert_logmar_to_etdrs`` (pharmaverse) applies the same formula.
         """
-        expr = (1.7 - pl.col(source)) / 0.02
-        if round_digits is not None:
-            expr = expr.round(round_digits)
+        expr = sas_round((1.7 - pl.col(source)) / 0.02, round_digits)
         return self._chain(expr.alias(target))
 
     # ------------------------------------------------------------------ #
@@ -137,7 +136,10 @@ class OphthaNamespace(SharedADaMVerbsMixin):
     ) -> Self:
         """Map SC FOCID laterality codes to study eye labels.
 
-        OS → LEFT, OD → RIGHT, OU → BILATERAL, other → null.
+        OS → LEFT, OD → RIGHT, OU → BILATERAL, other → null. The input is
+        the SC records with ``SCTESTCD == "FOCID"``: the verb recodes every
+        row, so filter SC first. Another SC test (ACOHORT) gives a null row,
+        and a merge of that into ADSL gives two rows per subject.
 
         Args:
             target: Name of the output column.
@@ -147,11 +149,17 @@ class OphthaNamespace(SharedADaMVerbsMixin):
             Self: The namespace with *target* appended.
 
         Examples:
-            Derive study eye from SC domain::
+            Derive study eye from the SC FOCID records and merge it into ADSL::
 
-                adbcva = (
-                    bcva_raw.adam.ophtha
+                se = (
+                    sc.filter(pl.col("SCTESTCD") == "FOCID")
+                    .adam.ophtha
                     .study_eye("STUDYEYE", source="SCSTRESC")
+                    .to_frame()
+                )
+                adsl = (
+                    adsl.adam
+                    .merge(se, on="USUBJID", keep=["STUDYEYE"], validate="m:1")
                     .to_frame()
                 )
 
@@ -285,7 +293,8 @@ class OphthaNamespace(SharedADaMVerbsMixin):
                 )
         """
         direction = direction.lower()
-        col = pl.col(value_col)
+        # NaN is a missing score, not one above every threshold.
+        col = pl.col(value_col).cast(pl.Float64).fill_nan(None)
         if direction == "ge":
             cond = col >= threshold
         elif direction == "gt":

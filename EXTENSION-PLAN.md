@@ -1,6 +1,6 @@
 # Extending Fleet — Company Extension Mechanism Plan
 
-> Status: **approved design, not yet implemented.**
+> Status: **approved design, not yet implemented** (rechecked 2026-11-05). Open; tracked in [issue #144](https://github.com/RealSlimMahdi/fleet-cdisc/issues/144) and the ideas tracker.
 > Model chosen: hybrid *discover via entry points, activate via config* (the MkDocs
 > model), with company verbs living at `df.adam.<code>.*` via a new dynamic
 > sub-namespace registry.

@@ -659,3 +659,52 @@ class TestAtoxgrVerb:
             .sort("USUBJID")
         )
         assert result["ATOXGRH"].to_list() == ["2", "1", "0"]
+
+
+# ---------------------------------------------------------------------------
+# Cut-offs on the boundary value (c1-841)
+# ---------------------------------------------------------------------------
+
+
+def _grade_alt(system: str, term: str, aval: list[float], **cols: object) -> list[str | None]:
+    n = len(aval)
+    frame = pl.DataFrame(
+        {"PARAMCD": [term] * n, "AVAL": aval, "ANRHI": [40.0] * n, "AVALU": ["U/L"] * n}
+    ).with_columns(pl.lit(v).alias(k) for k, v in cols.items())
+    result = frame.adam.atoxgr(
+        "G", system=system, direction="H", term_var="PARAMCD", unit_var="AVALU"
+    ).to_frame()
+    return result["G"].to_list()
+
+
+class TestCutOffBoundaries:
+    """Each grade edge, on the value and one unit past it. ULN (ANRHI) is 40 U/L."""
+
+    def test_ctcae_v5_alt_with_a_normal_baseline(self):
+        # CTCAE v5: G1 >ULN-3.0xULN, G2 >3.0-5.0xULN, G3 >5.0-20.0xULN, G4 >20.0xULN.
+        grades = _grade_alt(
+            "ctcae_v5",
+            "Alanine aminotransferase increased",
+            [40.0, 41.0, 120.0, 121.0, 200.0, 201.0, 800.0, 801.0],
+            BASE=35.0,
+            BNRIND="NORMAL",
+        )
+        assert grades == ["0", "1", "1", "2", "2", "3", "3", "4"]
+
+    def test_ctcae_v5_alt_with_a_high_baseline(self):
+        # Abnormal baseline 60: G1 1.5-3.0xBASE, G2 >3.0-5.0, G3 >5.0-20.0, G4 >20.0.
+        grades = _grade_alt(
+            "ctcae_v5",
+            "Alanine aminotransferase increased",
+            [89.0, 90.0, 180.0, 181.0, 300.0, 301.0, 1200.0, 1201.0],
+            BASE=60.0,
+            BNRIND="HIGH",
+        )
+        assert grades == ["0", "1", "1", "2", "2", "3", "3", "4"]
+
+    def test_daids_alt(self):
+        # DAIDS v2.1: G1 1.25 to <2.5xULN, G2 2.5 to <5.0, G3 5.0 to <10.0, G4 >=10.0.
+        grades = _grade_alt(
+            "daids", "ALT, High", [49.0, 50.0, 99.0, 100.0, 199.0, 200.0, 399.0, 400.0]
+        )
+        assert grades == ["0", "1", "1", "2", "2", "3", "3", "4"]

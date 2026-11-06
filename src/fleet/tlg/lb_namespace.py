@@ -11,12 +11,15 @@ from __future__ import annotations
 from typing import Any, ClassVar
 
 import polars as pl
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 
 from ._ard import (
     ard_row,
-    compute_big_n,
+    check_text_arm,
+    enum_arms,
+    listing_frame,
     prepare_frame,
+    resolve_arms,
     restrict_to_population,
     rows_to_ard,
     summarize_ard,
@@ -32,8 +35,8 @@ from ._specs import (
     Statistic,
     SummarySpecBase,
     TLGSpec,
+    _check_filter_field,
     change_from_baseline_prefilter,
-    check_listing_columns,
     resolve_filter,
 )
 
@@ -41,6 +44,13 @@ from ._specs import (
 #: on-treatment record that is not the baseline record.  ADaM codes both
 #: flags as Y / null, so the ABLFL test is null-safe.
 POST_BASELINE_PREFILTER = '(pl.col("ONTRTFL") == "Y") & pl.col("ABLFL").ne_missing("Y")'
+
+#: Default rule of the abnormalities listing: a range indicator that is
+#: not normal (``NORMAL``, ``N`` or blank, in any case).
+ABNORMAL_PREFILTER = (
+    'pl.col("ANRIND").is_not_null() & '
+    '~pl.col("ANRIND").str.to_uppercase().str.strip_chars().is_in(["NORMAL", "N", ""])'
+)
 
 _POST_BASELINE_HINT = (
     " The table counts post-baseline records only. When the dataset has no "
@@ -101,14 +111,27 @@ class LBSummarySpec(SummarySpecBase):
 class LBListingSpec(TLGSpec):
     """Spec for a laboratory abnormalities listing (LBL01).
 
-    Defaults select results with a non-normal range indicator
-    (``ANRIND``) and present subject, parameter, value, and toxicity
-    grade columns sorted for review.
+    The ``prefilter`` keeps results with a non-normal range indicator
+    (``ANRIND``); it applies after ``dataset_filter``, and ``None``
+    lists every record.  The default columns present subject,
+    parameter, value, and toxicity grade, sorted for review.  When the
+    dataset has no ``PARAM``, the default parameter column and sort key
+    is ``PARAMCD``.
     """
 
     _unconsumed_spec_fields: ClassVar[frozenset[str]] = frozenset({"adsl_filter", "header_rows"})
 
     output_type: str = "listing"
+    prefilter: Any | None = Field(
+        default=ABNORMAL_PREFILTER,
+        description=(
+            "The record rule of the listing, applied after "
+            "``dataset_filter``.  The default keeps a non-normal "
+            "``ANRIND``; ``null`` lists every record."
+        ),
+    )
+
+    _validate_prefilter = field_validator("prefilter")(_check_filter_field)
     columns: list[Column] = Field(
         default_factory=lambda: [
             Column(field="USUBJID", label="Subject"),
@@ -137,8 +160,9 @@ class LBChgSpec(LBSummarySpec):
 
     Prefilter rule: the baseline record (``ABLFL`` = Y) and records
     with no change value are dropped before summarising, so ``ABLFL``
-    is a required column.  Unless set, the prefilter follows
-    ``value_col``; ``prefilter=None`` switches the rule off.
+    and the ``value_col`` column are required.  Unless set, the
+    prefilter follows ``value_col``; ``prefilter=None`` switches the
+    rule off.
     """
 
     context: ClassVar[str] = "t_lb_chg"
@@ -148,7 +172,7 @@ class LBChgSpec(LBSummarySpec):
         description="Analysis-value column summarized (change from baseline).",
     )
     required_columns: list[str] = Field(
-        default_factory=lambda: ["USUBJID", "TRTA", "PARAMCD", "AVISIT", "CHG"],
+        default_factory=lambda: ["USUBJID", "TRTA", "PARAMCD", "AVISIT"],
     )
 
     @model_validator(mode="after")
@@ -208,14 +232,14 @@ class LBAbnormalSpec(SummarySpecBase):
     )
     low_values: list[str] = Field(
         default_factory=lambda: ["LOW", "LOW LOW"],
-        description="ANRIND values counted as the Low direction.",
+        description="ANRIND values counted as the Low direction (any case).",
     )
     high_values: list[str] = Field(
         default_factory=lambda: ["HIGH", "HIGH HIGH"],
-        description="ANRIND values counted as the High direction.",
+        description="ANRIND values counted as the High direction (any case).",
     )
     required_columns: list[str] = Field(
-        default_factory=lambda: ["USUBJID", "TRTA", "PARAMCD", "ANRIND"],
+        default_factory=lambda: ["USUBJID", "TRTA", "PARAMCD", "BNRIND", "ANRIND"],
     )
 
 
@@ -371,7 +395,7 @@ class LBTLGNamespace(BuilderVerbsMixin):
         denominator is subjects with both a baseline and a post-baseline
         result per parameter, which needs per-cell denominator support
         in the engine (next round) — a percentage against the arm big-N
-        would be wrong.
+        would be wrong, so a statistic other than n raises.
 
         Args:
             groupby: Treatment-arm column.
@@ -384,8 +408,8 @@ class LBTLGNamespace(BuilderVerbsMixin):
         Raises:
             SchemaError: If the spec carries ``rows`` or ``header_rows``
                 — the shift hierarchy is fixed and would silently ignore
-                them — or if a column of the post-baseline rule is
-                missing.
+                them —, a statistic other than ``n_subjects``, or if a
+                column of the post-baseline rule is missing.
 
         Examples:
             ADSL arm in TRT01A::
@@ -400,6 +424,13 @@ class LBTLGNamespace(BuilderVerbsMixin):
                 "shift cell) and it emits no header rows — 'rows' and "
                 "'header_rows' in the spec would be silently ignored, so they "
                 "are rejected. Use t_summary for a custom hierarchy."
+            )
+        other = [s.value for s in spec.statistics if s != Statistic.N_SUBJECTS]
+        if other:
+            raise SchemaError(
+                f"t_shift emits subject counts only; remove {other}. A "
+                "percentage of the arm big N would be wrong: the denominator "
+                "is the subjects with a baseline and a post-baseline result."
             )
         group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
         spec.validate_dataframe(self._df, group_col=group_col)
@@ -458,14 +489,16 @@ class LBTLGNamespace(BuilderVerbsMixin):
 
         Post-baseline means the spec's ``prefilter`` (default
         ``ONTRTFL`` = Y and not the ``ABLFL`` record).  The baseline
-        lookup reads the records before the prefilter.  Without a
-        ``BNRIND`` column no baseline exclusion is applied.
+        lookup reads the records before the prefilter, so ``BNRIND`` is
+        a required column.  To apply no baseline exclusion, add a null
+        ``BNRIND`` column.
 
         The directions read ``spec.low_values`` and ``spec.high_values``
-        (default ``LOW``/``LOW LOW`` and ``HIGH``/``HIGH HIGH``).  When
-        ANRIND holds other codes, such as ``H`` and ``L``, set them in
-        the spec; the table stops when no code of the data is in either
-        list.
+        (default ``LOW``/``LOW LOW`` and ``HIGH``/``HIGH HIGH``), in any
+        case.  When ANRIND holds other codes, such as ``H`` and ``L``,
+        set them in the spec; the table stops when no code of the data
+        is in either list.  An arm with no analysis record keeps its
+        column with N=0, as in ``t_summary``.
 
         Args:
             groupby: Treatment-arm column.
@@ -506,6 +539,13 @@ class LBTLGNamespace(BuilderVerbsMixin):
                 f"Group column '{group_col}' not found in the analysis dataset. "
                 f"Available: {sorted(source.columns)}"
             )
+        check_text_arm(source, group_col, "the analysis dataset")
+        adsl_col = spec.adsl_group_col or group_col
+        if adsl is not None and adsl_col in adsl.columns:
+            check_text_arm(adsl, adsl_col, "adsl")
+        categories = enum_arms(adsl, adsl_col) or enum_arms(source, group_col)
+        source = source.with_columns(pl.col(group_col).cast(pl.Utf8))
+        known_arms = set(source[group_col].drop_nulls().unique().to_list())
         # The baseline lookup needs the records the post-baseline rule drops.
         source = prepare_frame(source, spec.model_copy(update={"prefilter": None}))
         if adsl is not None:
@@ -521,25 +561,17 @@ class LBTLGNamespace(BuilderVerbsMixin):
         _check_anrind_codes(post, spec)
 
         context = spec.context
-        if adsl is not None:
-            adsl_col = spec.adsl_group_col or group_col
-            if adsl_col not in adsl.columns:
-                raise SchemaError(f"Group column '{adsl_col}' not found in adsl.")
-            big_n = compute_big_n(adsl, adsl_col, [], filter_expr=resolve_filter(spec.adsl_filter))
-            data_arms = set(post[group_col].drop_nulls().unique().to_list())
-            unknown = sorted(data_arms - set(big_n))
-            if unknown:
-                raise SchemaError(
-                    f"Arm(s) {unknown} in the analysis dataset have no denominator in ADSL."
-                )
-            arms = sorted(big_n)
-        else:
-            big_n = {}
-            arms = sorted(post[group_col].drop_nulls().unique().to_list())
-        if spec.column_order:
-            arms = [a for a in spec.column_order if a in arms] + [
-                a for a in arms if a not in spec.column_order
-            ]
+        arms, big_n = resolve_arms(
+            set(post[group_col].drop_nulls().unique().to_list()),
+            group_col,
+            adsl=adsl,
+            adsl_group_col=spec.adsl_group_col,
+            adsl_filter=spec.adsl_filter,
+            pools=[],
+            column_order=spec.column_order,
+            known_arms=known_arms,
+            categories=categories,
+        )
 
         fmt = spec.decimals or {}
         rows_out: list[dict[str, object]] = []
@@ -551,23 +583,21 @@ class LBTLGNamespace(BuilderVerbsMixin):
                 for arm in arms
             ]
 
-        directions = {"Low": spec.low_values, "High": spec.high_values}
-        has_baseline = "BNRIND" in source.columns
-        baseline = (
-            source.with_columns(pl.col("BNRIND").str.to_uppercase().alias("__bnrind"))
-            if has_baseline
-            else None
+        directions = {
+            "Low": [v.upper() for v in spec.low_values],
+            "High": [v.upper() for v in spec.high_values],
+        }
+        baseline = source.with_columns(
+            pl.col("BNRIND").cast(pl.Utf8).str.to_uppercase().alias("__bnrind")
         )
         for param in sorted(post["PARAMCD"].drop_nulls().unique().to_list()):
             p_post = post.filter(pl.col("PARAMCD") == param)
             for direction, levels in directions.items():
-                base_abnormal: set[str] = set()
-                if baseline is not None:
-                    base_abnormal = set(
-                        baseline.filter(
-                            (pl.col("PARAMCD") == param) & pl.col("__bnrind").is_in(levels)
-                        )["USUBJID"].to_list()
-                    )
+                base_abnormal = set(
+                    baseline.filter(
+                        (pl.col("PARAMCD") == param) & pl.col("__bnrind").is_in(levels)
+                    )["USUBJID"].to_list()
+                )
                 for arm in arms:
                     a_post = p_post.filter(pl.col(group_col) == arm)
                     eligible = set(a_post["USUBJID"].to_list()) - base_abnormal
@@ -635,8 +665,11 @@ class LBTLGNamespace(BuilderVerbsMixin):
     ) -> pl.DataFrame:
         """Produce a laboratory abnormalities listing DataFrame.
 
-        Selects rows with a non-normal range indicator (``ANRIND``) and
-        returns the requested columns, sorted per spec.
+        Applies ``dataset_filter``, then the spec's ``prefilter`` (by
+        default a non-normal range indicator, ``ANRIND``), sorts by
+        ``sort_by`` (a key need not be a displayed column), formats
+        each column with its ``Column.format`` and keeps the requested
+        columns.
 
         Args:
             spec: Optional ``LBListingSpec`` override.  If ``None``, the
@@ -645,6 +678,11 @@ class LBTLGNamespace(BuilderVerbsMixin):
         Returns:
             pl.DataFrame: A plain DataFrame with the requested columns,
                 sorted per spec.
+
+        Raises:
+            SchemaError: If a listing column or a sort key that the user
+                set is not in the dataset, or a format cannot print a
+                value.
 
         Examples:
             Default lab listing::
@@ -674,34 +712,10 @@ class LBTLGNamespace(BuilderVerbsMixin):
         dataset_filter = resolve_filter(spec.dataset_filter)
         if dataset_filter is not None:
             df = df.filter(dataset_filter)
-        elif "ANRIND" in df.columns:
-            # Default: abnormalities only (exclude normal / missing indicators).
-            df = df.filter(
-                pl.col("ANRIND").is_not_null()
-                & (~pl.col("ANRIND").str.to_uppercase().is_in(["NORMAL", "N", ""]))
-            )
-
-        # Select only requested columns (that exist)
-        available = set(df.columns)
-        check_listing_columns(spec, available)
-        select_cols = [c.field for c in spec.columns if c.field in available]
-        df = df.select(select_cols)
-
-        # Rename to labels
-        rename_map = {c.field: c.label for c in spec.columns if c.label and c.field in available}
-        if rename_map:
-            df = df.rename(rename_map)
-
-        # Sort
-        sort_cols = []
-        for s in spec.sort_by:
-            col_name = rename_map.get(s, s)
-            if col_name in df.columns:
-                sort_cols.append(col_name)
-        if sort_cols:
-            df = df.sort(sort_cols, maintain_order=True)
-
-        return df
+        prefilter = resolve_filter(spec.prefilter)
+        if prefilter is not None:
+            df = df.filter(prefilter)
+        return listing_frame(df, spec, fallback={"PARAM": "PARAMCD"})
 
     # ------------------------------------------------------------------ #
     # Pre-validation diagnostic                                            #

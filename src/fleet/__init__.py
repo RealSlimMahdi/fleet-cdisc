@@ -15,6 +15,9 @@ e.g. ``df.sdtm.verbs()``, for the always-current catalogue):
   - ``df.adam.vaccine``   — Vaccine (admiralvaccine)
   - ``df.adam.metabolic`` — Metabolic (admiralmetabolic)
   - ``df.adam.neuro``     — Neuroscience (admiralneuro)
+  - ``df.adam.pk``        — Pharmacokinetics (ADPC, ADPP, ADPPK)
+  - ``df.adam.tte``       — Time-to-event (ADTTE)
+  - ``df.tlg``            — Tables, listings and their ARDs (``df.tlg.ae``, …)
 
 The ``sdtm``, ``adam``, ``adsl``, and ``occds`` namespaces are also
 registered on ``pl.LazyFrame``, so ``pl.scan_parquet(...).sdtm`` chains
@@ -35,8 +38,7 @@ Usage
         vs_df.adam
         .source("USUBJID")
         .study_day("ADY", date_col="ADT")
-        .flag("ABLFL", criteria='pl.col("VISITNUM") == 1',
-              by=["USUBJID", "PARAMCD"])
+        .flag("ABLFL", criteria='pl.col("VISITNUM") == 1')
         .baseline("BASE", aval="AVAL", baseline_flag="ABLFL")
         .chg("CHG", aval="AVAL", base="BASE")
         .to_frame()
@@ -55,7 +57,6 @@ from . import (
 )
 from ._version import __version__
 from .adam import (
-    ADAMAlgorithm,
     AdamNamespace,
     ADSLNamespace,
     MetabolicNamespace,
@@ -64,6 +65,8 @@ from .adam import (
     OncoNamespace,
     OphthaNamespace,
     PedsNamespace,
+    PKNamespace,
+    TTENamespace,
     VaccineNamespace,
 )
 from .comparison import ComparisonReport, compare
@@ -75,9 +78,16 @@ from .core import (
     load_study_context,
     to_repr,
 )
+from .core.exceptions import (
+    ComparisonError,
+    DerivationError,
+    FleetError,
+    PinError,
+    SpecError,
+    ValidationError,
+)
 from .core.frames import DataFrame, LazyFrame, frame
-from .core.spec_registry import SPEC_UNSUPPORTED
-from .core.spec_registry import algorithm_names as spec_algorithms
+from .core.spec_registry import SPEC_UNSUPPORTED, spec_algorithms
 from .core.spec_registry import coverage_matrix as spec_coverage
 from .ct import CTValidator, get_validator, import_codelists, load_controlled_terminology
 
@@ -90,7 +100,7 @@ from .define_xml import (
 )
 from .io import load_datasets, load_raw_data, save_dataset_json, save_parquet
 from .run import BuiltDataset, ResolvedInput, Step, StudyPlan, plan_study, run_study
-from .sdtm import SDTMAlgorithm, SDTMNamespace, StudyDesign
+from .sdtm import SDTMNamespace, StudyDesign
 from .tlg import (
     AEListingSpec,
     AESummarySpec,
@@ -152,11 +162,9 @@ __all__ = [
     "save_parquet",
     "save_dataset_json",
     # SDTM
-    "SDTMAlgorithm",
     "SDTMNamespace",
     "StudyDesign",
     # ADaM core + sub-structures (accessed via df.adam, df.adam.adsl, df.adam.occds)
-    "ADAMAlgorithm",
     "AdamNamespace",
     "ADSLNamespace",
     "OCCDSNamespace",
@@ -167,6 +175,8 @@ __all__ = [
     "VaccineNamespace",
     "MetabolicNamespace",
     "NeuroNamespace",
+    "PKNamespace",
+    "TTENamespace",
     # TLG namespace (accessed via df.tlg, df.tlg.ae)
     "TLGNamespace",
     "AETLGNamespace",
@@ -191,4 +201,11 @@ __all__ = [
     "ComparisonReport",
     # Utilities
     "to_repr",
+    # Exceptions (fleet.core.exceptions)
+    "FleetError",
+    "DerivationError",
+    "SpecError",
+    "ValidationError",
+    "ComparisonError",
+    "PinError",
 ]

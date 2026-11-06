@@ -1,7 +1,7 @@
 <!--
 Runnable examples on this page are executed by tests/unit/test_docs_examples.py.
 A fenced python or yaml block is run unless the line immediately before its
-opening fence is the HTML comment "docs:no-run" (used for illustrative
+opening fence is the HTML comment "docs:no-run: <reason>" (used for illustrative
 fragments that reference files or study data not present in the test harness).
 -->
 
@@ -18,7 +18,7 @@ fragments that reference files or study data not present in the test harness).
 
 ## File Layout
 
-<!-- docs:no-run -->
+<!-- docs:no-run: a full spec with placeholder values -->
 
 ```yaml
 # yaml-language-server: $schema=../../../src/fleet/define_xml/schemas/define_spec_schema.json
@@ -101,8 +101,10 @@ strict in the other direction too: `source` and `value` exclude each other on
 a misspelled key is rejected.
 
 A spec written before ADR-0008 (`assign_ct`, `hardcode_no_ct`, `if_then_else`,
-`ct_codelist`, `else_value`, `groups`, …) fails at load with a message that
-names the fix: `fleet migrate --spec <define.yaml> --write` rewrites the file
+`ct_codelist`, `else_value`, `groups`, …) fails at load. An old algorithm
+name gets a message that names the fix. An old key on a current algorithm
+(`groups:` on `seq`) gets `Extra inputs are not permitted`. In both cases
+`fleet migrate --spec <define.yaml> --write` rewrites the file
 line by line and sets `fleet_spec_version: 2`.
 
 The complete, always-current list is one call away (and `df.sdtm.verbs()` /
@@ -131,6 +133,12 @@ inline_only = fleet.SPEC_UNSUPPORTED  # {"sdtm": {...}, "adam": {...}}
 print(len(matrix), "algorithms;", len(inline_only["adam"]), "adam verbs are inline-only")
 ```
 
+The answer covers the verbs of `df.sdtm` and `df.adam`. The verbs of the
+sub-namespaces (`df.adam.onco`, `df.adam.pk`, `df.adam.occds` and the
+others) are inline only in this release, except the dotted algorithms in
+`fleet.spec_algorithms("adam")` (`occds.treatment_emergent`). For another
+one, use `algorithm: derivation` with `callable:`.
+
 ### Study-specific callables (`callable:`)
 
 When no built-in verb fits, point `derivation:` at a registered derivation
@@ -150,7 +158,7 @@ on the callable's `kind`:
 - name: AGEGR1
   derivation:
     algorithm: derivation
-    callable: examples.cdiscpilot01.adam.derivations.AGEGR1
+    callable: programs.derivations.AGEGR1
 ```
 
 Or use the registered short name (if the derivations module was imported):
@@ -179,7 +187,10 @@ core registry and resolver. The resolver itself does no folder scanning: a
 callable is found either (a) by short name, when its module has been imported
 and the function is `@derivation`-registered, or (b) by fully qualified
 dotted path. Declare `derivations_module:` at the top of the spec and
-`from_spec()` imports it for you, so short names always resolve.
+`from_spec()` imports it for you, so short names always resolve. The module
+is study Python that runs: `from_spec()` and `fleet define-xml` print one
+line on stderr (`# fleet: importing study code derivations_module '...'`)
+when they import it.
 
 Both `algorithm:` and `callable:` plug into the Define-XML methods:
 `DefineSpecGenerator(spec)` (or `fleet define-xml`) emits one `<MethodDef>` per
@@ -200,10 +211,18 @@ identical across studies and unstable across Fleet versions. The
 (the verb the algorithm runs plus the spec params, or the callable's
 `dotted_path`), giving a verifiable link between the regulatory
 submission and the exact code that produced the data. The verb is named
-after the class that defines it, the way the run's lineage records it in
-`VariableNode.method`, so an ADaM `study_day` reads
-`fleet.core._verb_mixin.SharedVerbsMixin.duration('ADY', end='ASTDT', start='TRTSDT')`
-in the define and in the lineage of the dataset it documents.
+after the public namespace class it runs on, the way the run's lineage
+records it in `VariableNode.method`, so an ADaM `study_day` reads
+`fleet.adam.namespace.AdamNamespace.duration('ADY', end='ASTDT', start='TRTSDT')`
+in the define and in the lineage of the dataset it documents. The path is
+importable and does not change when Fleet moves a verb between its
+internal mixins.
+
+With no `comment:`, the template text of `case_when` reads each branch as
+"if <condition> then <value>", and an expression (`flag` criteria,
+`derivation` expression) stays verbatim. `fleet define-xml` warns for each
+variable whose method text holds a Polars expression: add a `comment:` in
+words for the reviewer.
 
 ### Example — TRTSDT (date of first dose)
 
@@ -260,7 +279,7 @@ print(adsl)  # TRTSDT = 2014-01-05 for S1 (earliest dosed date), 2014-02-01 for 
 
 The equivalent hand-written pipeline calls the same verb directly:
 
-<!-- docs:no-run -->
+<!-- docs:no-run: the same verb as the spec above, without its input frames -->
 
 ```python
 treated = (
@@ -279,7 +298,7 @@ A step that removes records has no variable, so it does not sit in
 (ADR-0034). Each step names the variable it follows with `after:` (`null`:
 before the first variable), and `from_spec()` runs it right after that
 variable. `whereclauses` keeps the records where `where:` is true; `nodup`
-keeps one record per `subset:` after the sort on `sort_by:`.
+keeps one record per `subset:` after the sort on `order_by:`.
 
 ```yaml
 datasets:
@@ -297,6 +316,10 @@ datasets:
 write (a `pl.Expr` filter, `derive_param`) is written as `algorithm: TODO`
 with the verb name: `from_spec()` refuses the file until you write the step.
 Define-XML shows the steps as the dataset comment.
+
+A variable block with `algorithm: whereclauses` or `group_by` still runs, but
+the variable name becomes an ItemDef that no dataset holds, so `from_spec()`
+and `fleet define-xml` warn: move the filter to `row_steps:`.
 
 ---
 
@@ -319,7 +342,7 @@ graph TD
 `from_spec` is the execution entry point. Pin any datasets the spec references
 by name, then build each dataset:
 
-<!-- docs:no-run -->
+<!-- docs:no-run: reads parquet files of a built study -->
 
 ```python
 import polars as pl
@@ -351,7 +374,7 @@ uv run fleet define-xml -s specs/define.yaml -o out.xml --strict
 
 The same generation from Python:
 
-<!-- docs:no-run -->
+<!-- docs:no-run: writes into outputs/ of a built study -->
 
 ```python
 from fleet import DefineSpecGenerator
@@ -366,8 +389,10 @@ the method text rule above); variables with `origin: Collected`,
 `Assigned`, `Protocol`, or `Predecessor` never reference a method. Generated
 documents are validated on the way out — against the vendored CDISC XSDs
 *and* a semantic lint (`fleet.define_xml.semantic_errors`) that rejects
-reviewer-facing defects such as a `MethodOID` on a non-Derived variable or
-API markup inside `TranslatedText`; `validate_xml=False` bypasses both.
+reviewer-facing defects such as API markup inside `TranslatedText`;
+`validate_xml=False` bypasses both. The lint accepts a `MethodOID` on a
+variable that is not Derived in a received define, because the CDISC
+Define-XML 2.1 examples use it.
 
 ### Define-XML gaps: warning or refusal
 
@@ -401,7 +426,10 @@ The spec keys below apply to every generation:
 
 - **`fleet_spec_version: 2`** — spec dialect version (checked on load; 2 is the verb vocabulary of ADR-0008, `fleet migrate --spec` rewrites a version 1 file).
 - **`derivations_module:`** — a dotted module that `from_spec` imports itself, so
-  `callable:` derivations register without a manual import.
+  `callable:` derivations register without a manual import. The dotted path is
+  relative to the study root (the folder of `study_config.yaml`), so
+  `derivations_module: programs.derivations` finds the package that
+  `fleet derivation add` writes, from any working directory.
 - **`output_format:`** — per-dataset or spec-level export format (`parquet`,
   `dataset-json`, `xpt`) recorded in the DAG and Define-XML leaf hrefs, and
   the format `fleet run` writes when no `--format` is given.
@@ -416,7 +444,18 @@ The spec keys below apply to every generation:
   qualifier`, which marks a Non-Standard Variable for `SUPP<domain>` (see
   *Supplemental qualifiers* below).
 - **`value_level:`** — value-level metadata entries emitted as Define-XML
-  `<ValueListDef>` / where-clause elements.
+  `<ValueListDef>` / where-clause elements. `where:` is one condition or a
+  list of conditions that all apply, each with an optional `comparator:`
+  (`EQ`, `NE`, `LT`, `LE`, `GT`, `GE`, `IN`, `NOTIN`; default `EQ` for one
+  value, `IN` for more). Two conditions that would get the same OID stop
+  the generation.
+- **`class:`, `subclass:`, `domain:`** — the dataset `def:Class`, its
+  `def:SubClass` (ADAE: `ADVERSE EVENT`), and the SDTM `Domain` of a split
+  dataset (QSPH: `QS`). An ADaM dataset has no `Domain`. A dataset with no
+  class warns; a class of the other model stops the generation.
+- **Leaf hrefs** — a Submission define that names a file other than `.xpt`
+  or `.json` warns once. `generate()` copies Fleet's `define2-1.xsl` next to
+  the XML when no file of that name is there; it never replaces a file.
 - **`ct: {validate: true, file: ...}`** — opt the spec into CT validation
   (see below).
 
@@ -451,7 +490,7 @@ A codelist whose `oid` is an NCI code (`C66731`) gets
 `def:StandardOID="STD.CT"` when `study.ct_version` is set; `standard_oid:`
 sets another declared standard (`STD.CT.ADAM` with `study.adam_ct_version`).
 
-<!-- docs:no-run -->
+<!-- docs:no-run: a fragment of a define.yaml -->
 
 ```yaml
 codelists:
@@ -478,7 +517,7 @@ A spec step and its inline call check the same terms. Inside a study, the
 absent, resolves to the class of that ID in the study's `codelists.py`, the
 module `fleet init ct` generates. So this entry:
 
-<!-- docs:no-run -->
+<!-- docs:no-run: a fragment of a define.yaml -->
 
 ```yaml
 - name: AESEV
@@ -495,9 +534,10 @@ notations:
 
 - The study is the first `study_config.yaml` above the folder of the
   `define.yaml`, never the working directory.
-- When the CT loaded in `fleet.get_validator()` holds the codelist (for
-  example through `ct: file:`, below), it checks the values in both
-  notations. A constant (`assign` with `value:`) is checked against the loaded CT only.
+- When the spec's `ct: file:` (below) or the CT loaded in
+  `fleet.get_validator()` holds the codelist, it checks the values in both
+  notations. A constant (`assign` with `value:`) is checked against the
+  same terms as a column: the loaded CT, then the study class.
 - Outside a study, before `fleet init ct`, or for an ID without a class,
   only the loaded CT can check the values.
 
@@ -551,12 +591,12 @@ without a check. Add a top-level `ct:` block to check every `assign` with a
 codelist, mapped ones included; out-of-codelist values emit a warning
 naming the dataset, variable, and codelist:
 
-<!-- docs:no-run -->
+<!-- docs:no-run: a fragment of a study_config.yaml -->
 
 ```yaml
 ct:
   validate: true
-  file: ct/cdisc_ct.yaml   # optional — loaded into the CT cache before the run
+  file: ct/cdisc_ct.yaml   # optional — loaded for this spec only, also without validate:
 datasets:
   - name: DM
     variables:
@@ -598,7 +638,7 @@ What it catches:
 Errors are wrapped in a `SpecError` that names **file → dataset → variable**.
 Here is the real message for a typo'd key (`ct_mp` instead of `ct_map`):
 
-<!-- docs:no-run -->
+<!-- docs:no-run: shows the error a typo gives -->
 
 ```python
 # derivation block with a typo:
@@ -679,9 +719,10 @@ src/fleet/define_xml/schemas/define_spec_schema.json
 This schema is **generated from the algorithm registry** — its `algorithm:`
 enum, per-algorithm required fields, and the `fleet_spec_version` /
 `derivations_module` properties are derived from the same declarations that
-drive execution, and a CI test fails if the checked-in schema drifts. So the
-editor red-squiggles you see match exactly what `from_spec()` will accept —
-including the `callable` escape hatch and every algorithm the engine can run.
+drive execution, and a CI test fails if the checked-in schema drifts. The
+schema checks keys, types and required fields. `from_spec()` also checks
+the exclusive groups (`source` or `value` on `assign`) and the codelist
+rule, so some errors appear only at run time.
 Regenerate it after registry changes with:
 
 ```bash
@@ -691,7 +732,7 @@ uv run python -m fleet.define_xml.schema_builder
 Add this comment to the top of every spec file to activate YAML language-server auto-complete in
 VS Code or any LSP-enabled editor:
 
-<!-- docs:no-run -->
+<!-- docs:no-run: an editor directive, not a spec -->
 
 ```yaml
 # yaml-language-server: $schema=../../../src/fleet/define_xml/schemas/define_spec_schema.json
@@ -720,7 +761,7 @@ ItemGroupDef and add a `SUPP<domain>` ItemGroupDef (ADR 0044):
 - IDVAR text `<domain>SEQ` (for DM: null), the rule of `fleet run`;
 - the leaf `supp<domain>` in the format of the parent.
 
-<!-- docs:no-run -->
+<!-- docs:no-run: a fragment of a define.yaml -->
 
 ```yaml
 - name: AE
@@ -766,7 +807,8 @@ the standard `define2-1.xsl` stylesheet renders them as clickable links.
 How the Origin **description** renders, per origin type:
 
 - **`Predecessor`** requires `predecessor: DATASET.VARIABLE` (schema-enforced);
-  the define renders `Predecessor: DM.COUNTRY`. In an ADaM spec, a variable
+  the define renders `Predecessor: DM.COUNTRY`. A condition may follow:
+  `predecessor: "DS.DSDECOD where DS.DSCAT='DISPOSITION EVENT'"`. In an ADaM spec, a variable
   carried with `algorithm: assign` and `source:` but still marked `Collected`
   triggers a generation-time warning suggesting the Predecessor form. When
   freezing an inline pipeline, `to_spec_yaml(dataset="ADSL", predecessor="DM")`
@@ -917,6 +959,20 @@ study:
 ```
 
 These emit `<def:SupplementalDoc>` and corresponding `<def:leaf>` elements.
+
+---
+
+## Trust: a study folder is code
+
+Treat a `define.yaml` or a `study_config.yaml` from another party as code,
+not as data. Read it before you run it.
+
+- `callable:` and `derivations_module:` import a Python module and run it.
+- `validation.engine_path` in `study_config.yaml` starts a program.
+- An `expression:` string is checked against an allow-list of Polars names
+  and methods. The allow-list stops mistakes. It is not a security boundary.
+
+To report a security problem, see `SECURITY.md` at the root of the repository.
 
 ---
 

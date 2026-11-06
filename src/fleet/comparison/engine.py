@@ -14,6 +14,7 @@ Pure Polars: no numpy, no pandas.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Iterable, Mapping, Sequence
 
 import polars as pl
@@ -38,9 +39,7 @@ from .report import (
     VariablesSummary,
     _empty,
     _key_label,
-    _normalise_flag,
     _normalise_max_print,
-    _normalise_tolerance,
 )
 
 # Internal column names.  Tests never see them; the listing never carries them.
@@ -49,6 +48,8 @@ _IN_BASE = "__fleet_compare_in_base"
 _IN_CANDIDATE = "__fleet_compare_in_candidate"
 _SUFFIX = "__fleet_compare_candidate"
 _NEQ = "__fleet_compare_neq_"
+_EXACT_NEQ = "__fleet_compare_exact_neq_"
+_AGG = "__fleet_compare_agg_"
 
 #: How many duplicated key values an error message lists per side.
 _MAX_REPORTED_DUPLICATES = 10
@@ -196,13 +197,14 @@ def compare(
     base_schema = base_lf.collect_schema()
     candidate_schema = candidate_lf.collect_schema()
     _check_keys_present(key_list, base_schema, candidate_schema)
+    restriction = _normalise_variables(variables, key_list, base_schema, candidate_schema)
     # The settings are both the record of the run and the rule the join
     # evaluates, so every option is checked as they are built.
     settings = ComparisonSettings(
         keys=tuple(key_list),
         by=tuple(by_list),
-        pairs=_normalise_pairs(pairs, key_list, base_schema),
-        variables=_normalise_variables(variables, key_list, base_schema, candidate_schema),
+        pairs=_normalise_pairs(pairs, key_list, base_schema, restriction),
+        variables=restriction,
         abs_tol=_normalise_tolerance(abs_tol, "abs_tol"),
         rel_tol=_normalise_tolerance(rel_tol, "rel_tol"),
         ignore_trailing_whitespace=_normalise_flag(
@@ -279,6 +281,7 @@ def compare(
             per_variable,
             observations_with_differences,
             per_group=_values_per_group(matched, by_list, compared),
+            within_tolerance=_within_tolerance(matched, compared),
         ),
         listing=listing,
         statistics=statistics,
@@ -345,13 +348,18 @@ def _as_names(value: object, argument: str) -> list[str]:
     raise VerbUsageError(f"{argument} must be a variable name or a sequence of variable names")
 
 
-def _normalise_pairs(pairs: object, keys: list[str], base: pl.Schema) -> dict[str, str]:
+def _normalise_pairs(
+    pairs: object, keys: list[str], base: pl.Schema, restriction: tuple[str, ...] | None
+) -> dict[str, str]:
     """The base names mapped to the candidate names carrying them, checked against the base.
 
     A pair is stated in the base's vocabulary, so its left-hand side must be
     a base variable that is compared; its right-hand side is checked against
     the candidate later, where an absent one reports the base variable as
-    missing rather than stopping the compare.
+    missing rather than stopping the compare.  A target that an unpaired base
+    variable (a key included) also matches by name is refused, because that
+    candidate variable would then answer for two base variables.  A swap
+    such as ``{"A": "B", "B": "A"}`` is legal: both sides are paired.
     """
     if pairs is None:
         return {}
@@ -376,7 +384,45 @@ def _normalise_pairs(pairs: object, keys: list[str], base: pl.Schema) -> dict[st
         raise ComparisonError(
             f"pairs maps more than one base variable to candidate variable(s): {', '.join(repeated)}"
         )
+    claimed = [
+        c
+        for b, c in pairs.items()
+        if c != b
+        and c in base
+        and c not in pairs
+        and (c in keys or restriction is None or c in restriction)
+    ]
+    if claimed:
+        raise ComparisonError(
+            f"pairs maps a base variable to candidate variable(s) {', '.join(claimed)}, "
+            "which the base variable(s) of the same name also match by name; "
+            "pair those base variable(s) too, or pick another target"
+        )
     return dict(pairs)
+
+
+def _normalise_tolerance(value: object, name: str) -> float:
+    """Check one tolerance argument and return it as a float.
+
+    A tolerance is a finite, non-negative number.  Zero on both means exact,
+    which is the default; ``True`` is not a tolerance, however numeric
+    Python considers it.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise VerbUsageError(f"{name} must be a non-negative number, got {type(value).__name__}")
+    tolerance = float(value)
+    if not math.isfinite(tolerance):
+        raise ComparisonError(f"{name} must be a finite number, got {value}")
+    if tolerance < 0:
+        raise ComparisonError(f"{name} must not be negative, got {value}")
+    return tolerance
+
+
+def _normalise_flag(value: object, name: str) -> bool:
+    """Check one switch argument and return it; only a real boolean passes."""
+    if not isinstance(value, bool):
+        raise VerbUsageError(f"{name} must be True or False, got {type(value).__name__}")
+    return value
 
 
 def _normalise_variables(
@@ -528,7 +574,7 @@ def _classify_variables(
         candidate_only=tuple(
             c
             for c in candidate
-            if c not in base and c not in paired and (restriction is None or c in restriction)
+            if c not in keys and c not in paired and (restriction is None or c in restriction)
         ),
         type_conflicts=tuple(conflicts),
         dtype_differences=tuple(dtype_differences),
@@ -598,11 +644,26 @@ def _join(
         nulls_equal=True,
     )
     unequal = [_unequal(c, compared_dtypes[c], settings) for c in compared]
-    return joined.with_columns(unequal).collect()
+    exact = [
+        _unequal(c, compared_dtypes[c], settings, exact=True).alias(_EXACT_NEQ + c)
+        for c in compared
+        if _loosened(compared_dtypes[c], settings)
+    ]
+    return joined.with_columns(unequal + exact).collect()
 
 
-def _unequal(variable: str, dtype: pl.DataType, settings: ComparisonSettings) -> pl.Expr:
-    """True where the base and candidate values differ under *settings*.
+def _loosened(dtype: pl.DataType, settings: ComparisonSettings) -> bool:
+    """True when *settings* widen equality for a variable of *dtype* beyond the exact rule."""
+    kind = _kind(dtype)
+    return (kind == "numeric" and settings.tolerant) or (
+        kind == "string" and settings.ignore_trailing_whitespace
+    )
+
+
+def _unequal(
+    variable: str, dtype: pl.DataType, settings: ComparisonSettings, *, exact: bool = False
+) -> pl.Expr:
+    """True where the base and candidate values differ under *settings*, or exactly with *exact*.
 
     Null equals null, NaN equals NaN, null against anything else (NaN
     included) differs.  The rule survives every equality mode because it is
@@ -613,7 +674,9 @@ def _unequal(variable: str, dtype: pl.DataType, settings: ComparisonSettings) ->
     base_value = pl.col(variable).cast(dtype)
     candidate_value = pl.col(variable + _SUFFIX).cast(dtype)
     kind = _kind(dtype)
-    if kind == "numeric" and settings.tolerant:
+    if exact:
+        unequal = base_value != candidate_value
+    elif kind == "numeric" and settings.tolerant:
         unequal = _outside_tolerance(base_value, candidate_value, settings)
     elif kind == "string" and settings.ignore_trailing_whitespace:
         unequal = _stripped(base_value) != _stripped(candidate_value)
@@ -729,12 +792,18 @@ def _observations_per_group(
     return (
         frame.group_by(by)
         .agg(
-            (in_base & in_candidate).sum().alias("matched"),
-            (in_base & ~in_candidate).sum().alias("base_only"),
-            (~in_base & in_candidate).sum().alias("candidate_only"),
+            (in_base & in_candidate).sum().alias(_AGG + "matched"),
+            (in_base & ~in_candidate).sum().alias(_AGG + "base_only"),
+            (~in_base & in_candidate).sum().alias(_AGG + "candidate_only"),
         )
         .sort(by)
-        .select(_group_label(by).alias("group"), pl.exclude(by).cast(pl.Int64))
+        .select(
+            _group_label(by).alias("group"),
+            *[
+                pl.col(_AGG + name).cast(pl.Int64).alias(name)
+                for name in ("matched", "base_only", "candidate_only")
+            ],
+        )
     )
 
 
@@ -767,6 +836,15 @@ def _values_summary(matched: pl.DataFrame, compared: list[str]) -> tuple[pl.Data
     return per_variable, int(with_differences or 0)
 
 
+def _within_tolerance(matched: pl.DataFrame, compared: list[str]) -> int:
+    """Matched values equal under the rule in effect but not exactly equal."""
+    loosened = [c for c in compared if _EXACT_NEQ + c in matched.columns]
+    if not loosened:
+        return 0
+    within = [(pl.col(_EXACT_NEQ + c) & ~pl.col(_NEQ + c)).sum() for c in loosened]
+    return int(matched.select(pl.sum_horizontal(within)).item() or 0)
+
+
 def _values_per_group(matched: pl.DataFrame, by: list[str], compared: list[str]) -> pl.DataFrame:
     """What differed within each BY group, over its matched observations, in group order.
 
@@ -783,7 +861,7 @@ def _values_per_group(matched: pl.DataFrame, by: list[str], compared: list[str])
         .agg(
             *[u.sum().alias(_NEQ + c) for u, c in zip(unequal, compared)],
             (pl.any_horizontal(unequal).sum() if compared else zero).alias(
-                "observations_with_differences"
+                _AGG + "observations_with_differences"
             ),
         )
         .sort(by)
@@ -793,7 +871,9 @@ def _values_per_group(matched: pl.DataFrame, by: list[str], compared: list[str])
         pl.sum_horizontal([u > 0 for u in unequal] or [zero])
         .cast(pl.Int64)
         .alias("variables_with_differences"),
-        pl.col("observations_with_differences").cast(pl.Int64),
+        pl.col(_AGG + "observations_with_differences")
+        .cast(pl.Int64)
+        .alias("observations_with_differences"),
         pl.sum_horizontal(unequal or [zero]).cast(pl.Int64).alias("differences"),
     )
 
@@ -858,6 +938,8 @@ def _as_string(expr: pl.Expr, dtype: pl.DataType) -> pl.Expr:
             .str.strip_suffix("}")
         )
         return pl.when(expr.is_null()).then(pl.lit(None, pl.String)).otherwise(encoded)
+    if isinstance(dtype, pl.Duration):
+        return expr.dt.to_string("iso")
     return expr.cast(pl.String, strict=False)
 
 

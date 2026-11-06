@@ -213,8 +213,32 @@ def _resolve_define_xml(define_xml: str | Path | None) -> Resolved[Path | None]:
     return Resolved(path, "argument")
 
 
-#: Dataset file types a sweep picks up from a directory.
-DATA_EXTENSIONS: tuple[str, ...] = (".parquet", ".csv", ".xpt", ".sas7bdat")
+#: Dataset file types a sweep picks up from a directory (any case).  A
+#: ``.json`` file counts only when it is Dataset-JSON (see :func:`is_dataset_json`).
+DATA_EXTENSIONS: tuple[str, ...] = (".parquet", ".csv", ".xpt", ".sas7bdat", ".json")
+
+#: Bytes read from the start of a ``.json`` file to see whether it is Dataset-JSON.
+_JSON_HEAD = 1 << 20
+
+
+def is_dataset_json(path: Path) -> bool:
+    """Whether *path* holds Dataset-JSON: its start names ``datasetJSONVersion`` and ``columns``.
+
+    A data folder can also hold other JSON files, such as an engine report
+    or ``pipeline_dag.json``; a sweep skips them.
+
+    Args:
+        path: A ``.json`` file.
+
+    Returns:
+        bool: ``True`` when both Dataset-JSON keys occur in the first MB.
+    """
+    try:
+        with path.open(encoding="utf-8", errors="replace") as fh:
+            head = fh.read(_JSON_HEAD)
+    except OSError:
+        return False
+    return '"datasetJSONVersion"' in head and '"columns"' in head
 
 
 @dataclass(frozen=True)
@@ -242,6 +266,8 @@ class Sweep:
     """The datasets of one ``fleet validate`` call, fixed before the engine starts."""
 
     datasets: tuple[SweepDataset, ...]
+    #: Files of a swept directory that are not datasets, so not validated.
+    skipped: tuple[Path, ...] = ()
 
     @property
     def could_not_run(self) -> list[SweepDataset]:
@@ -307,7 +333,7 @@ def build_sweep(
                 print(standard, [d.name for d in datasets])
     """
     config_path = config if config is not None else find_study_config(start)
-    files = _collect_files(paths or _data_dirs(config_path))
+    files, skipped = _collect_files(paths or _data_dirs(config_path))
 
     datasets: list[SweepDataset] = []
     seen: set[tuple[Standard, str]] = set()
@@ -329,18 +355,36 @@ def build_sweep(
             continue
         key = (setup.standard.value, path.stem.upper())
         if setup.engine.value is None:
-            reason = (
-                "Could not run: CDISC Rules Engine not found. Install it with "
-                "`fleet install-engine` or set validation.engine_path / FLEET_RULES_ENGINE."
-            )
-            datasets.append(SweepDataset(path, None, reason))
+            datasets.append(SweepDataset(path, None, missing_engine_reason(setup)))
         elif key in seen:
             reason = f"Could not run: another file in the sweep is already dataset {key[1]}."
             datasets.append(SweepDataset(path, None, reason))
         else:
             seen.add(key)
             datasets.append(SweepDataset(path, setup))
-    return Sweep(tuple(datasets))
+    return Sweep(tuple(datasets), tuple(skipped))
+
+
+def missing_engine_reason(setup: RunSetup) -> str:
+    """Why a run setup with no engine could not run; a missing pinned engine is named.
+
+    Args:
+        setup: A run setup whose ``engine.value`` is ``None``.
+
+    Returns:
+        str: ``"Could not run: ..."``.
+    """
+    if setup.engine.source == "study config" and setup.study_config is not None:
+        pinned = _load(setup.study_config).config.validation.engine_path
+        return (
+            f"Could not run: validation.engine_path in {setup.study_config} names the "
+            f"engine {pinned}, and that file does not exist. Fleet does not fall back to "
+            "another engine for a pinned study (ADR 0003)."
+        )
+    return (
+        "Could not run: CDISC Rules Engine not found. Install it with "
+        "`fleet install-engine` or set validation.engine_path / FLEET_RULES_ENGINE."
+    )
 
 
 def _data_dirs(config_path: Path | None) -> list[Path]:
@@ -350,7 +394,8 @@ def _data_dirs(config_path: Path | None) -> list[Path]:
             "Pass files or directories, or run inside a study workspace."
         )
     ctx = _load(config_path)
-    dirs = [d for d in (ctx.sdtm_data_dir, ctx.adam_data_dir) if d.is_dir()]
+    # A data folder both standards share is swept once.
+    dirs = list(dict.fromkeys(d for d in (ctx.sdtm_data_dir, ctx.adam_data_dir) if d.is_dir()))
     if not dirs:
         raise _refuse(
             f"no data directories found under {ctx.study_root} "
@@ -360,20 +405,29 @@ def _data_dirs(config_path: Path | None) -> list[Path]:
     return dirs
 
 
-def _collect_files(paths: Sequence[str | Path]) -> list[Path]:
+def _collect_files(paths: Sequence[str | Path]) -> tuple[list[Path], list[Path]]:
+    """The dataset files *paths* name, and the other files of each swept directory."""
     files: list[Path] = []
+    skipped: list[Path] = []
     for raw in paths:
         p = Path(raw)
         if p.is_dir():
-            for ext in DATA_EXTENSIONS:
-                files.extend(sorted(p.glob(f"*{ext}")))
+            for f in sorted(p.iterdir()):
+                if not f.is_file() or f.name.startswith("."):
+                    continue
+                suffix = f.suffix.lower()
+                if suffix in DATA_EXTENSIONS and (suffix != ".json" or is_dataset_json(f)):
+                    files.append(f)
+                else:
+                    skipped.append(f)
         elif p.is_file():
             files.append(p)
         else:
             raise _refuse(f"path not found: {p}")
     if not files:
-        raise _refuse(f"no dataset files found. Pass {', '.join(DATA_EXTENSIONS)} files.")
-    return files
+        named = f" Skipped: {', '.join(p.name for p in skipped)}." if skipped else ""
+        raise _refuse(f"no dataset files found. Pass {', '.join(DATA_EXTENSIONS)} files.{named}")
+    return files, skipped
 
 
 def _refuse(reason: str) -> ValidationSetupError:
@@ -410,9 +464,18 @@ def _resolve_standard(
         claims.append(Resolved(namespace, "namespace"))
     if path is not None and ctx is not None:
         where = path.resolve()
-        for std, data_dir in (("sdtm", ctx.sdtm_data_dir), ("adam", ctx.adam_data_dir)):
-            if where.is_relative_to(data_dir):
-                claims.append(Resolved(std, "data directory"))
+        # Only the deepest data directory that holds the file names its standard;
+        # one folder that both standards share names none.
+        holding = [
+            (std, data_dir)
+            for std, data_dir in (("sdtm", ctx.sdtm_data_dir), ("adam", ctx.adam_data_dir))
+            if where.is_relative_to(data_dir)
+        ]
+        if len(holding) == 2 and holding[0][1] == holding[1][1]:
+            holding = []
+        if holding:
+            std, _ = max(holding, key=lambda pair: len(pair[1].parts))
+            claims.append(Resolved(std, "data directory"))
     dataset = path.stem if path is not None else name
     if dataset:
         claims.append(Resolved(_standard_of_name(dataset), "dataset name"))
@@ -440,16 +503,38 @@ def _resolve_ig_version(
         raw, source = declared, "study config"
     else:
         raw, source = DEFAULT_IG_VERSIONS[standard], "default"
+    return Resolved(check_ig_version(standard, raw, source), source)
 
-    dotted = str(raw).strip().replace("-", ".")
+
+def check_ig_version(standard: Standard, version: str, source: Source = "argument") -> str:
+    """Return *version* dotted, or refuse an IG version Fleet does not support.
+
+    Args:
+        standard: ``"sdtm"`` or ``"adam"``.
+        version: IG version, ``"3.4"`` or ``"3-4"``.
+        source: Where the version came from, for the message.
+
+    Returns:
+        str: The dotted version (``"3.4"``).
+
+    Raises:
+        ValidationSetupError: The version is not in :data:`SUPPORTED_IG_VERSIONS`.
+
+    Examples:
+        ``check_ig_version("sdtm", "3-4")`` gives ``"3.4"``;
+        ``check_ig_version("sdtm", "3.1.3")`` raises.
+    """
+    dotted = str(version).strip().replace("-", ".")
+    if standard not in SUPPORTED_IG_VERSIONS:
+        raise _refuse(f"unknown standard {standard!r}. Choose 'sdtm' or 'adam'.")
     supported = SUPPORTED_IG_VERSIONS[standard]
     if dotted not in supported:
         label = _IG_LABELS[standard]
         raise _refuse(
-            f"{label} {raw} (from the {source}) is not supported. "
+            f"{label} {version} (from the {source}) is not supported. "
             f"Supported {label} versions: {', '.join(supported)}."
         )
-    return Resolved(dotted, source)
+    return dotted
 
 
 def _resolve_custom_rules(
@@ -483,7 +568,11 @@ def _resolve_engine(
 ) -> Resolved[Path | None]:
     if engine is not None:
         return Resolved(Path(engine).resolve(), "argument")
-    found = find_engine(ctx.engine_file if ctx is not None else None, environ)
+    pinned = ctx.engine_file if ctx is not None else None
+    if pinned is not None and not pinned.is_file():
+        # One pinned rule build per study (ADR 0003): no fallback to another engine.
+        return Resolved(None, "study config")
+    found = find_engine(pinned, environ)
     if found is None:
         return Resolved(None, "default")
     return Resolved(found[0], found[1])

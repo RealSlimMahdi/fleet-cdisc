@@ -11,6 +11,7 @@ flag values, pool arm existence).
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable
 from enum import Enum
 from typing import Any, ClassVar, Literal, Self
@@ -97,6 +98,67 @@ class Statistic(str, Enum):  # noqa: UP042
     Q3 = "q3"
 
 
+#: ARD ``stat_name`` values that a ``decimals`` key may name.
+DECIMALS_KEYS: tuple[str, ...] = (
+    "N",
+    "n",
+    "n_events",
+    "pct",
+    "mean",
+    "sd",
+    "median",
+    "min",
+    "max",
+    "q1",
+    "q3",
+)
+
+#: Statistic names a user may write for an ARD stat name.
+_DECIMALS_ALIASES = {"n_subjects": "n", "n_pct": "pct"}
+
+
+def check_decimals(value: dict[str, str] | None) -> dict[str, str] | None:
+    """Validate a ``decimals`` map: ARD stat names to ``xx.x`` patterns.
+
+    A key that is not an ARD stat name, or a pattern that is not
+    ``x+(.x+)?%?``, would change nothing or print the full precision
+    without a sign, so it raises.
+
+    Args:
+        value: The map, or ``None``.
+
+    Returns:
+        dict[str, str] | None: *value* unchanged.
+
+    Raises:
+        ValueError: On an unknown key or a bad pattern.
+
+    Examples:
+        ``check_decimals({"mean": "xx.xx"}) == {"mean": "xx.xx"}``
+    """
+    if value is None:
+        return value
+    for key, pattern in value.items():
+        if key not in DECIMALS_KEYS:
+            hint = (
+                f"use '{_DECIMALS_ALIASES[key]}'"
+                if key in _DECIMALS_ALIASES
+                else f"use '{key.lower()}'"
+                if key.lower() in DECIMALS_KEYS
+                else "check the name"
+            )
+            raise ValueError(
+                f"decimals key '{key}' is not an ARD stat name; {hint}. "
+                f"Valid: {', '.join(DECIMALS_KEYS)}."
+            )
+        if not isinstance(pattern, str) or not re.fullmatch(r"x+(\.x+)?%?", pattern):
+            raise ValueError(
+                f"decimals['{key}'] = {pattern!r} is not a format pattern. "
+                "Use x for each digit: 'xx' (integer), 'xx.x' (1 decimal), 'xx.xx'."
+            )
+    return value
+
+
 class Row(BaseModel):
     """A row-level field mapping for a summary table.
 
@@ -110,11 +172,25 @@ class Row(BaseModel):
     )
     label: str | None = Field(
         default=None,
-        description="Display label for this row group.  Defaults to *field*.",
+        description=(
+            "Display label for this row group (the ARD ``variable_label``).  "
+            "With no label, the row group has no heading."
+        ),
     )
     filter_value: str | None = Field(
         default=None,
         description="Optional value used to subset the row to a single category.",
+    )
+    order_by: str | None = Field(
+        default=None,
+        description=(
+            "Numeric column that orders the levels of *field* (e.g. "
+            "``AVISITN`` for ``AVISIT``): each level sorts on the minimum "
+            "of the column within its parent, nulls last, ties by text.  "
+            "``None`` takes ``<field>N`` when the dataset has it (ADaMIG: "
+            "AVISITN is the sort key of AVISIT), else the text order.  "
+            "PARAMCD has no default: set ``order_by='PARAMN'`` (ADR-0049)."
+        ),
     )
     decimals: dict[str, str] | None = Field(
         default=None,
@@ -129,6 +205,11 @@ class Row(BaseModel):
 
     model_config = {"extra": "forbid"}
 
+    @field_validator("decimals")
+    @classmethod
+    def _check_decimals(cls, value: dict[str, str] | None) -> dict[str, str] | None:
+        return check_decimals(value)
+
 
 class Column(BaseModel):
     """A column specification for a listing.
@@ -142,11 +223,16 @@ class Column(BaseModel):
     )
     label: str | None = Field(
         default=None,
-        description="Display label for this column.  Defaults to *field*.",
+        description="Display label for this column.",
     )
     format: str | None = Field(
         default=None,
-        description="Optional Polars/Python format string applied at render time.",
+        description=(
+            "Display format applied when the listing is built: a Python "
+            "format string for a number (e.g. ``'{:.2f}'``), a strftime "
+            "pattern for a date (e.g. ``'%d%b%Y'``).  A null or NaN prints "
+            "empty; a format that cannot print a value raises."
+        ),
     )
 
     model_config = {"extra": "forbid"}
@@ -423,6 +509,14 @@ class InteractiveBlock(BaseModel):
                 raise ValueError(
                     f"interactive.stats: options {missing} must declare a 'statistics' list."
                 )
+        for axis in ("population", "dataset_filter", "stats"):
+            labels = [o.label for o in getattr(self, axis) or []]
+            twice = sorted({lab for lab in labels if labels.count(lab) > 1})
+            if twice:
+                raise ValueError(
+                    f"interactive.{axis}: option label {twice[0]!r} is used twice; "
+                    "the explorer could not tell the options apart."
+                )
         return self
 
 
@@ -528,6 +622,41 @@ class TLGSpec(BaseModel):
         "dataset_filter": "dataset_filter",
         "stats": "statistics",
     }
+
+    @model_validator(mode="after")
+    def _check_unconsumed_fields(self) -> TLGSpec:
+        """Reject a value in a field that the template does not use.
+
+        The builder refuses such a field, so a YAML spec must refuse it
+        too.  The value is compared with the class default, because
+        ``to_yaml`` writes every field.
+        """
+        fields = type(self).model_fields
+        for name in sorted(self._unconsumed_spec_fields):
+            if name in fields and not self.uses_default(name):
+                raise ValueError(
+                    f"{self.template or type(self).__name__} does not use {name}; "
+                    f"the value would be silently ignored. Remove {name}."
+                    + (
+                        " Filter the listing frame with dataset_filter."
+                        if name == "adsl_filter"
+                        else ""
+                    )
+                )
+        return self
+
+    @field_validator("header_rows")
+    @classmethod
+    def _unique_header_labels(cls, value: list[OverallStat]) -> list[OverallStat]:
+        """Reject two header rows with one label: the table would show one."""
+        labels = [h.label for h in value]
+        twice = sorted({lab for lab in labels if labels.count(lab) > 1})
+        if twice:
+            raise ValueError(
+                f"header_rows: label {twice[0]!r} is used twice; the table would "
+                "show the counts of the last row only. Give each row its own label."
+            )
+        return value
 
     @model_validator(mode="after")
     def _check_interactive_applies(self) -> TLGSpec:
@@ -764,6 +893,20 @@ class TLGSpec(BaseModel):
                     f"WARNING: filter column {', '.join(blank)} is null or blank on "
                     f"every record (row '{hdr.label}'); the row counts 0."
                 )
+        listing_cols = getattr(self, "columns", None)
+        if listing_cols and isinstance(listing_cols[0], Column):
+            absent = [c.field for c in listing_cols if c.field not in available]
+            if absent:
+                effect = (
+                    "they are left out" if self.uses_default("columns") else "the listing stops"
+                )
+                diagnostics.append(f"MISSING LISTING COLUMNS: {absent} not present; {effect}.")
+            labels = {c.label for c in listing_cols if c.label}
+            keys = [s for s in getattr(self, "sort_by", []) if s not in available | labels]
+            if keys and not self.uses_default("sort_by"):
+                diagnostics.append(
+                    f"MISSING SORT KEYS: sort_by {keys} not present; the listing stops."
+                )
         return diagnostics
 
     def to_yaml(self) -> str:
@@ -956,9 +1099,15 @@ class SummarySpecBase(TLGSpec):
             '``"mean"``, ``"sd"``, ``"pct"``) to format string (e.g. '
             '``"xx.xx"``).  Overrides the built-in defaults for this '
             "table; individual rows may override again via "
-            ":attr:`Row.decimals`."
+            ":attr:`Row.decimals`.  A key that is not an ARD stat name "
+            "or a pattern that is not ``xx.x`` raises."
         ),
     )
+
+    @field_validator("decimals")
+    @classmethod
+    def _check_decimals(cls, value: dict[str, str] | None) -> dict[str, str] | None:
+        return check_decimals(value)
 
     def prefilter_columns(self) -> list[str]:
         """Return the columns the spec's prefilter names.

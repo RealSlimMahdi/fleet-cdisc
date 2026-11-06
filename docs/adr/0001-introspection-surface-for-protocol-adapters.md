@@ -4,6 +4,8 @@ The language server reached directly into `fleet.core.spec_registry`, `fleet.cor
 
 So `fleet.introspect` is the single contract: `algorithms`, `get_algorithm`, `suggest_algorithm`, `algorithm_doc`, `define_schema`, returning purpose-built frozen dataclasses (`AlgorithmInfo`, `ParamInfo`, `AlgorithmDoc`) rather than `SpecAlgorithm` itself, whose `dispatch` callable, `overwrite_guard` and `define_template` are execution internals that must stay free to change.
 
+Later additions: `load_spec_yaml` and the `Standard` type. Since ADR-0008 an algorithm is the verb name, with no aliases.
+
 ## Consequences
 
 - **Additive-only within a major version**, tracked by `fleet.__version__` alone — no separate surface version. Names, return fields and algorithms may be added; nothing is removed or renamed except on a major. A client therefore declares a *minimum* Fleet version and never a maximum.

@@ -24,12 +24,18 @@ Fleet is pre-alpha. Only pre-release versions are on PyPI, so tell the installer
 
 ### Optional extras
 
-| Extra  | Installs         | When to use                    |
-| ------ | ---------------- | ------------------------------ |
-| `io`   | `pyreadstat`     | Reading SAS XPT (`.xpt`) files |
-| `all`  | All extras       | Full feature set               |
-| `docs` | MkDocs + plugins | Building this documentation    |
-| `dev`  | pytest, ruff, io | Contributing to Fleet          |
+| Extra      | Installs         | When to use                                |
+| ---------- | ---------------- | ------------------------------------------ |
+| `io`       | `pyreadstat`     | Reading SAS files (`.xpt`, `.sas7bdat`) and writing XPT |
+| `tlg-pdf`  | `weasyprint`     | TLG PDF export                             |
+| `tlg-pptx` | `python-pptx`    | TLG PowerPoint export                      |
+| `migrate`  | `libcst`         | `fleet migrate` (old spellings to new)     |
+| `watch`    | `watchfiles`     | `--watch` on `fleet define-xml` and `tlg`  |
+| `lsp`      | `pygls`          | `fleet lsp --stdio` language server        |
+| `mcp`      | `mcp`            | `fleet mcp --stdio` MCP server             |
+| `all`      | All extras above | Full feature set                           |
+| `docs`     | MkDocs + plugins | Building this documentation                |
+| `dev`      | pytest, ruff, io | Contributing to Fleet                      |
 
 ```bash
 # SAS XPT support
@@ -110,7 +116,7 @@ advs = (
     .assign("AVAL", source="VSSTRESN")
     .date("ADT", source="VSDTC")
     .study_day("ADY", date_col="ADT", ref_col="TRTSDT")
-    .flag("ABLFL", criteria='pl.col("VISITNUM") == 1', by=["USUBJID", "PARAMCD"])
+    .flag("ABLFL", criteria='pl.col("VISITNUM") == 1')
     .baseline("BASE", aval="AVAL", baseline_flag="ABLFL", by=["USUBJID", "PARAMCD"])
     .chg("CHG", aval="AVAL", base="BASE")
     .pchg("PCHG", aval="AVAL", base="BASE")
@@ -185,6 +191,6 @@ DefineSpecGenerator("examples/cdiscpilot01/adam/define.yaml").generate(
 ## Next steps
 
 - [Quickstart](quickstart.md)
-- [Full ADSL pipeline example (notebook)](../examples/02_spec_driven_pipeline.ipynb)
+- [Full pipeline walkthrough](../examples/full_pipeline.md)
 - [define.yaml concept guide](../concepts/define-yaml.md)
 - [API reference](../api/index.md)

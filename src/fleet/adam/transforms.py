@@ -4,7 +4,7 @@ Transform registry for custom ADaM derivations.
 Statistical programmers register named transforms so that:
 
 1. **Inline pipelines** can reference them by name or pass them directly.
-2. **YAML specs** can invoke them via ``algorithm: transform`` / ``callable: "<name>"``.
+2. **YAML specs** can invoke them via ``algorithm: derivation`` / ``callable: "<name>"``.
 
 Usage
 -----
@@ -17,8 +17,8 @@ Register with the decorator::
         \"\"\"Classify AGE into age group bands.\"\"\"
         return df.with_columns(
             pl.when(pl.col("AGE") < 65).then(pl.lit("<65"))
-              .otherwise(pl.lit(">=65"))
-              .alias("AGEGR1")
+              .when(pl.col("AGE") >= 65).then(pl.lit(">=65"))
+              .alias("AGEGR1")  # a missing AGE stays missing
         )
 
 Or register imperatively::
@@ -39,7 +39,7 @@ Or in a YAML spec::
     - name: AGEGR1
       label: Pooled Age Group 1
       derivation:
-        algorithm: transform
+        algorithm: derivation
         callable: derive_agegr1
 
 Contract
@@ -88,30 +88,28 @@ def register_transform(
 
 
 def register_transform(name, fn=None):
-    """
-    Register a named transform function.
+    """Register a named transform function, as a decorator or imperatively.
 
-    Can be used as a **decorator** or called **imperatively**::
+    Args:
+        name: Registry key.  Referenced in YAML specs via
+            ``callable: "<name>"``.
+        fn: The transform function.  Omit when using as a decorator.
 
-        # Decorator form
-        @register_transform("derive_agegr1")
-        def derive_agegr1(df):
-            ...
+    Returns:
+        The original function (unmodified), so it remains usable outside
+        the registry; the decorator when *fn* is omitted.
 
-        # Imperative form
-        register_transform("derive_agegr1", derive_agegr1)
+    Raises:
+        VerbUsageError: When *fn* is not callable.
 
-    Parameters
-    ----------
-    name : str
-        Registry key.  Referenced in YAML specs via ``callable: "<name>"``.
-    fn : callable, optional
-        The transform function.  Omit when using as a decorator.
+    Examples:
+        Decorator form and imperative form::
 
-    Returns
-    -------
-    The original function (unmodified), so it remains usable outside the
-    registry.
+            @register_transform("derive_agegr1")
+            def derive_agegr1(df):
+                ...
+
+            register_transform("derive_agegr1", derive_agegr1)
     """
     if fn is not None:
         # Imperative form: register_transform("name", fn)
@@ -151,13 +149,21 @@ def _warn_on_duplicate(name: str, fn: Callable | Any) -> None:
 
 
 def get_transform(name: str) -> Callable[[pl.DataFrame], pl.DataFrame]:
-    """
-    Retrieve a registered transform by name.
+    """Retrieve a registered transform by name.
 
-    Raises
-    ------
-    KeyError
-        If *name* has not been registered.
+    Args:
+        name: The registry key.
+
+    Returns:
+        The registered transform function.
+
+    Raises:
+        KeyError: If *name* has not been registered.
+
+    Examples:
+        Look up a study transform::
+
+            fn = get_transform("derive_agegr1")
     """
     try:
         return _TRANSFORMS[name]

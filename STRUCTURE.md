@@ -59,7 +59,7 @@ import fleet  # registers df.sdtm, df.adam (+ .adsl/.occds/…), df.tlg everywhe
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `_verb_mixin.py`        | `SharedVerbsMixin` — the canonical cross-namespace verbs (`assign`, `case_when`, `merge`, `keep`, `source`, `derivation`, `duration`, `study_day`, `seq`, `select`, `nodup`, `validate`, `verbs`), plus `to_frame`/`from_spec`/`to_spec_yaml`, `_chain()`, and column-typo did-you-mean errors |
 | `_flag_mixin.py`        | `FlagCriterionMixin` — the `flag` family (`flag`, `flag_first`, `flag_last`, `flag_extreme`, `flag_exists`, `flag_relative`) shared across SDTM and ADaM; validates params per criteria mode                                    |
-| `spec_registry.py`      | **Single source of truth for spec-executable algorithms** — `@spec_algorithm` declarations drive the `from_spec` executor, discriminated-union Pydantic models (`extra=forbid`), the JSON schema, and the `coverage_matrix()` / `SPEC_UNSUPPORTED` allowlist |
+| `spec_registry.py`      | **Single source of truth for spec-executable algorithms** — `@spec_verb` declarations drive the `from_spec` executor, discriminated-union Pydantic models (`extra=forbid`), the JSON schema, and the `coverage_matrix()` / `SPEC_UNSUPPORTED` allowlist |
 | `define_spec.py`        | **Single ingest boundary for spec files** — `load_define_spec()` + the `DefineSpec`/`DatasetEntry`/`VariableEntry` envelope models (`extra=forbid` at the top and dataset level). Used by `from_spec`, `build_dag`, and NSV metadata resolution so a typo'd key fails at load instead of silently deriving nothing |
 | `log.py`                | `logging.getLogger("fleet")` setup — replaces the old `print()` calls in `inspect`/`trail`/`nodup`/`validate` so batch runs can route/suppress output                                                                          |
 | `exceptions.py`         | Custom exceptions — `FleetError` base, `DerivationError`/`VerbUsageError`/`PinError`/`SpecError`/`SchemaError` (dual-inherit builtins so both `except FleetError` and `except ValueError` styles catch)                          |
@@ -112,7 +112,7 @@ The `assign` SDTM verb (with `ct=`) and the `recode` ADaM verb use the singleton
 | Function            | Signature                          | What it does                                                |
 | ------------------- | ---------------------------------- | ----------------------------------------------------------- |
 | `load_raw_data`     | `(file_path, file_type=None)`      | Returns a `pl.LazyFrame` — auto-detects CSV, Excel, Parquet |
-| `load_datasets`     | `(directory, pattern="*.csv")`     | Loads all matching files in a directory                     |
+| `load_datasets`     | `(file_paths: dict, file_type=None)` | Loads each named file (`{"DM": "dm.csv"}`) |
 | `download_raw_data` | `(url, destination)`               | Downloads a file from a URL                                 |
 | `save_parquet`      | `(df, path)`                       | Writes a Polars DataFrame to Parquet                        |
 | `save_xpt`          | `(df, path)`                       | Writes to SAS XPT (requires `pyreadstat`)                   |
@@ -127,13 +127,13 @@ The core of Fleet for SDTM work. Registers `df.sdtm` on every Polars DataFrame.
 
 | File           | Purpose                                                                                                                         |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `models.py`    | `SDTMAlgorithm` enum (verb names, kept in sync with `spec_registry`), `SDTMVariableSpec`, `SDTMDomainSpec`                       |
+| `models.py`    | `NSVMeta`, the metadata of a Non-Standard Variable; the verb names live in `core/spec_registry.py`                              |
 | `utils.py`     | Internal helpers — `to_iso8601_date`, `to_iso8601_datetime`, `parse_expression(str) → pl.Expr` (AST whitelist; bare names in arithmetic resolve to `pl.col`) |
 | `namespace.py` | `SDTMNamespace` — the SDTM namespace class + `_tdd_mixin` for Trial Design domains                                              |
 | `tdd.py`       | Trial Design row/collection Pydantic models (TE/TA/TV/TS/TI/TD/TM), `TrialVisits.from_schedule`, `TrialParameters.from_ctgov`, Mermaid parser |
 | `design.py`    | `StudyDesign` — define-once aggregate deriving every TDD domain; YAML/Mermaid/USDM interchange                                   |
 | `tdd_audit.py` | P21-style conformance pre-check (SD-series structural rules + FDA TS parameter profile)                                          |
-| `_tdd_structures.yaml` | Packaged SDTMIG 3.4 structures for the nine TDD domains (offline `fetch_structure()`)                                    |
+| `_tdd_structures.yaml` | Packaged SDTMIG 3.4 structures for the seven TDD domains plus SV and SE (offline `fetch_structure()`)                                    |
 
 **Canonical SDTM verbs** (call `df.sdtm.verbs()` for the always-current list — hardcoded counts rot):
 
@@ -166,7 +166,7 @@ Renamed in pre-alpha (removed outright, `fleet migrate` rewrites old scripts): `
 | `to_frame()`                | **Materialise** — execute the whole pipeline and return a `pl.DataFrame` |
 
 **How the pipeline works:**  
-Every verb returns a _new_ namespace instance (via `copy.copy(self)`) with its expression appended to an internal lazy plan. Most verbs are pure lazy `with_columns` and only run at `to_frame()`; a few (window functions like `baseline`, cross-domain joins, `date`-with-time) checkpoint internally via `_materialise_then` and re-wrap the collected frame so the **chain is never broken** — `flag → baseline → chg` is a single pipeline. The namespaces are registered on both `pl.DataFrame` and `pl.LazyFrame`, so `pl.scan_parquet(...).sdtm` stays lazy. Both `_chain` and `_materialise_then` use `copy.copy` to preserve all instance state (lineage, pins, domain) across chaining calls and sub-namespace switches.
+Every verb returns a _new_ namespace instance (via `copy.copy(self)`) with its expression appended to an internal lazy plan. Most verbs are pure lazy `with_columns` and only run at `to_frame()`. A few read data at their own line: `baseline` runs a side check for two flagged baseline records and then appends its window expression to the plan (it does not re-wrap a collected frame); `assign(ct=)` and `date` read their column for a check; cross-domain joins and row-reshaping verbs checkpoint via `_materialise_then` and re-wrap the collected frame, so the **chain is never broken** — `flag → baseline → chg` is a single pipeline. The namespaces are registered on both `pl.DataFrame` and `pl.LazyFrame`, so `pl.scan_parquet(...).sdtm` stays lazy. Both `_chain` and `_materialise_then` use `copy.copy` to preserve all instance state (lineage, pins, domain, the last comparison and validation reports) across chaining calls. A sub-namespace switch (`.occds`, `.adsl`, and `.adam` back to the BDS namespace) copies every instance attribute too, with its own lists and dicts.
 
 ---
 
@@ -176,8 +176,7 @@ Registers `df.adam` on every Polars DataFrame.
 
 | File           | Purpose                                                                                                                                                                                                       |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `models.py`    | `ADAMAlgorithm` enum (verb names, kept in sync with `spec_registry`), `ADAMVariableSpec`, `ADAMDatasetSpec`                                                                                                   |
-| `_mixins.py`   | `SharedADaMVerbsMixin` — the shared verbs available on **every** ADaM sub-namespace (`assign`, `case_when`, `merge`, `source`, `derivation`, `recode`, `whereclauses`, `merge_adsl`, `date`, `duration`, `pick`, `first_date`, `last_date`, `count_events`, `join_adsl`, …); `MultiRowMixin` for `seq` |
+| `_mixins.py`   | `SharedADaMVerbsMixin` — the shared verbs available on **every** ADaM sub-namespace (`assign`, `case_when`, `merge`, `source`, `derivation`, `recode`, `whereclauses`, `merge_adsl`, `date`, `duration`, `pick`, `first_date`, `last_date`, `count_events`, `join_adsl`, …) |
 | `utils.py`     | Standard ADaM calculation functions — all return `pl.Expr`: `study_day`, `baseline`, `chg`, `pchg`, `bmi`, `bsa`, `mean_arterial_pressure`, `qtc`, `age_in_years`, `nrind`, `on_treatment`, `shift`           |
 | `namespace.py` | `AdamNamespace` — the BDS namespace; BDS-specific verbs (`baseline`, `chg`, `pchg`, `bmi`, `bsa`, `map`, `qtc`, `nrind`, `on_treatment`, `shift`), record-generating verbs (`derive_summary_records`, `derive_locf_records`, `derive_param`), toxicity grading (`atoxgr`, `combine_grades`), `transform`, and the sub-namespace properties (`adsl`, `occds`, `onco`, …) |
 | `grading/`     | CTCAE / DAIDS toxicity-grading sub-package (see below)                                                                                                                                                        |
@@ -309,24 +308,39 @@ Three surfaces over the one engine: `fleet.compare(base, candidate, keys=...)`; 
 
 ---
 
-## `specs/` — Study Derivation Specifications
+## `examples/cdiscpilot01/` — Pilot Study Specifications and Sample Data
 
-YAML files that describe the study metadata, derivation logic, and Define-XML output. Consumed by both `from_spec()` and the Define-XML generator.
+The pilot study root. Its `study_config.yaml` names the two define files.
+`fleet run` and `from_spec()` read them; the Define-XML generator reads them too.
 
 ```
-specs/
-└── cdiscpilot01/
-    ├── sdtm/
-    │   └── define.yaml   # SDTM Define-XML spec + DM derivations
-    └── adam/
-        └── define.yaml   # ADaM Define-XML spec + ADSL/ADVS derivations
+examples/cdiscpilot01/
+├── study_config.yaml
+├── define2-1.xsl        # CDISC stylesheet for the Define-XML HTML preview
+├── raw/                  # small synthetic CSV inputs (dm_raw, ae_raw, vs_raw, ex_raw)
+├── sdtm/
+│   ├── define.yaml       # SDTM Define-XML spec + DM/AE/VS/EX derivations
+│   ├── codelists.py      # generated codelist classes
+│   └── custom_rules/
+└── adam/
+    ├── define.yaml       # ADaM Define-XML spec + ADSL/ADVS/ADAE/ADEX derivations
+    └── derivations/      # @derivation functions the define files can name
 ```
+
+The raw CSVs are synthetic sample data in the CDISCPILOT01 shape, not the
+CDISC pilot data. Each SDTM dataset names its raw file under `inputs:`, with a
+path relative to the study root, so `fleet run --dataset DM` runs on a copy of
+this folder.
 
 **Define YAML format (single source of truth):**
 
 ```yaml
 datasets:
   - name: DM
+    inputs:
+      - name: dm_raw
+        type: raw
+        path: raw/dm_raw.csv
     variables:
       - name: STUDYID
         derivation:
@@ -344,29 +358,14 @@ datasets:
 
 ---
 
-## `datasets/` — Example Study Data
-
-```
-datasets/
-└── cdiscpilot01/
-    └── raw/
-        ├── dm_raw.csv    # Demographics raw eCRF data
-        ├── vs_raw.csv    # Vital Signs raw data
-        └── ae_raw.csv    # Adverse Events raw data
-```
-
-Source: CDISC CDISCPILOT01 public example study.
-
----
-
 ## `tests/` — Test Suite
 
 ```
 tests/
 ├── conftest.py                          # Shared pytest fixtures
 ├── fixtures/
-│   ├── raw/                             # CSV copies of datasets for tests
 │   ├── ct/cdisc_ct_sample.yaml          # Sample CT for CT validator tests
+│   ├── goldens/define/                  # golden define_sdtm.xml, define_adam.xml (fixed stamp)
 │   └── specs/                           # define_sdtm.yaml, define_adam.yaml
 └── unit/
     ├── test_sdtm_namespace.py           # SDTM verbs
@@ -412,7 +411,7 @@ uv run pytest tests/ -v
 | `pyyaml ≥ 6.0`             | YAML spec / CT file parsing                     |
 | `httpx ≥ 0.27, < 1`        | HTTP downloads (CT files, raw data)             |
 | `jsonschema ≥ 4.26.0`      | Define-XML / spec schema validation             |
-| `lxml ≥ 5.0.0`             | Define-XML ODM XML generation                   |
+| `lxml ≥ 6.1.0`             | Define-XML ODM XML generation                   |
 
 **Optional extras** (`uv sync --extra <name>`):
 
@@ -423,5 +422,7 @@ uv run pytest tests/ -v
 | `tlg-pptx`  | `python-pptx`       | TLG PPTX slide export                  |
 | `migrate`   | `libcst`            | `fleet migrate` old→canonical codemod  |
 | `watch`     | `watchfiles`        | `--watch` dev loop                     |
+| `lsp`       | `pygls`             | `fleet lsp --stdio` language server    |
+| `mcp`       | `mcp`               | `fleet mcp --stdio` MCP server         |
 | `all`       | all of the above    | everything                             |
 | `dev`       | `pytest`, `pytest-cov`, `ruff`, `blacken-docs`, `dsjson` | Dev tooling  |

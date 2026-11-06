@@ -61,8 +61,8 @@ class TestChainColumnValidation:
         assert result["SUBJID"].to_list() == ["S001"]
 
     def test_adam_verbs_are_attributed(self, raw):
-        with pytest.raises(DerivationError, match=r"source\('USUBJID'\)"):
-            raw.adam.source("USUBJID", from_col="patient_numbr")
+        with pytest.raises(DerivationError, match=r"source\('patient_numbr'\)"):
+            raw.adam.source("patient_numbr")
 
     def test_legacy_catch_style_works(self, raw):
         with pytest.raises(ValueError):
@@ -384,6 +384,13 @@ class TestNodupReport:
 
 
 class TestValidateResultAccess:
+    @pytest.fixture(autouse=True)
+    def fake_engine(self, monkeypatch, tmp_path):
+        """An engine file, so the verb's engine check passes where CI has no CORE install."""
+        engine = tmp_path / "core"
+        engine.write_text("")
+        monkeypatch.setenv("FLEET_RULES_ENGINE", str(engine))
+
     @pytest.fixture
     def failing_ns(self, monkeypatch):
         """An SDTM chain whose validation run reports one error."""

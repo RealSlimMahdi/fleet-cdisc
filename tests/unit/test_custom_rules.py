@@ -366,7 +366,7 @@ class TestAddRuleCLI:
 
 class TestCheckRule:
     def test_valid_rule_no_errors(self):
-        """Scaffolded rule should pass check_rule with no errors."""
+        """A scaffolded rule with its Check block edited passes check_rule."""
         with tempfile.TemporaryDirectory() as tmpdir:
             rule_path = scaffold_rule(
                 domain="AE",
@@ -374,6 +374,9 @@ class TestCheckRule:
                 output_dir=Path(tmpdir),
                 prefix="TEST",
             )
+            rule = yaml.safe_load(rule_path.read_text(encoding="utf-8"))
+            rule["Check"] = {"all": [{"name": "AETERM", "operator": "empty"}]}
+            rule_path.write_text(yaml.safe_dump(rule, sort_keys=False), encoding="utf-8")
             errors = check_rule(rule_path)
             assert errors == []
 

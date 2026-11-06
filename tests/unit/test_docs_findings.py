@@ -342,7 +342,8 @@ def test_adnca_example_adppk_order_and_aseq(tmp_path, monkeypatch, capsys):
     assert adppk["ASEQ"].to_list() == (
         adppk.select(pl.int_range(1, pl.len() + 1).over("USUBJID")).to_series().to_list()
     )
-    first = adppk.filter(pl.col("USUBJID") == "01-701-1015").head(3)
+    # c1-676: the first PK subject is 01-701-1047 (Xanomeline); placebo has no PK.
+    first = adppk.filter(pl.col("USUBJID") == "01-701-1047").head(3)
     assert first.select("AFRLT", "EVID", "ASEQ").rows() == [
         (0.0, 0, 1),
         (0.0, 1, 2),

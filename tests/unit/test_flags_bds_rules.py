@@ -24,7 +24,9 @@ def test_baseline_skips_a_not_done_record_on_the_last_date() -> None:
 └─────────┴──────────┴────────────┴─────────┴──────────┴────────────┘
 """)
 
-    out = vs.sdtm.baseline_flag("VSBLFL", date_col="VSDTC", testcd_col="VSTESTCD").to_frame()
+    out = vs.sdtm.baseline_flag(
+        "VSBLFL", date_col="VSDTC", testcd_col="VSTESTCD", ref_col="RFSTDTC"
+    ).to_frame()
 
     assert out["VSBLFL"].to_list() == ["Y", None]
 
@@ -41,7 +43,9 @@ def test_baseline_is_null_when_every_record_is_not_done() -> None:
 └─────────┴──────────┴────────────┴─────────┴──────────┴────────────┘
 """)
 
-    out = vs.sdtm.baseline_flag("VSBLFL", date_col="VSDTC", testcd_col="VSTESTCD").to_frame()
+    out = vs.sdtm.baseline_flag(
+        "VSBLFL", date_col="VSDTC", testcd_col="VSTESTCD", ref_col="RFSTDTC"
+    ).to_frame()
 
     assert out["VSBLFL"].to_list() == [None, None]
 
@@ -58,7 +62,9 @@ def test_baseline_skips_a_blank_result() -> None:
 └─────────┴──────────┴────────────┴─────────┴────────────┘
 """)
 
-    out = vs.sdtm.baseline_flag("VSBLFL", date_col="VSDTC", testcd_col="VSTESTCD").to_frame()
+    out = vs.sdtm.baseline_flag(
+        "VSBLFL", date_col="VSDTC", testcd_col="VSTESTCD", ref_col="RFSTDTC"
+    ).to_frame()
 
     assert out["VSBLFL"].to_list() == ["Y", None]
 
@@ -75,7 +81,9 @@ def test_baseline_takes_the_result_when_a_not_done_record_has_the_same_date() ->
 └─────────┴──────────┴────────────┴─────────┴──────────┴───────┴────────────┘
 """)
 
-    out = vs.sdtm.baseline_flag("VSBLFL", date_col="VSDTC", testcd_col="VSTESTCD").to_frame()
+    out = vs.sdtm.baseline_flag(
+        "VSBLFL", date_col="VSDTC", testcd_col="VSTESTCD", ref_col="RFSTDTC"
+    ).to_frame()
 
     assert out["VSBLFL"].to_list() == ["Y", None]
 
@@ -92,7 +100,9 @@ def test_baseline_reads_stresc_before_orres() -> None:
 └─────────┴──────────┴────────────┴─────────┴──────────┴────────────┘
 """)
 
-    out = lb.sdtm.baseline_flag("LBBLFL", date_col="LBDTC", testcd_col="LBTESTCD").to_frame()
+    out = lb.sdtm.baseline_flag(
+        "LBBLFL", date_col="LBDTC", testcd_col="LBTESTCD", ref_col="RFSTDTC"
+    ).to_frame()
 
     assert out["LBBLFL"].to_list() == ["Y", None]
 
@@ -110,7 +120,9 @@ def test_baseline_keeps_a_derived_record_with_no_orres() -> None:
 └─────────┴──────────┴────────────┴─────────┴──────────┴─────────┴────────────┘
 """)
 
-    out = eg.sdtm.baseline_flag("EGBLFL", date_col="EGDTC", testcd_col="EGTESTCD").to_frame()
+    out = eg.sdtm.baseline_flag(
+        "EGBLFL", date_col="EGDTC", testcd_col="EGTESTCD", ref_col="RFSTDTC"
+    ).to_frame()
 
     assert out["EGBLFL"].to_list() == [None, "Y", None]
 
@@ -128,7 +140,7 @@ def test_baseline_reads_a_numeric_result_column() -> None:
 """)
 
     out = vs.sdtm.baseline_flag(
-        "VSBLFL", date_col="VSDTC", testcd_col="VSTESTCD", result_col="VSSTRESN"
+        "VSBLFL", date_col="VSDTC", testcd_col="VSTESTCD", ref_col="RFSTDTC", result_col="VSSTRESN"
     ).to_frame()
 
     assert out["VSBLFL"].to_list() == ["Y", None]
@@ -146,7 +158,7 @@ def test_baseline_with_no_result_column_raises() -> None:
 """)
 
     with pytest.raises(DerivationError, match="result_col="):
-        vs.sdtm.baseline_flag("VSBLFL", date_col="VSDTC", testcd_col="VSTESTCD")
+        vs.sdtm.baseline_flag("VSBLFL", date_col="VSDTC", testcd_col="VSTESTCD", ref_col="RFSTDTC")
 
 
 # ── baseline_flag: one record on a tie (c1-99, Q1 A) ──────────────────────────
@@ -165,7 +177,9 @@ def test_baseline_tie_takes_the_last_seq_with_a_warning() -> None:
 """)
 
     with pytest.warns(UserWarning, match="EGSEQ"):
-        out = eg.sdtm.baseline_flag("EGBLFL", date_col="EGDTC", testcd_col="EGTESTCD").to_frame()
+        out = eg.sdtm.baseline_flag(
+            "EGBLFL", date_col="EGDTC", testcd_col="EGTESTCD", ref_col="RFSTDTC"
+        ).to_frame()
 
     assert out["EGBLFL"].to_list() == ["Y", None]
 
@@ -183,7 +197,7 @@ def test_baseline_tie_follows_order_by() -> None:
 """)
 
     out = eg.sdtm.baseline_flag(
-        "EGBLFL", date_col="EGDTC", testcd_col="EGTESTCD", order_by="EGREPNUM"
+        "EGBLFL", date_col="EGDTC", testcd_col="EGTESTCD", ref_col="RFSTDTC", order_by="EGREPNUM"
     ).to_frame()
 
     assert out["EGBLFL"].to_list() == ["Y", None]
@@ -202,7 +216,9 @@ def test_baseline_tie_with_no_seq_takes_the_last_input_record() -> None:
 """)
 
     with pytest.warns(UserWarning, match="order_by="):
-        out = eg.sdtm.baseline_flag("EGBLFL", date_col="EGDTC", testcd_col="EGTESTCD").to_frame()
+        out = eg.sdtm.baseline_flag(
+            "EGBLFL", date_col="EGDTC", testcd_col="EGTESTCD", ref_col="RFSTDTC"
+        ).to_frame()
 
     assert out["EGBLFL"].to_list() == [None, "Y"]
 

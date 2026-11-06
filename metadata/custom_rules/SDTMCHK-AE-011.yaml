@@ -69,3 +69,6 @@ Authorities:
       - Cited Guidance: check_ae_aetoxgr
         Document: pharmaverse sdtmchecks
         Section: AE Domain
+  Category:
+    Purpose: Data quality check from sdtmchecks
+    Keywords: [AE]

@@ -28,6 +28,7 @@ from ._specs import (
     Row,
     SummarySpecBase,
     TLGSpec,
+    resolve_filter,
 )
 
 
@@ -149,8 +150,9 @@ class DSTLGNamespace(BuilderVerbsMixin):
     ) -> pl.DataFrame:
         """Produce a subject-disposition ARD (DST01).
 
-        Counts subjects by end-of-study status (``EOSSTT``) and, nested
-        beneath it, discontinuation reason (``DCSREAS``), per treatment arm.
+        Counts subjects by end-of-study status (``EOSSTT``) and, as a
+        separate flat block, discontinuation reason (``DCSREAS``), per
+        treatment arm.
 
         Args:
             groupby: Treatment arm column.  Overrides ``spec.columns[0]``.
@@ -189,11 +191,13 @@ class DSTLGNamespace(BuilderVerbsMixin):
         Emits a ``"Total Number of Deaths"`` headline row (n / % of the
         arm population) followed by primary cause of death (``DTHCAT``)
         rows whose percentages use the **deaths** denominator, matching
-        the NEST template.  Deaths with a missing cause appear as an
-        explicit ``"Unknown"`` level instead of vanishing.
+        the NEST template.  Deaths with a missing cause (the last row
+        field) appear as an explicit ``"Unknown"`` level instead of
+        vanishing.
 
-        Arms without any death get the headline zeros but no cause
-        breakdown (there are no deaths to break down).
+        Every arm and pool keeps its column in the cause block: an arm
+        without any death shows 0, and a pool counts the deaths of its
+        arms.
 
         Args:
             groupby: Treatment arm column.  Overrides ``spec.columns[0]``.
@@ -246,26 +250,24 @@ class DSTLGNamespace(BuilderVerbsMixin):
             return total
 
         # Cause block: percentages among deaths, not the full population.
-        # Explicit-arm pools survive only when all their arms have deaths —
-        # a pool cannot be validated against a population it has no members in.
-        deaths_population = population.filter(pl.col("USUBJID").is_in(death_ids))
-        death_arms = set(deaths[group_col].drop_nulls().unique().to_list())
-        cause_pools = [
-            pool for pool in spec.pools if pool.arms == "*" or set(pool.arms) <= death_arms
-        ]
+        # The deaths are the population of this block, so every arm and
+        # pool keeps its column: an arm with no death shows 0.
+        is_death = pl.col("USUBJID").is_in(death_ids)
+        population_filter = resolve_filter(spec.adsl_filter)
         cause_df = analysis
-        if "DTHCAT" in cause_df.columns:
-            cause_df = cause_df.with_columns(pl.col("DTHCAT").fill_null("Unknown"))
+        cause_field = spec.rows[-1].field if spec.rows else None
+        if cause_field is not None and cause_field in cause_df.columns:
+            cause_df = cause_df.with_columns(pl.col(cause_field).fill_null("Unknown"))
         causes = summarize_ard(
             cause_df,
             rows=spec.rows,
             stats=spec.statistics,
             context=spec.context,
             group_col=group_col,
-            pools=cause_pools,
+            pools=spec.pools,
             column_order=spec.column_order,
-            adsl=deaths_population,
-            adsl_filter=spec.adsl_filter,
+            adsl=population,
+            adsl_filter=is_death if population_filter is None else is_death & population_filter,
             prefilter=deaths_filter,
             value_col=spec.value_col,
             label_col=spec.label_col,

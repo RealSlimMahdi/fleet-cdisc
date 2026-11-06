@@ -3,7 +3,7 @@
 This cheat sheet summarises the most common verbs across Fleet namespaces. **Every verb name in this page is a clickable link to its docstring**, rendered directly from the source code in the corresponding namespace page.
 
 !!! tip "Single source of truth"
-Fleet's documentation is generated directly from Python docstrings via [mkdocstrings](https://mkdocstrings.github.io/) and cross-linked with [autorefs](https://mkdocstrings.github.io/autorefs/). The verb name you click here resolves to the exact method signature, parameters, and examples that the runtime executes — there is no separately maintained reference that can drift out of sync. Renaming a parameter in the source automatically updates this page on the next build.
+    Fleet's documentation is generated directly from Python docstrings via [mkdocstrings](https://mkdocstrings.github.io/) and cross-linked with [autorefs](https://mkdocstrings.github.io/autorefs/). The verb name you click here resolves to the exact method signature, parameters, and examples that the runtime executes — there is no separately maintained reference that can drift out of sync. Renaming a parameter in the source automatically updates this page on the next build.
 
 ## Core verbs (available everywhere)
 
@@ -11,7 +11,6 @@ Fleet's documentation is generated directly from Python docstrings via [mkdocstr
 | ------------------------------------------------------ | ----------------------------------------------------------------------------- | ------------------------------------------------------------------- |
 | [`.to_frame()`][fleet.core._verb_mixin.SharedVerbsMixin.to_frame]     | Materialises the pipeline into a Polars DataFrame. Must be called at the end. | `.to_frame()`                                                       |
 | [`.derivation()`][fleet.core._verb_mixin.SharedVerbsMixin.derivation] | Injects an arbitrary Polars expression.                                       | `.derivation("AGE", expression="pl.col('AGE_RAW').cast(pl.Int64)")` |
-| [`.source()`][fleet.adam.AdamNamespace.source]         | Passes a column through (renaming if `from_col` is provided).                 | `.source("USUBJID")`                                                |
 | [`.assign()`][fleet.core._verb_mixin.SharedVerbsMixin.assign]         | Copy a column (`source=`) or hardcode a literal (`value=`).                   | `.assign("DOMAIN", value="DM")`                                     |
 | [`.inspect()`][fleet.core._verb_mixin.SharedVerbsMixin.inspect]       | Hard checkpoint — materialises and prints schema/shape/head.                  | `.inspect("after rename")`                                          |
 | [`.explain()`][fleet.core._verb_mixin.SharedVerbsMixin.explain]       | Prints the Polars query plan without materialising.                           | `.explain()`                                                        |
@@ -23,7 +22,7 @@ Fleet's documentation is generated directly from Python docstrings via [mkdocstr
 | -------------------------------------------------------------- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | [`.assign()`][fleet.core._verb_mixin.SharedVerbsMixin.assign]  | Copy (`source=`) or hardcode (`value=`) a variable.                         | `.assign("USUBJID", source="patient_id")`                                    |
 | [`.assign()`][fleet.core._verb_mixin.SharedVerbsMixin.assign]  | CT-validated assignment: add `ct=` and optional `ct_map=`.                  | `.assign("SEX", source="sex_raw", ct=SEX, ct_map={"M":"M"})`                 |
-| [`.date()`][fleet.sdtm.SDTMNamespace.date]                     | Normalise dates to ISO 8601 strings or parse to Date/Datetime.              | `.date("RFSTDTC", source="first_dose_dt")`                                   |
+| [`.date()`][fleet.sdtm.SDTMNamespace.date]                     | Normalise dates to ISO 8601 strings or parse to Date/Datetime. A `--DTC` target is text (`pl.String`); a partial date stays partial. | `.date("RFSTDTC", source="first_dose_dt")`                                   |
 | [`.duration()`][fleet.core._verb_mixin.SharedVerbsMixin.duration]             | Compute elapsed time or CDISC study day.                                    | `.duration("SVSTDY", start="RFSTDTC", end="SVSTDTC")`                        |
 | [`.case_when()`][fleet.core._verb_mixin.SharedVerbsMixin.case_when] | Derive a value conditionally over multiple branches.                   | `.case_when("AGEGR1", when=[...], else_="OTHER")`                            |
 | [`.condition_add()`][fleet.sdtm.SDTMNamespace.condition_add]   | Single-condition assignment.                                                | `.condition_add("FLAG", condition=..., then_value="Y")`                      |
@@ -41,15 +40,17 @@ Fleet's documentation is generated directly from Python docstrings via [mkdocstr
 
 | Verb                                                                           | Description                                                          | Example                                                                 |
 | ------------------------------------------------------------------------------ | -------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| [`.source()`][fleet.adam.AdamNamespace.source]                                 | Passes one or more columns through unchanged; rename with `assign`. ADaM namespaces only. | `.source("USUBJID")`                                      |
 | [`.derivation()`][fleet.core._verb_mixin.SharedVerbsMixin.derivation]                         | Arbitrary Polars expression.                                         | `.derivation("AVAL", expression="pl.col('vsorres').cast(pl.Float64)")`  |
 | [`.recode()`][fleet.adam.AdamNamespace.recode]                                 | Value remapping with default.                                        | `.recode("PARAM", source="vstest", recode_map={...})`                   |
 | [`.assign()`][fleet.core._verb_mixin.SharedVerbsMixin.assign]                  | Copy/rename a column, or hardcode a literal.                         | `.assign("PARAMCD", source="vstestcd")`                                 |
 | [`.case_when()`][fleet.core._verb_mixin.SharedVerbsMixin.case_when]            | Multi-branch conditional derivation.                                 | `.case_when("EOSSTT", when=[...])`                                      |
-| [`.pick()`][fleet.adam.SharedADaMVerbsMixin.pick]                              | Derive targets from the event with the latest (or first) value across sources. | `.pick("LSTALVDT", events=[...], by=["USUBJID"], order=["LSTALVDT"], mode="last")`   |
-| [`.date()`][fleet.adam.AdamNamespace.date]                                     | Parse `--DTC` to analysis date or datetime with optional imputation. | `.date("ADT", source="VSDTC")`                                          |
+| [`.pick()`][fleet.adam.SharedADaMVerbsMixin.pick]                              | Derive targets from the event with the latest (or first) value across sources. | `.pick("LSTALVDT", events=[...], by=["USUBJID"], order_by=["LSTALVDT"], mode="last")`   |
+| [`.date()`][fleet.adam.AdamNamespace.date]                                     | Parse `--DTC` to analysis date or datetime; imputes a partial date to the first day or month by default (`highest="n"` for no imputation). | `.date("ADT", source="VSDTC")`                                          |
 | [`.duration()`][fleet.core._verb_mixin.SharedVerbsMixin.duration]                             | CDISC study day, elapsed time, or ISO 8601 duration.                 | `.duration("ADY", start="TRTSDT", end="ADT")`                           |
 | [`.merge_adsl()`][fleet.adam.AdamNamespace.merge_adsl]                         | Bring ADSL columns onto a BDS dataset.                               | `.merge_adsl(adsl, keep=["TRTSDT","SAFFL"])`                            |
 | [`.baseline()`][fleet.adam.AdamNamespace.baseline]                             | Find baseline record per group, broadcast to target.                 | `.baseline("BASE", aval="AVAL", baseline_flag="ABLFL")`                 |
+| [`.baseline()`][fleet.adam.AdamNamespace.baseline]                             | BNRIND: the baseline `ANRIND`, text included.                        | `.baseline("BNRIND", aval="ANRIND", baseline_flag="ABLFL")`             |
 | [`.chg()`][fleet.adam.AdamNamespace.chg]                                       | Change from baseline (`AVAL - BASE`).                                | `.chg("CHG", aval="AVAL", base="BASE")`                                 |
 | [`.pchg()`][fleet.adam.AdamNamespace.pchg]                                     | Percent change `(CHG / BASE) * 100`.                                 | `.pchg("PCHG", aval="AVAL", base="BASE")`                               |
 | [`.flag()`][fleet.adam.FlagCriterionMixin.flag]                                     | Assign `"Y"` per criteria (expression / `first` / `last`).           | `.flag("ANL01FL", criteria="last", order_by="ADT")`                     |
@@ -73,6 +74,8 @@ Fleet's documentation is generated directly from Python docstrings via [mkdocstr
 | Verb                                                           | Description                                                                 | Example                                                       |
 | -------------------------------------------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------- |
 | [`.first_date()`][fleet.adam.SharedADaMVerbsMixin.first_date] | Earliest date per subject from a second dataset.                     | `.first_date("TRTSDT", from_dataset=ex, date_col="EXSTDTC")`  |
+| [`.first_date()`][fleet.adam.SharedADaMVerbsMixin.first_date] | RFXSTDTC on DM: a `*DTC` target keeps the ISO 8601 text of the first EX record. | `dm.adam.adsl.first_date("RFXSTDTC", from_dataset=ex, date_col="EXSTDTC")` |
+| [`.first_date()`][fleet.adam.SharedADaMVerbsMixin.first_date] | A partial `--DTC` is left out with a warning; `impute=` states the SAP rule and writes `*DTF`. | `.first_date("TRTSDT", from_dataset=ex, date_col="EXSTDTC", impute="first")` |
 | [`.last_date()`][fleet.adam.SharedADaMVerbsMixin.last_date]   | Latest date per subject from a second dataset.                       | `.last_date("TRTEDT", from_dataset=ex, date_col="EXENDTC")`   |
 | [`.duration()`][fleet.core._verb_mixin.SharedVerbsMixin.duration]             | Number of elapsed days (start to end).                                      | `.duration("TRTDURD", start="TRTSDT", end="TRTEDT")`          |
 | [`.flag()`][fleet.adam.FlagCriterionMixin.flag]                | Generalised `"Y"` flag (first/last/max/min/exists/before/after/expression). | `.flag("SAFFL", criteria='pl.col("TRTSDT").is_not_null()', false_value="N")` |
@@ -111,12 +114,15 @@ Fleet's documentation is generated directly from Python docstrings via [mkdocstr
 ## Time-to-event (`df.adam.tte`)
 
 Each event or censor source is a plain frame with `USUBJID` and `ADT`. The key of
-`events=` is the EVNTDESC; the key of `censors=` is the CNSR. Records after the
-first `stop_at=` date are dropped (ADR-0043).
+`events=` is the EVNTDESC; the key of `censors=` is the CNSR. `stop_at=` maps an
+ADSL date column to `(CNSR, EVNTDESC)`: records after the first stop date are
+dropped, and a censored subject takes the date from the censor frame and the
+reason from the stop. `keep_reason=` names censor keys that keep their own
+reason (ADR-0043).
 
 | Verb                                                             | Description                                                        | Example                                                              |
 | ---------------------------------------------------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------- |
-| [`.param()`][fleet.adam.TTENamespace.param]                      | Derive one TTE parameter: earliest event wins, else latest censor. | `.param("PFS", start="TRTSDT", events={"PD": pd}, censors={2: last_assessment}, stop_at=["EOSDT", "NACTDT"])` |
+| [`.param()`][fleet.adam.TTENamespace.param]                      | Derive one TTE parameter: earliest event wins, else latest censor. | `.param("PFS", start="TRTSDT", events={"PD": pd}, censors={1: last_assessment}, stop_at={"EOSDT": (4, "END OF STUDY"), "NACTDT": (2, "NEW ANTICANCER THERAPY")})` |
 | [`.aval()`][fleet.adam.TTENamespace.aval]                        | AVAL (+AVALU) from STARTDT/ADT with CDISC unit conventions.        | `.aval(unit="months")`                                                |
 | [`.km_data()`][fleet.adam.TTENamespace.km_data]                  | `(duration, event)` frame for lifelines / scikit-survival.         | `.km_data("OS", by=["TRT01P"])`                                       |
 
@@ -142,6 +148,18 @@ domain — see the [Trial Design concepts page](../concepts/tdd.md).
 | [`.visit_map()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.visit_map]                               | Map planned ↔ actual visits (SV).                      | `.visit_map("VISITNUM", "VISIT", ...)`                |
 | [`.duration()`][fleet.core._verb_mixin.SharedVerbsMixin.duration]                                 | Derive study day from reference.                       | `.duration("SVSTDY", start="RFSTDTC", end="SVSTDTC")` |
 
+## Tables, listings and graphs (`fleet tlg`)
+
+A template id (`aet02`) is not a file. `fleet tlg run` reads a spec file;
+the smallest spec is one line that names the template.
+
+| Step                       | Example                                                    |
+| -------------------------- | ---------------------------------------------------------- |
+| List the template ids      | `fleet tlg list`                                           |
+| Write a one-line spec      | `aet02.yaml` that holds the line `template: aet02`         |
+| Build the table            | `fleet tlg run aet02.yaml --data adae.parquet --adsl adsl.parquet` |
+| Same table in Python       | `adae.tlg.ae.t_soc_pt(adsl=adsl)` (see the [TLG page](tlg.md)) |
+
 ---
 
 ## How linking works
@@ -151,7 +169,7 @@ Click any verb name in the tables above. Your browser navigates to the correspon
 This means:
 
 1. **Parameter accuracy** — the cheat sheet links never describe a parameter that doesn't exist in code.
-2. **Examples stay current** — code samples in docstrings are the same ones the test suite exercises.
+2. **Examples stay close to the code** — code samples in docstrings are syntax-checked; they are not all run by the test suite.
 3. **Discoverability** — IDE hover, docs site, and `help()` in a REPL all read from the same docstring.
 
 If you find a verb missing from this cheat sheet, file an issue or add a row — the link target itself is generated automatically once the method exists in source.
