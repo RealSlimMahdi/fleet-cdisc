@@ -1,7 +1,7 @@
 # Fleet vs Oak + Admiral — ADAE Benchmark Report
 
-**Date:** 2026-11-05 (one rerun on branch `wip/high2-bench`)  
-**Machine:** Apple M4 Max (Mac16,6), 16 cores (12 performance, 4 efficiency), 64 GB RAM, macOS 26.7.1. The machine was shared with other jobs: load average 12.4 when the Fleet runs started, 3 to 6 during the R runs.  
+**Date:** Fleet 2026-11-06 on `main` at commit fdc137f (after #209, the fix of #207). Oak + Admiral 2026-11-05 (branch `wip/high2-bench`); the R pipeline did not change, so its times were not measured again.  
+**Machine:** Apple M4 Max (Mac16,6), 16 cores (12 performance, 4 efficiency), 64 GB RAM, macOS 26.7.1. The machine was shared with other jobs. Load average (1 minute): 7.9 when the Fleet runs of 2026-11-06 started (just after the data was inflated), 5.9 to 6.4 during them. On 2026-11-05: 12.4 when the Fleet runs started, 3 to 6 during the R runs.  
 **Data:** synthetic raw AE, inflated from a synthetic 64-row AE extract (study STUDY001, 39 subjects, `benchmark/data`) copied 179,196 times. Two inputs:
 
 - **Sparse:** each copy gets new subject IDs, so a subject holds 1 to 3 AE records (1.64 on average). The full input has 11,468,544 AE rows and 6,988,644 subjects.
@@ -10,7 +10,7 @@
 **I/O:** Parquet for all tools; the timers exclude the read.  
 **Threads:** Fleet at the Polars default (16 threads) and with `POLARS_MAX_THREADS=1`. R (dplyr, admiral, sdtm.oak) runs on one thread.  
 **Repetitions:** each size runs 3 times in one process per tool. The tables give the median and, in brackets, the minimum and maximum.  
-**Command:** `uv run python -u benchmark/run_benchmark.py --reps 3` (section 2 names the exceptions of this rerun).
+**Command:** the steps of `benchmark/run_benchmark.py`, run one by one (section 2 names the exceptions).
 
 ---
 
@@ -31,34 +31,35 @@ All tools read Parquet (via Arrow for R, native for Polars) to ensure I/O parity
 
 ## 2. Execution Time (seconds)
 
-Pipeline time only (SDTM + ADaM, no file read). Median [min-max] of 3 runs. Speedup is the R median divided by the Fleet median. "Check" is the row-by-row comparison of section 6 at that size, for Fleet at both thread counts against oak + admiral.
+Pipeline time only (SDTM + ADaM, no file read). Median [min-max] of 3 runs. Fleet times are from 2026-11-06, R times from 2026-11-05. Speedup is the R median divided by the Fleet median. "Check" is the row-by-row comparison of section 6 at that size, for the Fleet output of 2026-11-06 at both thread counts against a new oak + admiral output (one R run per size, section 2).
 
 ### Sparse input (1 to 3 records per subject)
 
 |      Rows |  Subjects | Fleet (16 threads) |    Fleet (1 thread) |       Oak + Admiral (R) | Speedup (16 / 1 thread) | Check   |
 | --------: | --------: | -----------------: | ------------------: | ----------------------: | ----------------------: | ------- |
-|      100K |    60,940 | 0.23 [0.22-0.23]   | 0.47 [0.47-0.48]    | 2.81 [2.79-3.04]        |               12× / 6× | same    |
-|      500K |   304,690 | 1.05 [1.04-1.06]   | 2.64 [2.40-2.92]    | 15.23 [15.13-16.44]     |               15× / 6× | same    |
-|        1M |   609,375 | 2.12 [2.11-2.14]   | 5.20 [5.11-5.28]    | 31.64 [30.50-31.70]     |               15× / 6× | same    |
-|        2M | 1,218,750 | 4.24 [4.22-4.28]   | 10.10 [9.93-11.44]  | 54.56 [53.48-59.27]     |               13× / 5× | same    |
-|        5M | 3,046,875 | 11.57 [10.80-12.17] | 26.00 [25.34-26.66] | 133.74 [131.07-139.85] |               12× / 5× | same    |
-| 11,468,544 | 6,988,644 | 26.61 [25.53-29.64] | 58.46 [57.79-58.81] | 322.20 (1 run, see below) |             12× / 6× | not run |
+|      100K |    60,940 | 0.10 [0.10-0.11]   | 0.19 [0.18-0.20]    | 2.81 [2.79-3.04]        |               29× / 15× | same    |
+|      500K |   304,690 | 0.42 [0.42-0.43]   | 0.91 [0.91-0.93]    | 15.23 [15.13-16.44]     |               36× / 17× | same    |
+|        1M |   609,375 | 0.84 [0.84-0.85]   | 1.88 [1.87-1.88]    | 31.64 [30.50-31.70]     |               38× / 17× | same    |
+|        2M | 1,218,750 | 1.69 [1.69-1.75]   | 3.84 [3.83-3.85]    | 54.56 [53.48-59.27]     |               32× / 14× | same    |
+|        5M | 3,046,875 | 4.24 [4.22-4.26]   | 9.94 [9.75-10.06]   | 133.74 [131.07-139.85] |               32× / 13× | same    |
+| 11,468,544 | 6,988,644 | 10.10 [9.79-10.97] | 23.41 [23.35-23.85] | 322.20 (1 run, see below) |             32× / 14× | not run |
 
 ### Dense input (50,037 subjects)
 
 | Rows | Records per subject | Fleet (16 threads) | Fleet (1 thread) | Oak + Admiral (R)   | Speedup (16 / 1 thread) | Check |
 | ---: | ------------------: | -----------------: | ---------------: | ------------------: | ----------------------: | ----- |
-| 100K |                   2 | 0.19 [0.19-0.19]   | 0.40 [0.40-0.41] | 2.08 [2.06-2.30]    |                11× / 5× | same  |
-| 500K |                  10 | 0.34 [0.33-0.35]   | 0.88 [0.88-0.88] | 4.99 [4.83-5.08]    |                15× / 6× | same  |
-|   1M |                  20 | 0.54 [0.54-0.55]   | 1.60 [1.59-1.60] | 8.10 [7.95-8.10]    |                15× / 5× | same  |
-|   2M |                  40 | 0.97 [0.96-0.98]   | 2.91 [2.90-2.95] | 14.62 [14.34-15.99] |                15× / 5× | same  |
+| 100K |                   2 | 0.09 [0.09-0.09]   | 0.18 [0.18-0.18] | 2.08 [2.06-2.30]    |               24× / 12× | same  |
+| 500K |                  10 | 0.25 [0.24-0.25]   | 0.74 [0.73-0.75] | 4.99 [4.83-5.08]    |                20× / 7× | same  |
+|   1M |                  20 | 0.45 [0.45-0.46]   | 1.50 [1.49-1.51] | 8.10 [7.95-8.10]    |                18× / 5× | same  |
+|   2M |                  40 | 0.84 [0.84-0.86]   | 3.01 [3.01-3.04] | 14.62 [14.34-15.99] |                17× / 5× | same  |
 
 ### Exceptions in this rerun
 
-- **R at 11,468,544 rows.** The first run took 322.20 s (SDTM 87.19 s, ADaM 235.01 s). In the second run the R process went into swap (gc "max used" 75.6 GB on a 64 GB machine), because the script kept the output of the previous run in memory; it took 466.39 s. The run was stopped during the third repetition, so this size has one clean R run and no row-by-row check. The script now frees the previous output before each repetition; this fix was not run at this size. The largest size with the full protocol (3 runs and the check) is 5M rows.
-- **Order of the runs.** The rerun stopped at that point, so `run_benchmark.py` did not finish. The R dense runs were then started alone (`admiral_adae_benchmark.R --reps=3 --input=dense --tag=dense`), and the check of section 6 ran on the saved outputs with `compare_outputs` of `run_benchmark.py`.
-- **Earlier report.** From 500K rows on, the Fleet times on the sparse input are about 2.9 times those of the earlier report (its header date, 2025-07-22, is wrong; it ran in 2026) (2.12 s against 0.74 s at 1M rows, 26.61 s against 9.02 s at 11.5M rows). A recheck at 1M rows at load average 3.3 gave 2.11 to 2.13 s. The R times are close to the earlier ones (31.64 s against 30.5 s at 1M rows).
-- **Cause of the slowdown (issue #207).** Not Polars: with Polars 1.39.0 the code of this rerun takes the same time (2.05 s at 1M rows). Not the new call-time checks: the Python part of the pipeline takes less than 0.02 s. The cause is the change of the Fleet pipeline in this rerun, to give the same ANL01FL and ASEQ as admiral: `flag(criteria="last", order_by=["AESEVN", "AESEQ"])` in place of `flag(criteria="max", value_col="AESEVN")`, and `seq(order_by=["AESEQ"])`. The ordered window of `flag` took 1.24 of the 2.1 s, because the sparse input has about one record per USUBJID and AETERM. The code of the earlier report, with its pipeline, takes 0.68 s on this machine. The fix of #207 sorts the frame once in `flag`: the pipeline then takes 0.90 s at 1M rows and 1.87 s at 2M rows, with the same output. The tables above are from before this fix and are not rerun.
+- **Fleet on main.** The Fleet columns are from 2026-11-06, on `main` at commit fdc137f, which includes #209 (the fix of #207). The inputs were built again with `inflate_data.py` (same row and subject counts). The pipeline code and the protocol did not change: 3 runs per size, at 16 threads and with `POLARS_MAX_THREADS=1`.
+- **R times kept.** The R pipeline and the R packages did not change, so the R columns are the medians of 2026-11-05. The R outputs of 2026-11-05 were not kept, so for the check R ran again, once per size (`admiral_adae_benchmark.R 5000000 --reps=1` and `admiral_adae_benchmark.R --reps=1 --input=dense --tag=dense`). The check of section 6 then ran with `compare_outputs` of `run_benchmark.py`. These single R runs are not in the tables, because other jobs ran on the machine at that time. On the dense input they took 2.24, 4.89, 8.01 and 15.63 s, close to the medians of 2026-11-05.
+- **R at 11,468,544 rows (2026-11-05).** The first run took 322.20 s (SDTM 87.19 s, ADaM 235.01 s). In the second run the R process went into swap (gc "max used" 75.6 GB on a 64 GB machine), because the script kept the output of the previous run in memory; it took 466.39 s. The run was stopped during the third repetition, so this size has one clean R run and no row-by-row check. The script now frees the previous output before each repetition; this fix was not run at this size. The largest size with the full protocol (3 runs and the check) is 5M rows.
+- **Effect of the fix of #207.** On 2026-11-05, before the fix, the pipeline used an ordered window in `flag(criteria="last", order_by=["AESEVN", "AESEQ"])`, the call that gives the same ANL01FL as admiral. That window took 1.24 of the 2.1 s at 1M rows, because the sparse input has about one record per USUBJID and AETERM. #209 sorts the frame once instead. On the sparse input, the Fleet time at 16 threads went from 2.12 s to 0.84 s at 1M rows and from 26.61 s to 10.10 s at 11.5M rows; on one thread, from 5.20 s to 1.88 s at 1M rows. On the dense input the change is smaller (0.97 s to 0.84 s at 2M rows), because it has fewer USUBJID and AETERM groups. The outputs are the same as those of admiral (section 6).
+- **Earlier report.** The Fleet times are again close to those of the earlier report (its header date, 2025-07-22, is wrong; it ran in 2026): 0.84 s against 0.74 s at 1M rows, 10.10 s against 9.02 s at 11.5M rows. Its pipeline used `flag(criteria="max", value_col="AESEVN")`; on 2026-11-05 the pipeline was changed to give the same ANL01FL and ASEQ as admiral.
 
 ### Native R vs rpy2 (same R code called from Python)
 
@@ -73,10 +74,10 @@ One run per size. The rpy2 total includes reading the full 11.5M-row Parquet fil
 
 ### Scaling behaviour
 
-- **Both scale near-linearly on the sparse input.** From 100K to 11.5M rows (115 times the rows), Fleet time grows 117 times and R time 115 times.
-- **Fleet:** at 2M rows the pipeline takes 4.24 s; at 11.5M rows 26.61 s (SDTM 3.73 s, ADaM 22.88 s). On one thread it takes 2.1 to 2.5 times as long on the sparse input (58.46 s at 11.5M rows) and 2.1 to 3.0 times as long on the dense input. Fleet time depends on the number of subjects: at 2M rows it takes 0.97 s with 50,037 subjects and 4.24 s with 1,218,750 subjects.
+- **Both scale near-linearly on the sparse input.** From 100K to 11.5M rows (115 times the rows), Fleet time grows 103 times and R time 115 times.
+- **Fleet:** at 2M rows the pipeline takes 1.69 s; at 11.5M rows 10.10 s (SDTM 3.02 s, ADaM 7.08 s). On one thread it takes 1.9 to 2.3 times as long on the sparse input (23.41 s at 11.5M rows) and 2.0 to 3.6 times as long on the dense input. Fleet time depends on the number of subjects: at 2M rows it takes 0.84 s with 50,037 subjects and 1.69 s with 1,218,750 subjects.
 - **Oak + Admiral:** about 27 to 32 s per million rows on the sparse input. Most of the time is in the ADaM step: 235.01 of 322.20 s at 11.5M rows.
-- **Speedup:** 11 to 15 times with 16 threads and 5 to 6 times with one thread, at every size and on both inputs.
+- **Speedup:** 17 to 38 times with 16 threads (29 to 38 times on the sparse input) and 5 to 17 times with one thread (13 to 17 times on the sparse input). On the dense input the one-thread speedup falls from 12 times at 100K rows to 5 times at 2M rows.
 
 ---
 
@@ -232,7 +233,7 @@ Fleet carries forward all source columns by default (useful for traceability); O
 - ANL01FL: the last record by AESEVN, then AESEQ, within USUBJID and AETERM, so one record per group on a tie.
 - ASEQ: numbered by AESEQ within USUBJID.
 
-Result of this rerun: all 17 variables have the same value on every row at every checked size: sparse 100K to 5M rows, dense 100K to 2M rows (on the dense input a USUBJID and AETERM group holds several copies of the same record, so the tie rule decides ANL01FL). The check did not run at 11,468,544 rows (section 2). A changed value in one row (ANL01FL, TRTEMFL or ASEQ) of a saved Fleet output makes the check report a difference.
+Result of this rerun (Fleet output of 2026-11-06 against the R output of the same day): all 17 variables have the same value on every row at every checked size: sparse 100K to 5M rows, dense 100K to 2M rows (on the dense input a USUBJID and AETERM group holds several copies of the same record, so the tie rule decides ANL01FL). The check did not run at 11,468,544 rows (section 2). A changed value in one row (ANL01FL, TRTEMFL or ASEQ) of a saved Fleet output makes the check report a difference.
 
 ---
 
@@ -256,9 +257,9 @@ To ensure objectivity:
 
 | Dimension             | Fleet                     | Oak + Admiral          | Winner       |
 | --------------------- | ------------------------- | ---------------------- | ------------ |
-| Speed (2M rows, sparse) | 4.24 s (16 threads), 10.10 s (1 thread) | 54.56 s (native R) | Fleet (13× / 5×) |
-| Speed (2M rows, dense)  | 0.97 s (16 threads), 2.91 s (1 thread)  | 14.62 s (native R) | Fleet (15× / 5×) |
-| Speed (11.5M rows, sparse) | 26.61 s (16 threads), 58.46 s (1 thread) | 322.20 s (1 run) | Fleet (12× / 6×) |
+| Speed (2M rows, sparse) | 1.69 s (16 threads), 3.84 s (1 thread) | 54.56 s (native R) | Fleet (32× / 14×) |
+| Speed (2M rows, dense)  | 0.84 s (16 threads), 3.01 s (1 thread)  | 14.62 s (native R) | Fleet (17× / 5×) |
+| Speed (11.5M rows, sparse) | 10.10 s (16 threads), 23.41 s (1 thread) | 322.20 s (1 run) | Fleet (32× / 14×) |
 | Speed via rpy2 (2M rows) | —                      | 67.08 s (+23% vs native) | Native R   |
 | Scaling linearity     | Near-linear               | Near-linear            | Comparable   |
 | Same 17 ADAE variables | Every row, every checked size | Every row, every checked size | Comparable |
@@ -269,7 +270,7 @@ To ensure objectivity:
 | Community / ecosystem | Small                     | Large (pharmaverse)    | Oak+Admiral  |
 | CDISC CT integration  | Built-in codelist classes | External lookups       | Fleet        |
 
-On this workload Fleet is 11 to 15 times faster than oak + admiral with 16 threads and 5 to 6 times faster on one thread, with fewer lines of pipeline code and a lighter dependency tree. Oak + Admiral remains the pharmaverse standard with deeper regulatory acceptance and a broader R-based ecosystem. The rpy2 bridge works and adds 20% to 28% to the total time from 500K to 2M rows, so native Rscript is the baseline for the speed comparison.
+On this workload Fleet is 17 to 38 times faster than oak + admiral with 16 threads and 5 to 17 times faster on one thread (29 to 38 times and 13 to 17 times on the sparse input), with fewer lines of pipeline code and a lighter dependency tree. Oak + Admiral remains the pharmaverse standard with deeper regulatory acceptance and a broader R-based ecosystem. The rpy2 bridge works and adds 20% to 28% to the total time from 500K to 2M rows, so native Rscript is the baseline for the speed comparison.
 
 ---
 
@@ -277,7 +278,7 @@ On this workload Fleet is 11 to 15 times faster than oak + admiral with 16 threa
 
 | Component | Version                       |
 | --------- | ----------------------------- |
-| Fleet     | 0.1.dev371 (`wip/high2-bench`) |
+| Fleet     | 0.1.dev562 (`main`, fdc137f)  |
 | Polars    | 1.44.2                        |
 | Python    | 3.12.16                       |
 | sdtm.oak  | 0.2.0                         |
