@@ -341,7 +341,7 @@ class TestAuditDiagnostics:
         assert any("fleet migrate --spec" in d["message"] for d in compute_diagnostics(text))
 
     @pytest.mark.parametrize(
-        "text", ["a: &x\n  - *x\n", "[" * 3000 + "]" * 3000], ids=["recursive-anchor", "deep"]
+        "text", ["a: &x\n  - *x\n", "[" * 101 + "]" * 101], ids=["recursive-anchor", "deep"]
     )
     def test_c1_616_a_hostile_file_gives_one_diagnostic(self, text):
         diags = compute_diagnostics(text)
@@ -380,6 +380,21 @@ def test_c1_616_load_spec_yaml_refuses_a_recursive_anchor():
 
     with pytest.raises(yaml.YAMLError, match="nests too deep"):
         load_spec_yaml("a: &x\n  - *x\n")
+
+
+def test_c1_616_load_spec_yaml_turns_a_recursion_error_into_a_yaml_error(monkeypatch):
+    import yaml
+
+    from fleet.core.define_spec import SpecYamlLoader
+    from fleet.introspect import load_spec_yaml
+
+    def overflow(self):
+        raise RecursionError
+
+    # A real overflow needs a file nested past the recursion limit; that strains the interpreter.
+    monkeypatch.setattr(SpecYamlLoader, "get_single_node", overflow)
+    with pytest.raises(yaml.YAMLError, match="nests too deep"):
+        load_spec_yaml("a: 1\n")
 
 
 # ── The server over stdio ─────────────────────────────────────────────────────
