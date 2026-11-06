@@ -80,12 +80,14 @@ import polars as pl
 import fleet
 
 vs = fleet.frame(pl.read_parquet("out/minipilot/vs.parquet"))
-adsl = pl.read_parquet("out/minipilot/adsl.parquet").select("USUBJID", "TRTSDT")
+adsl = pl.read_parquet("out/minipilot/adsl.parquet").select("USUBJID", "TRT01A", "TRTSDT", "SAFFL")
 
 advs = (
     vs.adam.merge(dataset=adsl, on="USUBJID", how="left")
     .assign("PARAMCD", source="VSTESTCD")
+    .assign("PARAM", source="VSTEST")
     .assign("AVAL", source="VSSTRESN")
+    .assign("AVALU", source="VSSTRESU")
     .date("ADT", source="VSDTC")
     .flag(
         "ABLFL",
@@ -98,16 +100,36 @@ advs = (
     .chg("CHG", aval="AVAL", base="BASE", post_baseline="pl.col('ADT') > pl.col('TRTSDT')")
     .pchg("PCHG", aval="AVAL", base="BASE", post_baseline="pl.col('ADT') > pl.col('TRTSDT')")
     .to_frame()
+    # keep= of SAS: the ADVS variables of the define, without the SDTM VS ones
+    .select(
+        "STUDYID",
+        "USUBJID",
+        "TRT01A",
+        "TRTSDT",
+        "SAFFL",
+        "PARAMCD",
+        "PARAM",
+        "AVAL",
+        "AVALU",
+        "VISITNUM",
+        "VISIT",
+        "ADT",
+        "ADTF",
+        "ABLFL",
+        "BASE",
+        "CHG",
+        "PCHG",
+    )
 )
 advs.write_parquet("out/minipilot/advs_qc.parquet")
 ```
 
-Then `fleet compare`, the PROC COMPARE of Fleet, checks the derived
-variables of the two datasets:
+Then `fleet compare`, the PROC COMPARE of Fleet, checks every variable of
+the two datasets:
 
 ```bash
 uv run fleet compare out/minipilot/advs.parquet out/minipilot/advs_qc.parquet \
-    --keys USUBJID,PARAMCD,VISITNUM --variables ADT,AVAL,ABLFL,BASE,CHG,PCHG
+    --keys USUBJID,PARAMCD,VISITNUM
 ```
 
 The verdict is `EQUAL: no differences found.` and the exit code is 0.
