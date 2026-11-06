@@ -4,6 +4,7 @@ import polars as pl
 import pytest
 
 import fleet  # noqa: F401 — triggers namespace registration
+from fleet.core.exceptions import DerivationError, VerbUsageError
 
 
 @pytest.fixture
@@ -171,6 +172,21 @@ class TestPostBaseline:
         result = self._ADVS.adam.chg("CHG").to_frame()
 
         assert result["CHG"].to_list() == [20.0, 0.0, 10.0, -10.0]
+
+    @pytest.mark.parametrize(
+        ("post_baseline", "error", "message"),
+        [
+            ("__import__('os').system('id')", DerivationError, "Dunder identifier"),
+            ("pl.col('AVISN').__class__", DerivationError, "Dunder attribute"),
+            ("1 + 1", DerivationError, "did not produce a pl.Expr"),
+            ("pl.col('AVISN')", VerbUsageError, "True or False per record, but it gives Int64"),
+            (True, VerbUsageError, "not bool"),
+        ],
+        ids=["import", "dunder", "not an expression", "not boolean", "not a string"],
+    )
+    def test_only_a_boolean_polars_expression_is_accepted(self, post_baseline, error, message):
+        with pytest.raises(error, match=message):
+            self._ADVS.adam.pchg("PCHG", post_baseline=post_baseline).to_frame()
 
 
 class TestFlag:

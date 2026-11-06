@@ -90,14 +90,33 @@ if TYPE_CHECKING:
 _GRADES = frozenset({"0", "1", "2", "3", "4"})
 
 
-def _post_baseline_only(expr: pl.Expr, post_baseline: str | pl.Expr | None) -> pl.Expr:
+def _post_baseline_only(
+    verb: str,
+    expr: pl.Expr,
+    post_baseline: str | pl.Expr | None,
+    schema: pl.Schema,
+) -> pl.Expr:
     """*expr* on the records *post_baseline* marks, null elsewhere; ``None`` keeps every record."""
     if post_baseline is None:
         return expr
     if isinstance(post_baseline, str):
         from fleet.sdtm.utils import parse_expression
 
-        post_baseline = parse_expression(post_baseline)
+        post_baseline = parse_expression(post_baseline, schema)
+    elif not isinstance(post_baseline, pl.Expr):
+        raise VerbUsageError(
+            f"{verb}: post_baseline must be a Polars expression or an expression string, "
+            f"not {type(post_baseline).__name__}. Example: \"pl.col('ADT') > pl.col('TRTSDT')\"."
+        )
+    try:
+        dtype = pl.LazyFrame(schema=schema).select(post_baseline).collect_schema().dtypes()[0]
+    except pl.exceptions.ColumnNotFoundError:
+        dtype = pl.Boolean  # _chain names the missing column
+    if dtype not in (pl.Boolean, pl.Null):
+        raise VerbUsageError(
+            f"{verb}: post_baseline must give True or False per record, but it gives {dtype}. "
+            "Compare a column, e.g. \"pl.col('ADT') > pl.col('TRTSDT')\"."
+        )
     name = expr.meta.output_name()
     return pl.when(post_baseline.fill_null(False)).then(expr).otherwise(None).alias(name)
 
@@ -251,7 +270,12 @@ class AdamNamespace(SharedADaMVerbsMixin):
                 )
         """
         return self._chain(
-            _post_baseline_only(chg(aval=aval, base=base, target=target), post_baseline),
+            _post_baseline_only(
+                f"chg('{target}')",
+                chg(aval=aval, base=base, target=target),
+                post_baseline,
+                self._lazy.collect_schema(),
+            ),
             verb="chg",
         )
 
@@ -301,7 +325,12 @@ class AdamNamespace(SharedADaMVerbsMixin):
                 )
         """
         return self._chain(
-            _post_baseline_only(pchg(aval=aval, base=base, target=target), post_baseline),
+            _post_baseline_only(
+                f"pchg('{target}')",
+                pchg(aval=aval, base=base, target=target),
+                post_baseline,
+                self._lazy.collect_schema(),
+            ),
             verb="pchg",
         )
 
