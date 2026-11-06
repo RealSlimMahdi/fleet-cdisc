@@ -2297,7 +2297,7 @@
 <ol>
 <li><strong>Access</strong> the namespace on a Polars DataFrame: <code>df.sdtm</code></li>
 <li><strong>Chain</strong> verb calls — each returns a new namespace object accumulating <code>pl.Expr</code> objects</li>
-<li><strong>Materialise</strong> with <code>.to_frame()</code> — executes a single <code>df.with_columns(...)</code> pass</li>
+<li><strong>Materialise</strong> with <code>.to_frame()</code> — Polars runs the lazy plan</li>
 </ol>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">result</span> <span class="o">=</span> <span class="p">(</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="n">raw_df</span><span class="o">.</span><span class="n">sdtm</span><span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="s2">&quot;USUBJID&quot;</span><span class="p">,</span> <span class="n">source</span><span class="o">=</span><span class="s2">&quot;patient_id&quot;</span><span class="p">)</span>  <span class="c1"># 1. access  # 2. chain</span>
@@ -2307,9 +2307,11 @@
 </span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="p">)</span>
 </span></code></pre></div>
 <p><code>assign</code> is the one canonical assignment verb (<code>source=</code> copies, <code>value=</code>
-hardcodes, <code>ct=</code>/<code>ct_map=</code> add CT). Most verbs only build an internal expression
-list at step 2; a few window/cross-domain verbs checkpoint internally but keep
-the chain going.</p>
+hardcodes, <code>ct=</code>/<code>ct_map=</code> add CT). Most verbs append to one lazy plan. Some
+verbs read data before the chain continues: checks (<code>baseline</code>, <code>date</code> to a DTC
+variable) and verbs that
+build or filter records (<code>whereclauses</code>, <code>pick</code>, <code>derive_*</code>, <code>nodup</code>). The chain
+does not break at these verbs.</p>
 <p>To inspect intermediate state or the query plan during development, use the
 chainable debug verbs <code>.inspect()</code> (hard checkpoint with diagnostic output)
 and <code>.explain()</code> (print the Polars query plan). See
@@ -2322,9 +2324,11 @@ and <code>.explain()</code> (print the Polars query plan). See
 </span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>  ├─ .assign(&quot;SEX&quot;, ct=...)          →  [..., Expr(when/then.alias(&quot;SEX&quot;))]
 </span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>  └─ .to_frame()
 </span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>       │
-</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>       └─ df.with_columns(*exprs)   ← single Polars pass
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>       └─ df.with_columns(*exprs)   ← one Polars plan for these verbs
 </span></code></pre></div>
-<p>This means you pay no cost for columns you don't chain. Expression ordering mirrors declaration order.</p>
+<p>This means you pay no cost for columns you don't chain. Expression ordering mirrors declaration order.
+The verbs that read data before the chain continues are listed in the GUIDE
+laziness table ("What is lazy, and what checkpoints").</p>
 <hr />
 <h2 id="sdtm-verbs-at-a-glance">SDTM verbs at a glance<a class="headerlink" href="#sdtm-verbs-at-a-glance" title="Permanent link">&para;</a></h2>
 <table>
@@ -2444,12 +2448,12 @@ and <code>.explain()</code> (print the Polars query plan). See
 <td>Corrected QT (QT in ms, RR in ms by default)</td>
 </tr>
 <tr>
-<td><code>derive_summary_records(by_vars, ...)</code></td>
+<td><code>derive_summary_records(by, ...)</code></td>
 <td>Aggregate by group, append summary rows</td>
 </tr>
 <tr>
-<td><code>derive_locf_records(by_vars, ...)</code></td>
-<td>Forward-fill (LOCF) within patient groups</td>
+<td><code>derive_locf_records(dataset_ref, by, order_by, ...)</code></td>
+<td>Add LOCF records for the expected visits</td>
 </tr>
 <tr>
 <td><code>derive_param(by_vars, ...)</code></td>
@@ -2559,20 +2563,21 @@ to <code>init define</code> and <code>init ct</code>, or <code>cd</code> into th
 <p><code>StudyContext.init()</code> can also be used programmatically — it creates the folder
 tree and writes <code>study_config.yaml</code>. Define specs and codelists are produced by
 the subsequent pipeline steps (<code>fleet init define</code>, <code>fleet init ct</code>).</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fleet</span><span class="w"> </span><span class="kn">import</span> <span class="n">StudyContext</span><span class="p">,</span> <span class="n">SDTMConfig</span><span class="p">,</span> <span class="n">ADAMConfig</span><span class="p">,</span> <span class="n">load_study_context</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="c1"># ── Once, when starting a new study ──────────────────────────────────────</span>
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="n">ctx</span> <span class="o">=</span> <span class="n">StudyContext</span><span class="o">.</span><span class="n">init</span><span class="p">(</span>
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>    <span class="s2">&quot;./studies/STUDY01&quot;</span><span class="p">,</span>
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>    <span class="n">study_id</span><span class="o">=</span><span class="s2">&quot;STUDY01&quot;</span><span class="p">,</span>
-</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>    <span class="n">company</span><span class="o">=</span><span class="s2">&quot;Acme Pharma&quot;</span><span class="p">,</span>
-</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>    <span class="n">sdtm</span><span class="o">=</span><span class="n">SDTMConfig</span><span class="p">(</span><span class="n">ig_version</span><span class="o">=</span><span class="s2">&quot;3-4&quot;</span><span class="p">,</span> <span class="n">domains</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;DM&quot;</span><span class="p">,</span> <span class="s2">&quot;AE&quot;</span><span class="p">,</span> <span class="s2">&quot;VS&quot;</span><span class="p">,</span> <span class="s2">&quot;EX&quot;</span><span class="p">]),</span>
-</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>    <span class="n">adam</span><span class="o">=</span><span class="n">ADAMConfig</span><span class="p">(</span><span class="n">ig_version</span><span class="o">=</span><span class="s2">&quot;1-1&quot;</span><span class="p">,</span> <span class="n">datasets</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;ADSL&quot;</span><span class="p">,</span> <span class="s2">&quot;ADVS&quot;</span><span class="p">]),</span>
-</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="p">)</span>
-</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>
-</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="c1"># ── Every subsequent session ──────────────────────────────────────────────</span>
-</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="n">ctx</span> <span class="o">=</span> <span class="n">load_study_context</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="s2">&quot;./studies/STUDY01/study_config.yaml&quot;</span><span class="p">))</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fleet</span><span class="w"> </span><span class="kn">import</span> <span class="n">StudyContext</span><span class="p">,</span> <span class="n">load_study_context</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fleet.core.study_context</span><span class="w"> </span><span class="kn">import</span> <span class="n">ADAMConfig</span><span class="p">,</span> <span class="n">SDTMConfig</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="c1"># ── Once, when starting a new study ──────────────────────────────────────</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="n">ctx</span> <span class="o">=</span> <span class="n">StudyContext</span><span class="o">.</span><span class="n">init</span><span class="p">(</span>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>    <span class="s2">&quot;./studies/STUDY01&quot;</span><span class="p">,</span>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>    <span class="n">study_id</span><span class="o">=</span><span class="s2">&quot;STUDY01&quot;</span><span class="p">,</span>
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>    <span class="n">company</span><span class="o">=</span><span class="s2">&quot;Acme Pharma&quot;</span><span class="p">,</span>
+</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>    <span class="n">sdtm</span><span class="o">=</span><span class="n">SDTMConfig</span><span class="p">(</span><span class="n">ig_version</span><span class="o">=</span><span class="s2">&quot;3-4&quot;</span><span class="p">,</span> <span class="n">domains</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;DM&quot;</span><span class="p">,</span> <span class="s2">&quot;AE&quot;</span><span class="p">,</span> <span class="s2">&quot;VS&quot;</span><span class="p">,</span> <span class="s2">&quot;EX&quot;</span><span class="p">]),</span>
+</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>    <span class="n">adam</span><span class="o">=</span><span class="n">ADAMConfig</span><span class="p">(</span><span class="n">ig_version</span><span class="o">=</span><span class="s2">&quot;1-1&quot;</span><span class="p">,</span> <span class="n">datasets</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;ADSL&quot;</span><span class="p">,</span> <span class="s2">&quot;ADVS&quot;</span><span class="p">]),</span>
+</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="p">)</span>
+</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a>
+</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="c1"># ── Every subsequent session ──────────────────────────────────────────────</span>
+</span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="n">ctx</span> <span class="o">=</span> <span class="n">load_study_context</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="s2">&quot;./studies/STUDY01/study_config.yaml&quot;</span><span class="p">))</span>
 </span></code></pre></div>
 <table>
 <thead>
@@ -2614,7 +2619,7 @@ the subsequent pipeline steps (<code>fleet init define</code>, <code>fleet init 
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="November 3, 2026 11:00:10 UTC">November 3, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="November 4, 2026 23:05:01 UTC">November 4, 2026</span>
   </span>
 
     

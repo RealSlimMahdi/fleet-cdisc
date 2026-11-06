@@ -2231,11 +2231,10 @@
 </span></code></pre></div>
 <h3 id="2-power-high-performance-lazy-evaluation">2. Power: High Performance Lazy Evaluation<a class="headerlink" href="#2-power-high-performance-lazy-evaluation" title="Permanent link">&para;</a></h3>
 <p>Fleet doesn't just wrap Polars; it deeply integrates with its lazy evaluation engine. When you chain Fleet verbs (e.g., <code>.assign()</code>, <code>.study_day()</code>), most accumulate business logic into a single optimized set of Polars expressions rather than computing immediately.</p>
-<p>When you call <code>.to_frame()</code>, Polars executes the pipeline in one pass, leveraging multithreading and query optimization. A few window/cross-domain verbs (<code>baseline</code>, pinned <code>study_day</code>) checkpoint internally — but they re-wrap the collected frame and keep the chain going, so <code>flag → baseline → chg</code> stays a single pipeline. The namespaces are also registered on <code>pl.LazyFrame</code>, so <code>pl.scan_parquet(...).sdtm</code> keeps the whole pipeline lazy with predicate pushdown.</p>
+<p>When you call <code>.to_frame()</code>, Polars executes the plan, with multithreading and query optimization. Most verbs append to one lazy plan. Some verbs read data before the chain continues: checks (<code>baseline</code>, <code>date</code> to a DTC variable) and verbs that build or filter records (<code>whereclauses</code>, <code>pick</code>, <code>derive_*</code>, <code>nodup</code>). The chain does not break at these verbs, so <code>flag → baseline → chg</code> stays one pipeline. The <a href="https://github.com/RealSlimMahdi/fleet-cdisc/blob/main/GUIDE.md#what-is-lazy-and-what-checkpoints">laziness table in the guide</a> lists every verb that reads data. The namespaces are also registered on <code>pl.LazyFrame</code>, so <code>pl.scan_parquet(...).sdtm</code> starts a lazy plan.</p>
 <ul>
-<li><strong>No intermediate DataFrames:</strong> Saves memory.</li>
-<li><strong>Blazing fast:</strong> Processes millions of records in milliseconds.</li>
-<li><strong>Zero overhead:</strong> Fleet verbs compile down to native Polars <code>pl.Expr</code> objects.</li>
+<li><strong>Native expressions:</strong> most Fleet verbs compile down to native Polars <code>pl.Expr</code> objects.</li>
+<li><strong>Multithreaded:</strong> Polars runs the plan on all CPU cores.</li>
 </ul>
 <h3 id="3-clarity-specification-driven-development">3. Clarity: Specification-Driven Development<a class="headerlink" href="#3-clarity-specification-driven-development" title="Permanent link">&para;</a></h3>
 <p>Fleet natively understands the <code>define.yaml</code> specification. You can define your metadata, controlled terminology, and derivation rules in a single, human-readable file.</p>
@@ -2302,7 +2301,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="September 4, 2026 14:38:31 UTC">September 4, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="November 4, 2026 23:05:01 UTC">November 4, 2026</span>
   </span>
 
     

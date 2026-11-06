@@ -2514,7 +2514,7 @@
 <p>Each link is a versioned, reviewable artefact stored alongside the study specification.</p>
 <hr />
 <h3 id="pillar-2-cross-language-benchmark-admiral-parity">Pillar 2 — Cross-Language Benchmark: <code>{admiral}</code> Parity<a class="headerlink" href="#pillar-2-cross-language-benchmark-admiral-parity" title="Permanent link">&para;</a></h3>
-<p><code>{admiral}</code>[^4] is the Roche/Atorus R package for ADaM derivations; it is the de-facto gold standard in R-based clinical programming and is documented in multiple regulatory submissions. Fleet's test suite contains <code>tests/unit/test_admiral_parity.py</code> — 400+ lines of tests that benchmark Fleet's Python outputs against documented <code>{admiral}</code> algorithm specifications.</p>
+<p><code>{admiral}</code>[^4] is the Roche/Atorus R package for ADaM derivations; it is the de-facto gold standard in R-based clinical programming and is documented in multiple regulatory submissions. Fleet's test suite contains <code>tests/unit/test_admiral_parity.py</code>: 39 tests that check selected <code>{admiral}</code> formulas and patterns, adapted to Polars, against expected values written into the tests. They do not cover every ADaM verb. The known differences are listed below.</p>
 <p><strong>Coverage as of v0.1.0:</strong></p>
 <table>
 <thead>
@@ -2526,7 +2526,7 @@
 <tbody>
 <tr>
 <td><code>TestBSA</code></td>
-<td>Dubois-DuBois, Mosteller, Haycock, Gehan-George (4 methods)</td>
+<td>DuBois, Mosteller, Haycock, Gehan-George (4 methods)</td>
 </tr>
 <tr>
 <td><code>TestMeanArterialPressure</code></td>
@@ -2568,10 +2568,47 @@
 </table>
 <p><strong>No R runtime is required.</strong> The parity tests work in two ways:</p>
 <ul>
-<li><strong>Formula transcription</strong> — mathematical formulas (BSA, QTc, MAP, age conversion) are transcribed directly from <code>{admiral}</code>'s published R source code. The tests then assert that Fleet's Polars implementation produces numerically identical results for the same inputs, using analytically-derived expected values computed in pure Python from the same formula.</li>
+<li><strong>Formula transcription</strong>: selected formulas (BSA, QTc, MAP, age conversion) are written from the <code>{admiral}</code> R source. The tests compare the Fleet result with an expected value that pure Python computes from the same formula, at the number of decimals that the verb keeps. This is the same formula, not a run of <code>{admiral}</code>.</li>
 <li><strong>Behavioural specification</strong> — for higher-level patterns such as ANL01FL flagging, the expected output rows and flag values are transcribed verbatim from <code>{admiral}</code>'s documented examples (the test comments quote the equivalent R code). Fleet's Python implementation is then verified to reproduce that exact output.</li>
 </ul>
-<p>This approach means the validation does not depend on an R installation, a specific R version, or <code>rpy2</code>. The published <code>{admiral}</code> specification is the invariant; Fleet's implementation is validated against it.</p>
+<p>This approach means the validation does not depend on an R installation, a specific R version, or <code>rpy2</code>. It covers only the formulas and patterns in the tests. The weekly admiral oracle job (<code>scripts/admiral_oracle.py</code>) runs <code>{admiral}</code> itself on study day, duration, TRTEMFL and ANL01FL.</p>
+<p><strong>Known differences from <code>{admiral}</code>:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Class</th>
+<th>Fleet</th>
+<th><code>{admiral}</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Sign</td>
+<td><code>pchg</code>: <code>(AVAL - BASE) / BASE * 100</code>. AVAL -5, BASE -10 gives PCHG -50.</td>
+<td><code>derive_var_pchg</code> divides by <code>abs(BASE)</code>: the same row gives 50.</td>
+</tr>
+<tr>
+<td>Rounding</td>
+<td><code>bsa</code> keeps 4 decimals, <code>map</code> and <code>qtc</code> keep 2, <code>bmi</code> keeps 1.</td>
+<td><code>compute_bsa</code>, <code>compute_map</code>, <code>compute_qtc</code> do not round.</td>
+</tr>
+<tr>
+<td>Record structure</td>
+<td><code>derive_locf_records</code> fills the null values in place and adds no DTYPE.</td>
+<td><code>derive_locf_records</code> adds new records with <code>DTYPE = "LOCF"</code>.</td>
+</tr>
+<tr>
+<td>Missing values</td>
+<td><code>pchg</code> gives null when BASE is 0.</td>
+<td>Same: <code>NA</code> when BASE is 0.</td>
+</tr>
+<tr>
+<td>Units</td>
+<td><code>qtc</code> reads RR in ms (ADR-0013).</td>
+<td>Same: RR in ms.</td>
+</tr>
+</tbody>
+</table>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Example: ANL01FL last-valid-row parity test</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="c1"># tests/unit/test_admiral_parity.py — TestANL01FLAdmiralParity</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="c1">#</span>
@@ -2650,11 +2687,10 @@ cannot replace the engine the team pinned. An explicit <code>rules_engine_path=<
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># After fleet init define has created define.yaml files:</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>uv<span class="w"> </span>run<span class="w"> </span>fleet<span class="w"> </span>init<span class="w"> </span>rules
 </span></code></pre></div>
-<p>Each YAML file records the rule's CORE ID, description, check logic, scope, severity, and regulatory citations. When committed to VCS, these files provide:</p>
+<p>Each YAML file records the rule's CORE ID, description, check logic, scope, and regulatory citations. The files are a reference copy. Validation does not read them: the CORE engine runs the rules bundled in its own release, so the engine version fixes the rules that a study is validated against. Pin the engine with <code>fleet install-engine --version &lt;tag&gt;</code> or with <code>validation.engine_path</code> in <code>study_config.yaml</code>. When committed to VCS, the files provide:</p>
 <ul>
-<li><strong>Version lock:</strong> The exact rule definitions in effect when the study was validated, immune to upstream CDISC updates.</li>
-<li><strong>Audit trail:</strong> Reviewers (including regulators) can inspect which rules were applied without re-querying the CDISC Library.</li>
-<li><strong>Diff visibility:</strong> Any change in the rule set between study milestones is visible in version control history.</li>
+<li><strong>Reference:</strong> Reviewers can read the rule text for the IG version without re-querying the CDISC Library.</li>
+<li><strong>Diff visibility:</strong> Any change in the CDISC Library rule text between study milestones is visible in version control history.</li>
 </ul>
 <h4 id="custom-rules">Custom rules<a class="headerlink" href="#custom-rules" title="Permanent link">&para;</a></h4>
 <p>When the standard CDISC CORE rule set does not cover a study-specific requirement, sponsors can author custom rules in the same YAML schema used by the engine.</p>
@@ -2742,7 +2778,7 @@ cannot replace the engine the team pinned. An explicit <code>rules_engine_path=<
 <tr>
 <td>Conformance rule snapshot</td>
 <td><code>fleet init rules</code> → <code>metadata/*/rules/*.yaml</code></td>
-<td>All CDISC CORE rules for IG version, version-locked</td>
+<td>All CDISC CORE rules for IG version, reference copy</td>
 <td>Automated at study setup</td>
 </tr>
 <tr>
@@ -2779,7 +2815,7 @@ cannot replace the engine the team pinned. An explicit <code>rules_engine_path=<
 <td>ADaM conformance</td>
 <td><code>ValidationService.validate_adam()</code></td>
 <td>ADSL, BDS, OCCDS datasets, ADaMIG 1.3</td>
-<td>Run at study delivery</td>
+<td>Gives NOT ASSESSED until CORE ships ADaM rules, so it is not a qualification activity today</td>
 </tr>
 <tr>
 <td>Unit and integration tests</td>
@@ -2836,7 +2872,7 @@ cannot replace the engine the team pinned. An explicit <code>rules_engine_path=<
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="November 3, 2026 22:02:25 UTC">November 3, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="November 4, 2026 23:13:56 UTC">November 4, 2026</span>
   </span>
 
     

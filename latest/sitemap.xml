@@ -2,254 +2,358 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/changelog/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/test-status/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/validation-strategy/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/why-fleet/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/adr/0001-introspection-surface-for-protocol-adapters/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/adr/0002-own-comparison-engine-in-pure-polars/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/adr/0003-one-run-setup-for-every-validation-surface/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/adr/0004-a-compare-that-checks-no-values-keeps-the-two-value-verdict/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/adr/0005-summary-specs-are-the-engine-contract/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/adr/0006-a-study-run-carries-only-derivation-free-columns-and-pins-every-input/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/adr/0007-spec-parameter-facts-come-from-the-verb-signature/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/adr/0008-the-verb-is-the-algorithm/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/adr/0009-an-admission-bar-for-clinical-verbs/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/adr/0010-sas-files-follow-sas-rules/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/adr/0011-one-reader-for-dtc-text/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/adr/0012-adsl-and-occds-verbs-follow-admiral/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/adr/0013-one-flagged-record-per-group-and-qtc-units/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/adr/0014-grading-criteria-are-generated-from-admiral/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/adr/0015-blq-comes-from-the-sdtm-text/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/adr/0016-the-population-filter-selects-the-subjects-of-every-count/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/adr/0017-every-core-finding-blocks-until-the-study-accepts-it/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/adr/0018-define-gaps-are-named-and-strict-refuses/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/adr/0019-the-bootstrap-pins-two-ct-packages-and-invents-no-text/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/adr/0020-a-missing-sort-key-sorts-last-as-admiral/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
+    </url>
+    <url>
+         <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/adr/0021-date-imputation-reads-the-form-and-follows-admiral-highest/</loc>
+         <lastmod>2026-11-06</lastmod>
+    </url>
+    <url>
+         <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/adr/0022-a-date-verb-reads-the-type-of-each-column/</loc>
+         <lastmod>2026-11-06</lastmod>
+    </url>
+    <url>
+         <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/adr/0023-nodup-sorts-a-missing-key-as-sas/</loc>
+         <lastmod>2026-11-06</lastmod>
+    </url>
+    <url>
+         <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/adr/0024-pick-needs-an-order-and-takes-the-last-tied-record/</loc>
+         <lastmod>2026-11-06</lastmod>
+    </url>
+    <url>
+         <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/adr/0025-a-derived-value-keeps-full-precision-and-age-is-completed-years/</loc>
+         <lastmod>2026-11-06</lastmod>
+    </url>
+    <url>
+         <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/adr/0026-pediatric-bmi-uses-a-growth-reference-and-the-adult-rule-moves-to-metabolic/</loc>
+         <lastmod>2026-11-06</lastmod>
+    </url>
+    <url>
+         <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/adr/0027-vaccine-flags-follow-their-cited-definitions/</loc>
+         <lastmod>2026-11-06</lastmod>
+    </url>
+    <url>
+         <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/adr/0028-toxicity-grading-states-its-unit-and-description-columns/</loc>
+         <lastmod>2026-11-06</lastmod>
+    </url>
+    <url>
+         <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/adr/0029-locf-adds-records-with-dtype-as-admiral/</loc>
+         <lastmod>2026-11-06</lastmod>
+    </url>
+    <url>
+         <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/adr/0030-response-confirmation-follows-admiralonco-by-default/</loc>
+         <lastmod>2026-11-06</lastmod>
+    </url>
+    <url>
+         <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/adr/0031-best-overall-response-needs-the-protocol-sd-minimum/</loc>
+         <lastmod>2026-11-06</lastmod>
+    </url>
+    <url>
+         <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/adr/0032-merge-reads-as-sas-merge-and-stops-on-a-clash/</loc>
+         <lastmod>2026-11-06</lastmod>
+    </url>
+    <url>
+         <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/adr/0033-a-criterion-on-a-missing-value-is-missing/</loc>
+         <lastmod>2026-11-06</lastmod>
+    </url>
+    <url>
+         <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/adr/0034-record-filters-live-in-a-dataset-level-row-steps-list/</loc>
+         <lastmod>2026-11-06</lastmod>
+    </url>
+    <url>
+         <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/adr/0035-visit-map-numbers-an-unscheduled-visit/</loc>
+         <lastmod>2026-11-06</lastmod>
+    </url>
+    <url>
+         <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/adr/0036-an-arm-path-entry-is-an-element-or-a-step/</loc>
+         <lastmod>2026-11-06</lastmod>
+    </url>
+    <url>
+         <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/adr/0037-a-printed-tie-rounds-half-away-from-zero/</loc>
+         <lastmod>2026-11-06</lastmod>
+    </url>
+    <url>
+         <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/adr/0038-a-missing-value-is-counted-not-dropped/</loc>
+         <lastmod>2026-11-06</lastmod>
+    </url>
+    <url>
+         <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/adr/0039-a-count-cell-shows-every-number-the-table-needs/</loc>
+         <lastmod>2026-11-06</lastmod>
+    </url>
+    <url>
+         <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/adr/0040-rtf-pages-carry-their-own-title-footnotes-and-page-number/</loc>
+         <lastmod>2026-11-06</lastmod>
+    </url>
+    <url>
+         <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/adr/0041-the-define-follows-the-ig-for-dataset-defaults-and-qualifiers/</loc>
+         <lastmod>2026-11-06</lastmod>
+    </url>
+    <url>
+         <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/adr/0042-the-sdtm-define-states-the-itemref-role-and-core-checks-a-define-only-on-request/</loc>
+         <lastmod>2026-11-06</lastmod>
+    </url>
+    <url>
+         <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/adr/0043-tte-censors-at-the-last-record-before-the-stop-date/</loc>
+         <lastmod>2026-11-06</lastmod>
+    </url>
+    <url>
+         <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/adr/0044-the-define-moves-a-parent-qualifier-to-a-generated-supp-dataset/</loc>
+         <lastmod>2026-11-06</lastmod>
+    </url>
+    <url>
+         <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/adr/0045-one-date-time-path-follows-admiral-derive-vars-dtm/</loc>
+         <lastmod>2026-11-06</lastmod>
+    </url>
+    <url>
+         <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/adr/0046-a-subject-level-table-takes-the-adsl-arm/</loc>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/api/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/api/adam/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/api/adsl/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/api/cheat_sheet/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/api/codelists/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/api/comparison/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/api/core/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/api/ct/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/api/define_xml/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/api/introspect/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/api/occds/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/api/run/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/api/sdtm/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/api/ta/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/api/tdd/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/api/tlg/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/concepts/advanced/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/concepts/comparison/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/concepts/custom-rules/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/concepts/define-yaml/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/concepts/exports/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/concepts/interactive-explorer/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/concepts/pick/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/concepts/pipeline/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/concepts/tdd/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/concepts/validation-core/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/examples/01_code_driven_pipeline/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/examples/02_spec_driven_pipeline/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/examples/adtte_pipeline/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/examples/full_pipeline/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/examples/r2r_strategy/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/examples/tdd_pipeline/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/examples/tlg_pipeline/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/getting-started/cli/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/getting-started/ide-tooling/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/getting-started/installation/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/getting-started/quickstart/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/getting-started/troubleshooting/</loc>
-         <lastmod>2026-11-04</lastmod>
+         <lastmod>2026-11-06</lastmod>
     </url>
 </urlset>

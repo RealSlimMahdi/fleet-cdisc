@@ -2394,7 +2394,7 @@
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>    <span class="p">{</span><span class="s2">&quot;when&quot;</span><span class="p">:</span> <span class="s1">&#39;pl.col(&quot;DTHDT&quot;).is_not_null()&#39;</span><span class="p">,</span> <span class="s2">&quot;set&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;LSTALVDT&quot;</span><span class="p">:</span> <span class="s2">&quot;DTHDT&quot;</span><span class="p">}},</span>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="p">]</span>
 </span></code></pre></div>
-<p>This is equivalent to passing a <code>pl.Expr</code> directly and enables full round-tripping through <code>define.yaml</code>.</p>
+<p>This gives the same result as a <code>pl.Expr</code>, and a define.yaml can hold it. When an event holds a <code>pl.DataFrame</code> or a <code>pl.Expr</code>, <code>to_spec_yaml()</code> cannot write it and writes a TODO stub for the variable.</p>
 <h2 id="admiral-comparison">Admiral Comparison<a class="headerlink" href="#admiral-comparison" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -2430,12 +2430,12 @@
 </tr>
 </tbody>
 </table>
-<p>Fleet's <code>pick()</code> is semantically equivalent but:</p>
+<p>Compared with admiral, Fleet's <code>pick()</code>:</p>
 <ul>
 <li>Eliminates the need for a separate <code>event()</code> constructor</li>
 <li>Supports per-event mode/order overrides</li>
 <li>Accepts literals (<code>pl.lit("Y")</code>) directly in <code>"set"</code> alongside column references</li>
-<li>Chains naturally into the ADaM pipeline without materialisation breaks</li>
+<li>Chains into the ADaM pipeline with no <code>.to_frame()</code> call (it reads the data once, at the verb)</li>
 </ul>
 <h2 id="when-to-use-pick-vs-derivation">When to Use <code>pick()</code> vs <code>@derivation</code><a class="headerlink" href="#when-to-use-pick-vs-derivation" title="Permanent link">&para;</a></h2>
 <table>
@@ -2466,24 +2466,33 @@
 </table>
 <p><strong>Rule of thumb:</strong> If your logic is "the latest (or first) value over sources A, B and C", or "try source A, then B, then C", use <code>pick()</code>.  If it requires comparing multiple records within the same subject to determine a single result (e.g., sustained response confirmation), use a <code>@derivation</code>.</p>
 <h2 id="spec-driven-usage">Spec-Driven Usage<a class="headerlink" href="#spec-driven-usage" title="Permanent link">&para;</a></h2>
-<p>In a <code>define.yaml</code>, the pick algorithm maps directly:</p>
+<p>In a <code>define.yaml</code>, the pick block goes under the variable's <code>derivation:</code>. Use date columns (AEENDT, not the text AEENDTC), so that the dates compare as dates:</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nt">variables</span><span class="p">:</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">LSTALVDT</span>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">    </span><span class="nt">label</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Last Date Known Alive</span>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">    </span><span class="nt">algorithm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pick</span>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">    </span><span class="nt">targets</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">LSTALVDT</span><span class="p p-Indicator">]</span>
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">    </span><span class="nt">events</span><span class="p">:</span>
-</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">when</span><span class="p">:</span><span class="w"> </span><span class="s">&#39;pl.col(&quot;DTHDT&quot;).is_not_null()&#39;</span>
-</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="w">        </span><span class="nt">set</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">LSTALVDT</span><span class="p">:</span><span class="w"> </span><span class="nv">DTHDT</span><span class="p p-Indicator">}</span>
-</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="w">        </span><span class="nt">source</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ADSL</span>
-</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">when</span><span class="p">:</span><span class="w"> </span><span class="s">&#39;pl.col(&quot;AEENDTC&quot;).is_not_null()&#39;</span>
-</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="w">        </span><span class="nt">set</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">LSTALVDT</span><span class="p">:</span><span class="w"> </span><span class="nv">AEENDTC</span><span class="p p-Indicator">}</span>
-</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="w">        </span><span class="nt">source</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">AE</span>
-</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="w">    </span><span class="nt">by</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">USUBJID</span><span class="p p-Indicator">]</span>
-</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="w">    </span><span class="nt">order</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">LSTALVDT</span><span class="p p-Indicator">]</span>
-</span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a><span class="w">    </span><span class="nt">mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">last</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">date</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">    </span><span class="nt">derivation</span><span class="p">:</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">      </span><span class="nt">algorithm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pick</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">      </span><span class="nt">events</span><span class="p">:</span>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">when</span><span class="p">:</span><span class="w"> </span><span class="s">&#39;pl.col(&quot;DTHDT&quot;).is_not_null()&#39;</span>
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="w">          </span><span class="nt">set</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">LSTALVDT</span><span class="p">:</span><span class="w"> </span><span class="nv">DTHDT</span><span class="p p-Indicator">}</span>
+</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="w">          </span><span class="nt">source</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ADSL</span>
+</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">when</span><span class="p">:</span><span class="w"> </span><span class="s">&#39;pl.col(&quot;AEENDT&quot;).is_not_null()&#39;</span>
+</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="w">          </span><span class="nt">set</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">LSTALVDT</span><span class="p">:</span><span class="w"> </span><span class="nv">AEENDT</span><span class="p p-Indicator">}</span>
+</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="w">          </span><span class="nt">source</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">AE</span>
+</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">when</span><span class="p">:</span><span class="w"> </span><span class="s">&#39;pl.col(&quot;TRTEDT&quot;).is_not_null()&#39;</span>
+</span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a><span class="w">          </span><span class="nt">set</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">LSTALVDT</span><span class="p">:</span><span class="w"> </span><span class="nv">TRTEDT</span><span class="p p-Indicator">}</span>
+</span><span id="__span-4-16"><a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a><span class="w">          </span><span class="nt">source</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ADSL</span>
+</span><span id="__span-4-17"><a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a><span class="w">      </span><span class="nt">by</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">USUBJID</span><span class="p p-Indicator">]</span>
+</span><span id="__span-4-18"><a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a><span class="w">      </span><span class="nt">order</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">LSTALVDT</span><span class="p p-Indicator">]</span>
+</span><span id="__span-4-19"><a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a><span class="w">      </span><span class="nt">mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">last</span>
 </span></code></pre></div>
-<p>Fleet's <code>from_spec()</code> dispatches to <code>.pick()</code> automatically when <code>algorithm: pick</code> is detected.</p>
+<p>Each <code>source:</code> name is a pinned dataset. Pin them before <code>from_spec()</code>; a name with no pin raises <code>PinError</code>:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">adsl</span> <span class="o">=</span> <span class="p">(</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>    <span class="n">adsl_df</span><span class="o">.</span><span class="n">adam</span><span class="o">.</span><span class="n">adsl</span><span class="o">.</span><span class="n">pin</span><span class="p">(</span><span class="n">ADSL</span><span class="o">=</span><span class="n">adsl_df</span><span class="p">,</span> <span class="n">AE</span><span class="o">=</span><span class="n">adae</span><span class="p">)</span><span class="o">.</span><span class="n">from_spec</span><span class="p">(</span><span class="s2">&quot;define.yaml&quot;</span><span class="p">,</span> <span class="n">dataset</span><span class="o">=</span><span class="s2">&quot;ADSL&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">to_frame</span><span class="p">()</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="p">)</span>
+</span></code></pre></div>
+<p><code>algorithm:</code>, <code>events:</code> or <code>targets:</code> beside <code>name:</code> (not under <code>derivation:</code>) raise <code>SpecError</code>.</p>
 
 
 
@@ -2506,7 +2515,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="November 3, 2026 09:14:56 UTC">November 3, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="November 4, 2026 23:05:01 UTC">November 4, 2026</span>
   </span>
 
     

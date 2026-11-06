@@ -1010,6 +1010,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#what-a-pass-does-not-cover-controlled-terminology" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What a PASS does not cover: controlled terminology
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#which-rules-actually-exist-upstream" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2212,6 +2223,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#what-a-pass-does-not-cover-controlled-terminology" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What a PASS does not cover: controlled terminology
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#which-rules-actually-exist-upstream" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2311,6 +2333,10 @@ first source that gives it:</p>
   (<code>--custom-rules</code> overrides). They run in a second engine run next to the
   official rules, so a sweep of both standards with custom rules makes four
   engine runs. See <a href="../custom-rules/">Custom Validation Rules</a>.</li>
+<li><strong>Define-XML</strong>: <code>--define outputs/define_sdtm.xml</code> gives the define to
+  CORE (<code>-dxp</code>), so the define rules (for example CG0010 on the ItemRef
+  Role) run. It is opt-in: Fleet never passes a define by default
+  (ADR 0042).</li>
 <li>The report header of each dataset shows every input with its source, as on
   the verb.</li>
 <li><strong>HTML report</strong>: <code>--report findings.html</code> writes one page: a status row
@@ -2344,6 +2370,16 @@ first source that gives it:</p>
 <li>Exit codes: 0 nothing blocks, 1 a finding blocks, 2 a dataset could not
   run. So <code>fleet validate</code> drops straight into CI. The last line counts each
   status and the findings.</li>
+<li><strong>Rule counts</strong>: each report states, per engine run (official, custom),
+  how many rules executed, were skipped and could not run, for example
+  <code>Rules (engine run, official): 90 executed, 313 skipped, 27 could not run</code>.
+  The counts belong to the engine run, not to one dataset. A rule that could
+  not run (status <code>EXECUTION_ERROR</code>, often because a dataset it needs is
+  absent) is a rule problem, not a data finding: its rows are left out of the
+  findings, and it does not change the status or the exit code. The rows are
+  chosen by the rule status in <code>Rules_Report</code>, never by the message text.
+  <code>fleet validate</code> and the HTML report also list the IDs of these rules; the
+  verb prints the count line only.</li>
 <li><strong>Engine version</strong>: <code>fleet install-engine</code> installs the newest tested CORE
   release. The report header and <code>fleet doctor</code> name a version Fleet is not
   tested with. A weekly CI job runs Fleet on the newest CORE release.</li>
@@ -2439,6 +2475,17 @@ used:</p>
 <li>the IG version is not supported, for example SDTMIG 3.1.3,</li>
 <li>the custom rules directory does not exist.</li>
 </ul>
+<h2 id="what-a-pass-does-not-cover-controlled-terminology">What a PASS does not cover: controlled terminology<a class="headerlink" href="#what-a-pass-does-not-cover-controlled-terminology" title="Permanent link">&para;</a></h2>
+<p>CORE checks only a few controlled terminology values. A <code>PASS</code> or a <code>FAIL</code>
+for other rules does not mean that the codelist values are correct. Fleet
+checks a value against its codelist at the line that assigns it
+(<code>assign(..., ct=SEX)</code>), and warns.</p>
+<p>Example: a DM with <code>SEX = "X"</code>, <code>AGEU = "DECADES"</code>, <code>RACE = "MARTIAN"</code> and
+<code>ETHNIC = "UNKNOWN ETHNIC"</code>, and an AE with <code>AESER = "YES"</code>,
+<code>AESEV = "HORRIBLE"</code>, <code>AEOUT = "BETTER"</code> and <code>AESTDTC = "2020-13-45"</code>.
+<code>fleet validate</code> (CORE 0.15.0) reports only CORE-000087 and CORE-000266
+(AESER) and CORE-000726 (ETHNIC) for these values. It names no finding for
+SEX, AGEU, RACE, AESEV, AEOUT or the bad ISO 8601 date.</p>
 <h2 id="which-rules-actually-exist-upstream">Which rules actually exist upstream<a class="headerlink" href="#which-rules-actually-exist-upstream" title="Permanent link">&para;</a></h2>
 <p>CORE executes the rule sets CDISC has published to its Library. As of
 mid-2026 that means:</p>
@@ -2541,7 +2588,7 @@ control next to the study.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="November 3, 2026 21:47:21 UTC">November 3, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="November 4, 2026 23:53:16 UTC">November 4, 2026</span>
   </span>
 
     

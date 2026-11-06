@@ -2185,7 +2185,12 @@ directory from <code>study_config.yaml</code>:</p>
 <h2 id="from-the-spec-output_format">From the spec (<code>output_format:</code>)<a class="headerlink" href="#from-the-spec-output_format" title="Permanent link">&para;</a></h2>
 <p>Declare the format once in <code>define.yaml</code> — per dataset or spec-wide. The
 choice is recorded in the pipeline DAG and drives the Define-XML leaf
-<code>href</code>s, so the metadata always points at the files you actually ship:</p>
+<code>href</code>s. <code>fleet run</code> writes each dataset in the same format: <code>--format</code>,
+else the dataset's <code>output_format:</code>, else the spec's, else parquet. A
+<code>--format</code> that differs from the define warns, and <code>fleet define-xml</code> warns
+when a leaf names a file that the data folder does not hold. <code>output:</code>
+names the leaf <code>href</code> only; <code>fleet run</code> warns when it writes another file
+name:</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">output_format</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">parquet</span><span class="w">          </span><span class="c1"># spec-level default</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nt">datasets</span><span class="p">:</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ADSL</span>
@@ -2213,7 +2218,17 @@ choice is recorded in the pipeline DAG and drives the Define-XML leaf
   for the dataset and variable labels; <code>fleet run</code> takes them from
   <code>define.yaml</code>. Install the writer with <code>uv add "fleet-cdisc[io]"</code>.</li>
 <li><strong>Dataset-JSON</strong> embeds dataset metadata (<code>domain</code>, <code>label</code>, originator,
-  file OID) alongside typed column data — pass them as keyword arguments.</li>
+  file OID) alongside typed column data. Pass <code>columns=</code> for the variable
+  labels, lengths and key sequence, and <code>study_oid=</code> and
+  <code>metadata_version_oid=</code> for the define. <code>fleet run</code> and <code>to_dataset_json</code>
+  after <code>from_spec</code> take them from <code>define.yaml</code>. Each <code>itemOID</code> is the
+  ItemDef OID of the Define-XML. A <code>pl.Date</code>, <code>pl.Datetime</code> or <code>pl.Time</code> is
+  written with <code>targetDataType: integer</code> and DATE9., DATETIME20. or TIME8.,
+  so <code>read_dataset_json</code> gives the date back. NaN and infinity are written
+  as null, with a warning, because JSON has no such number. A duration
+  column stops the write: convert it to a number first.
+  <code>read_dataset_json</code> reads <code>float</code> and <code>decimal</code> as <code>pl.Float64</code>, as SAS
+  holds them, and an integer written as <code>63.0</code> as 63.</li>
 <li><strong>Parquet</strong> forwards any keyword arguments to Polars'
   <code>write_parquet</code> (compression, statistics, ...).</li>
 </ul>
@@ -2271,7 +2286,7 @@ this page covers dataset files for machines and submissions. See
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="November 2, 2026 16:26:57 UTC">November 2, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="November 4, 2026 23:20:39 UTC">November 4, 2026</span>
   </span>
 
     

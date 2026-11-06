@@ -1073,10 +1073,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#three-kind-values" class="md-nav__link">
+  <a href="#two-kind-values" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Three kind values
+        Two kind values
       
     </span>
   </a>
@@ -1106,10 +1106,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#kindparam-example" class="md-nav__link">
+  <a href="#a-new-parameter-row-derive_param" class="md-nav__link">
     <span class="md-ellipsis">
       
-        kind="param" example
+        A new parameter row: derive_param
       
     </span>
   </a>
@@ -2318,10 +2318,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#three-kind-values" class="md-nav__link">
+  <a href="#two-kind-values" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Three kind values
+        Two kind values
       
     </span>
   </a>
@@ -2351,10 +2351,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#kindparam-example" class="md-nav__link">
+  <a href="#a-new-parameter-row-derive_param" class="md-nav__link">
     <span class="md-ellipsis">
       
-        kind="param" example
+        A new parameter row: derive_param
       
     </span>
   </a>
@@ -2590,6 +2590,7 @@
 </span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>    <span class="p">),</span>
 </span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="p">)</span><span class="o">.</span><span class="n">to_frame</span><span class="p">()</span>
 </span></code></pre></div>
+<p><strong>Date differences are durations, not days.</strong> In Polars, <code>TRTEDT - TRTSDT</code> gives a Duration, not a number of days as in SAS. In a string expression, <code>flag</code>, <code>case_when</code> and <code>derivation</code> refuse <code>TRTEDT - TRTSDT &gt; 10</code> and name the correct form, <code>(TRTEDT - TRTSDT).dt.total_days() &gt; 10</code>. A direct <code>pl.Expr</code> is not checked: write <code>(pl.col("TRTEDT") - pl.col("TRTSDT")).dt.total_days()</code> yourself, or <code>&gt; 10</code> compares with 10 microseconds.</p>
 <p><strong>Lambda returning <code>pl.Expr</code> (inline, IDE auto-complete, no string sandbox):</strong></p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">adsl</span> <span class="o">=</span> <span class="n">dm</span><span class="o">.</span><span class="n">adam</span><span class="o">.</span><span class="n">adsl</span><span class="o">.</span><span class="n">derivation</span><span class="p">(</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="s2">&quot;AGEGR1&quot;</span><span class="p">,</span>
@@ -2600,7 +2601,7 @@
 </span></code></pre></div>
 <h2 id="derivation-file-based-lineage-tracked-derivations"><code>@derivation</code> — File-Based, Lineage-Tracked Derivations<a class="headerlink" href="#derivation-file-based-lineage-tracked-derivations" title="Permanent link">&para;</a></h2>
 <p>For study-specific logic that should be versioned, reused, and automatically documented in Define-XML, use the <code>@derivation</code> decorator. This is the <strong>primary escape-hatch pattern</strong> for anything too complex for a one-liner.</p>
-<h3 id="three-kind-values">Three <code>kind</code> values<a class="headerlink" href="#three-kind-values" title="Permanent link">&para;</a></h3>
+<h3 id="two-kind-values">Two <code>kind</code> values<a class="headerlink" href="#two-kind-values" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
 <tr>
@@ -2620,11 +2621,6 @@
 <td>Multi-column or aggregation logic</td>
 <td><code>(df: pl.DataFrame) -&gt; pl.DataFrame</code></td>
 </tr>
-<tr>
-<td><code>param</code></td>
-<td>By-group reshape (e.g. tall/narrow BDS rows)</td>
-<td><code>(df: pl.DataFrame) -&gt; pl.DataFrame</code> + <code>by=</code> / <code>set_values_to=</code></td>
-</tr>
 </tbody>
 </table>
 <p><strong>What the function receives and returns:</strong></p>
@@ -2632,21 +2628,21 @@
 <li><strong><code>column</code></strong> — the function takes <strong>no arguments</strong> and returns a
   <code>pl.Expr</code>. Fleet splices the expression into the lazy pipeline, so
   nothing is materialised: it behaves exactly like an inline
-  <code>.derivation(expression=...)</code>, just versioned in its own file.</li>
+  <code>.derivation(expression=...)</code>, just versioned in its own file. The
+  result goes to the column named as the function (<code>AGEGR1</code> below). An
+  explicit <code>.alias()</code> on the expression wins.</li>
 <li><strong><code>frame</code></strong> — the <code>df</code> parameter is <strong>the pipeline's current state</strong>,
   materialised as a plain <code>pl.DataFrame</code> at the point the derivation runs
   (every column derived by earlier verbs is present). The function returns
   a <code>pl.DataFrame</code> — usually <code>df.with_columns(...)</code> — and Fleet wraps the
   result back into the namespace so the chain continues.</li>
-<li><strong><code>param</code></strong> — same in/out contract as <code>frame</code> (upstream
-  <code>pl.DataFrame</code> in, <code>pl.DataFrame</code> out), but tagged for BDS parameter
-  derivation: the <code>by=</code> / <code>set_values_to=</code> metadata drives the by-group
-  reshape and the PARAMCD/PARAM stamping of the appended rows.</li>
 </ul>
 <p>You rarely need to pass <code>kind=</code> yourself — it is inferred from the
 signature: a return annotation of <code>pl.Expr</code> (or a zero-argument function)
-means <code>column</code>; <code>by=</code>/<code>set_values_to=</code> means <code>param</code>; everything else is
-<code>frame</code>.</p>
+means <code>column</code>; everything else is <code>frame</code>.</p>
+<p>A new parameter row, such as BMI from WEIGHT and HEIGHT, is not a
+<code>@derivation</code>: use <code>.adam.derive_param()</code>. <code>@derivation(by=...,
+set_values_to=...)</code> raises <code>VerbUsageError</code>.</p>
 <h3 id="kindcolumn-example"><code>kind="column"</code> example<a class="headerlink" href="#kindcolumn-example" title="Permanent link">&para;</a></h3>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># examples/cdiscpilot01/adam/derivations/AGEGR1.py</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fleet.core.derivation</span><span class="w"> </span><span class="kn">import</span> <span class="n">derivation</span>
@@ -2674,14 +2670,13 @@ means <code>column</code>; <code>by=</code>/<code>set_values_to=</code> means <c
 </span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>        <span class="n">pl</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="s2">&quot;Y&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;ITTFL&quot;</span><span class="p">),</span>
 </span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>    <span class="p">)</span>
 </span></code></pre></div>
-<h3 id="kindparam-example"><code>kind="param"</code> example<a class="headerlink" href="#kindparam-example" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nd">@derivation</span><span class="p">(</span>
+<h3 id="a-new-parameter-row-derive_param">A new parameter row: <code>derive_param</code><a class="headerlink" href="#a-new-parameter-row-derive_param" title="Permanent link">&para;</a></h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">advs</span> <span class="o">=</span> <span class="n">vs</span><span class="o">.</span><span class="n">adam</span><span class="o">.</span><span class="n">derive_param</span><span class="p">(</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>    <span class="n">by</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;USUBJID&quot;</span><span class="p">,</span> <span class="s2">&quot;ADT&quot;</span><span class="p">],</span>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>    <span class="n">set_values_to</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;PARAMCD&quot;</span><span class="p">:</span> <span class="s2">&quot;BMI&quot;</span><span class="p">,</span> <span class="s2">&quot;PARAM&quot;</span><span class="p">:</span> <span class="s2">&quot;Body Mass Index&quot;</span><span class="p">},</span>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="p">)</span>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="k">def</span><span class="w"> </span><span class="nf">BMI</span><span class="p">(</span><span class="n">df</span><span class="p">:</span> <span class="n">pl</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pl</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Compute BMI per subject visit.&quot;&quot;&quot;</span>
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>    <span class="k">return</span> <span class="n">df</span><span class="o">.</span><span class="n">with_columns</span><span class="p">((</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;WEIGHT&quot;</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;HEIGHT&quot;</span><span class="p">)</span> <span class="o">/</span> <span class="mi">100</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;AVAL&quot;</span><span class="p">))</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>    <span class="n">parameter_filter</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;WEIGHT&quot;</span><span class="p">:</span> <span class="s2">&quot;WEIGHT&quot;</span><span class="p">,</span> <span class="s2">&quot;HEIGHT&quot;</span><span class="p">:</span> <span class="s2">&quot;HEIGHT&quot;</span><span class="p">},</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>    <span class="n">analysis_value</span><span class="o">=</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;WEIGHT&quot;</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;HEIGHT&quot;</span><span class="p">)</span> <span class="o">/</span> <span class="mi">100</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">,</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="p">)</span><span class="o">.</span><span class="n">to_frame</span><span class="p">()</span>
 </span></code></pre></div>
 <h3 id="derivations-folder-convention">Derivations folder convention<a class="headerlink" href="#derivations-folder-convention" title="Permanent link">&para;</a></h3>
 <p>Study derivations live under the study's configured programs tree:</p>
@@ -2943,7 +2938,7 @@ an explicit frame and defaults <code>by=</code> to <code>["USUBJID"]</code>.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="November 3, 2026 21:47:21 UTC">November 3, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="November 4, 2026 22:39:09 UTC">November 4, 2026</span>
   </span>
 
     

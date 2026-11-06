@@ -2177,9 +2177,12 @@ field:</p>
 </span></code></pre></div>
 <p>Outside a study (or to override), pass paths explicitly:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>uv<span class="w"> </span>run<span class="w"> </span>fleet<span class="w"> </span>tlg<span class="w"> </span>run<span class="w"> </span>examples/tlg_specs/aet01.yaml<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span>--data<span class="w"> </span><span class="nv">ADAE</span><span class="o">=</span>adae.parquet<span class="w"> </span>--adsl<span class="w"> </span>adsl.parquet<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span>--data<span class="w"> </span><span class="nv">ADAE</span><span class="o">=</span>adae.parquet<span class="w"> </span>--adsl<span class="w"> </span>adsl.parquet<span class="w"> </span>--adsl-groupby<span class="w"> </span>TRT01A<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span>-o<span class="w"> </span>out/<span class="w"> </span>--format<span class="w"> </span>rtf<span class="w"> </span>--rows-per-page<span class="w"> </span><span class="m">40</span>
 </span></code></pre></div>
+<p>ADAE holds the arm as <code>TRTA</code> and a conformant ADSL holds it as <code>TRT01A</code>:
+<code>--adsl-groupby TRT01A</code> names the ADSL arm for the big N. Without it the
+CLI stops and names the flag.</p>
 <p><code>--format</code> selects the display format — <code>html</code>, <code>rtf</code>, <code>pdf</code>, or <code>pptx</code>
 (PDF/PPTX need the <code>tlg-pdf</code> / <code>tlg-pptx</code> extras).</p>
 <h2 id="3-the-same-spec-interactive">3. The same spec, interactive<a class="headerlink" href="#3-the-same-spec-interactive" title="Permanent link">&para;</a></h2>
@@ -2236,7 +2239,7 @@ directly from the configured datasets.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="November 3, 2026 16:35:01 UTC">November 3, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="November 5, 2026 10:06:06 UTC">November 5, 2026</span>
   </span>
 
     

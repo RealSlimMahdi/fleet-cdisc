@@ -1256,10 +1256,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#2-sources-typed-reusable-and-inspectable" class="md-nav__link">
+  <a href="#2-sources-plain-frames" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. Sources — typed, reusable, and inspectable
+        2. Sources: plain frames
       
     </span>
   </a>
@@ -1281,7 +1281,7 @@
   <a href="#4-why-did-subject-03-get-censored-the-decision-trace" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4. Why did subject 03 get censored? — the decision trace
+        4. Why did subject 03 get censored? The decision trace
       
     </span>
   </a>
@@ -1293,6 +1293,17 @@
     <span class="md-ellipsis">
       
         5. Straight into a survival fit
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-pfs-stop-the-observation-at-new-therapy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. PFS: stop the observation at new therapy
       
     </span>
   </a>
@@ -2111,10 +2122,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#2-sources-typed-reusable-and-inspectable" class="md-nav__link">
+  <a href="#2-sources-plain-frames" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. Sources — typed, reusable, and inspectable
+        2. Sources: plain frames
       
     </span>
   </a>
@@ -2136,7 +2147,7 @@
   <a href="#4-why-did-subject-03-get-censored-the-decision-trace" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4. Why did subject 03 get censored? — the decision trace
+        4. Why did subject 03 get censored? The decision trace
       
     </span>
   </a>
@@ -2148,6 +2159,17 @@
     <span class="md-ellipsis">
       
         5. Straight into a survival fit
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-pfs-stop-the-observation-at-new-therapy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. PFS: stop the observation at new therapy
       
     </span>
   </a>
@@ -2187,40 +2209,43 @@
 
 <h1 id="adtte-time-to-event-in-one-chain">ADTTE: Time-to-Event in One Chain<a class="headerlink" href="#adtte-time-to-event-in-one-chain" title="Permanent link">&para;</a></h1>
 <p>A time-to-event parameter answers one question per subject: <em>how long until X
-happened — and if it never did, how long did we watch?</em> This walkthrough
+happened, and if it never did, how long did we watch?</em> This walkthrough
 builds a two-parameter ADTTE (overall survival + time to first adverse
 event) in a single chain, shows <strong>why</strong> every subject got their row, and
-hands the result straight to a Kaplan-Meier fit. Every output below is real.</p>
+hands the result straight to a Kaplan-Meier fit. It then adds a PFS
+parameter that stops the observation at new anticancer therapy. Every output
+below is real.</p>
 <h2 id="the-model-in-30-seconds">The model in 30 seconds<a class="headerlink" href="#the-model-in-30-seconds" title="Permanent link">&para;</a></h2>
 <ul>
-<li>An <strong><code>EventSource</code></strong> says: <em>in this dataset, these rows, this date column —
-  if selected, the clock stops here with <code>CNSR = 0</code>.</em></li>
-<li>A <strong><code>CensorSource</code></strong> says the same for censoring (<code>CNSR ≥ 1</code>).</li>
-<li><strong><code>.param()</code></strong> plays referee per parameter: pool the events, the
-  <strong>earliest wins</strong>; no event → the <strong>latest censor</strong>. <code>STARTDT</code> comes from
-  the pinned ADSL; dates before it are floored to it.</li>
-<li><strong><code>.aval()</code></strong> turns <code>ADT − STARTDT</code> into <code>AVAL</code> (+<code>AVALU</code>) afterwards.</li>
+<li>An <strong>event</strong> or <strong>censor</strong> source is a plain Polars frame with <code>USUBJID</code>
+  and <code>ADT</code>. Build it with <code>filter</code> and <code>select</code>.</li>
+<li><strong><code>.param()</code></strong> plays referee per parameter: the <strong>earliest event wins</strong>
+  (<code>CNSR = 0</code>, <code>EVNTDESC</code> = its key in <code>events=</code>); no event gives the
+  <strong>last censor record</strong> (<code>CNSR</code> = its key in <code>censors=</code>). <code>STARTDT</code> comes
+  from ADSL; a date before it is set to it.</li>
+<li><strong><code>stop_at=</code></strong> names ADSL date columns. The earliest one ends the
+  observation: event and censor records after it are dropped (admiral 1.5
+  <code>end_dates</code>, ADR-0043).</li>
+<li><strong><code>.aval()</code></strong> turns <code>ADT − STARTDT + 1</code> into <code>AVAL</code> (+<code>AVALU</code>) afterwards.</li>
 </ul>
-<p>Datasets attach by nickname through the pin system — a source saying
-<code>dataset="ADAE"</code> reads whatever you pinned as <code>ADAE</code>.</p>
 <div class="admonition note">
-<p class="admonition-title">Choosing the time origin (<code>start_date=</code>)</p>
+<p class="admonition-title">Choosing the time origin (<code>start=</code>)</p>
 <p><code>TRTSDT</code> (ADaMIG: <em>Date of First Exposure to Treatment</em>) is the
 conventional origin for <strong>safety</strong> endpoints like time to first AE.
-For ITT <strong>efficacy</strong> endpoints in randomized trials — overall survival
-in particular — use the randomization date (<code>RANDDT</code>): ITT time starts
-at randomization, not at first dose. <code>start_date=</code> accepts any ADSL
-date column, so pick per parameter.</p>
+For ITT <strong>efficacy</strong> endpoints in randomized trials, overall survival
+in particular, use the randomization date (<code>RANDDT</code>): ITT time starts
+at randomization, not at first dose. <code>start=</code> accepts any ADSL date
+column, so pick per parameter.</p>
 </div>
 <h2 id="1-input-data">1. Input data<a class="headerlink" href="#1-input-data" title="Permanent link">&para;</a></h2>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">date</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="kn">import</span><span class="w"> </span><span class="nn">polars</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pl</span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="kn">import</span><span class="w"> </span><span class="nn">fleet</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fleet.adam.tte</span><span class="w"> </span><span class="kn">import</span> <span class="n">AE_EVENT</span><span class="p">,</span> <span class="n">CensorSource</span><span class="p">,</span> <span class="n">DEATH_EVENT</span><span class="p">,</span> <span class="n">LASTALIVE_CENSOR</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="n">adsl</span> <span class="o">=</span> <span class="n">pl</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="p">{</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="n">adsl</span> <span class="o">=</span> <span class="n">pl</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="p">{</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>        <span class="s2">&quot;STUDYID&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;S1&quot;</span><span class="p">,</span> <span class="s2">&quot;S1&quot;</span><span class="p">,</span> <span class="s2">&quot;S1&quot;</span><span class="p">],</span>
 </span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>        <span class="s2">&quot;USUBJID&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;01&quot;</span><span class="p">,</span> <span class="s2">&quot;02&quot;</span><span class="p">,</span> <span class="s2">&quot;03&quot;</span><span class="p">],</span>
 </span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>        <span class="s2">&quot;TRT01P&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;Drug A&quot;</span><span class="p">,</span> <span class="s2">&quot;Placebo&quot;</span><span class="p">,</span> <span class="s2">&quot;Drug A&quot;</span><span class="p">],</span>
 </span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>        <span class="s2">&quot;TRTSDT&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">date</span><span class="p">(</span><span class="mi">2023</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">date</span><span class="p">(</span><span class="mi">2023</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span> <span class="n">date</span><span class="p">(</span><span class="mi">2023</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">)],</span>
@@ -2242,123 +2267,197 @@ date column, so pick per parameter.</p>
 <p>Note the traps this tiny study contains: subject 01 has an earlier <em>and</em> a
 later AE (tie-break needed), subject 03 has <strong>no death, no last-alive date,
 and no AE</strong> (the classic silently-dropped subject), and dates must be typed
-<code>Date</code> — a DTC string column is rejected with instructions to <code>.date()</code> it
+<code>Date</code>: a DTC string column is rejected with instructions to <code>.date()</code> it
 first.</p>
-<h2 id="2-sources-typed-reusable-and-inspectable">2. Sources — typed, reusable, and inspectable<a class="headerlink" href="#2-sources-typed-reusable-and-inspectable" title="Permanent link">&para;</a></h2>
-<p><code>DEATH_EVENT</code>, <code>LASTALIVE_CENSOR</code>, and <code>AE_EVENT</code> ship with Fleet (the full
-prebuilt registry: <code>prebuilt_sources_frame()</code>). Custom ones are one
-constructor call — and unlike admiral's opaque source objects, <strong>every
-source renders as a DataFrame</strong>:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fleet.adam.tte</span><span class="w"> </span><span class="kn">import</span> <span class="n">sources_frame</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">EOS</span> <span class="o">=</span> <span class="n">CensorSource</span><span class="p">(</span><span class="n">dataset</span><span class="o">=</span><span class="s2">&quot;ADSL&quot;</span><span class="p">,</span> <span class="n">date</span><span class="o">=</span><span class="s2">&quot;EOSDT&quot;</span><span class="p">,</span> <span class="nb">set</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;EVNTDESC&quot;</span><span class="p">:</span> <span class="s2">&quot;END OF STUDY&quot;</span><span class="p">})</span>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="nb">print</span><span class="p">(</span><span class="n">sources_frame</span><span class="p">(</span><span class="n">DEATH_EVENT</span><span class="p">,</span> <span class="n">LASTALIVE_CENSOR</span><span class="p">,</span> <span class="n">AE_EVENT</span><span class="p">))</span>
+<h2 id="2-sources-plain-frames">2. Sources: plain frames<a class="headerlink" href="#2-sources-plain-frames" title="Permanent link">&para;</a></h2>
+<p>Each source is one <code>select</code>. The date goes to <code>ADT</code>. A source may also
+carry <code>SRCDOM</code>, <code>SRCVAR</code>, <code>SRCSEQ</code>, <code>CNSDTDSC</code> and (censors only)
+<code>EVNTDESC</code>; they go onto the selected row. <code>SRCSEQ</code> also breaks a tie on
+one date. A censor frame without <code>EVNTDESC</code> gives a null <code>EVNTDESC</code> and a
+warning: the reason of the censoring is study text.</p>
+<p>Without a PARAM label, <code>.param()</code> reads it from the study CT: the decode
+of PARAMCD in the codelist of <code>ADTTE.PARAMCD</code> in the ADaM <code>define.yaml</code>.
+If there is no such decode, it raises and asks for <code>param=</code>.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">death</span> <span class="o">=</span> <span class="n">adsl</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;DTHFL&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;Y&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">select</span><span class="p">(</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    <span class="s2">&quot;USUBJID&quot;</span><span class="p">,</span> <span class="n">ADT</span><span class="o">=</span><span class="s2">&quot;DTHDT&quot;</span><span class="p">,</span> <span class="n">SRCDOM</span><span class="o">=</span><span class="n">pl</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="s2">&quot;ADSL&quot;</span><span class="p">),</span> <span class="n">SRCVAR</span><span class="o">=</span><span class="n">pl</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="s2">&quot;DTHDT&quot;</span><span class="p">)</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="p">)</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">alive</span> <span class="o">=</span> <span class="n">adsl</span><span class="o">.</span><span class="n">select</span><span class="p">(</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="s2">&quot;USUBJID&quot;</span><span class="p">,</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    <span class="n">ADT</span><span class="o">=</span><span class="s2">&quot;LSTALVDT&quot;</span><span class="p">,</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>    <span class="n">EVNTDESC</span><span class="o">=</span><span class="n">pl</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="s2">&quot;ALIVE&quot;</span><span class="p">),</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>    <span class="n">SRCDOM</span><span class="o">=</span><span class="n">pl</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="s2">&quot;ADSL&quot;</span><span class="p">),</span>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>    <span class="n">SRCVAR</span><span class="o">=</span><span class="n">pl</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="s2">&quot;LSTALVDT&quot;</span><span class="p">),</span>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="p">)</span>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="n">first_ae</span> <span class="o">=</span> <span class="n">adae</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;TRTEMFL&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;Y&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">select</span><span class="p">(</span>
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>    <span class="s2">&quot;USUBJID&quot;</span><span class="p">,</span> <span class="n">ADT</span><span class="o">=</span><span class="s2">&quot;ASTDT&quot;</span><span class="p">,</span> <span class="n">SRCDOM</span><span class="o">=</span><span class="n">pl</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="s2">&quot;ADAE&quot;</span><span class="p">),</span> <span class="n">SRCVAR</span><span class="o">=</span><span class="n">pl</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="s2">&quot;ASTDT&quot;</span><span class="p">),</span> <span class="n">SRCSEQ</span><span class="o">=</span><span class="s2">&quot;AESEQ&quot;</span>
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="p">)</span>
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="n">eos</span> <span class="o">=</span> <span class="n">adsl</span><span class="o">.</span><span class="n">select</span><span class="p">(</span>
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>    <span class="s2">&quot;USUBJID&quot;</span><span class="p">,</span>
+</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>    <span class="n">ADT</span><span class="o">=</span><span class="s2">&quot;EOSDT&quot;</span><span class="p">,</span>
+</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>    <span class="n">EVNTDESC</span><span class="o">=</span><span class="n">pl</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="s2">&quot;END OF STUDY&quot;</span><span class="p">),</span>
+</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>    <span class="n">SRCDOM</span><span class="o">=</span><span class="n">pl</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="s2">&quot;ADSL&quot;</span><span class="p">),</span>
+</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>    <span class="n">SRCVAR</span><span class="o">=</span><span class="n">pl</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="s2">&quot;EOSDT&quot;</span><span class="p">),</span>
+</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>┌────────┬─────────┬──────────┬──────────────────────────┬───────┬────────┬──────────────────────────┐
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>│ kind   ┆ dataset ┆ date     ┆ where                    ┆ order ┆ censor ┆ set                      │
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>╞════════╪═════════╪══════════╪══════════════════════════╪═══════╪════════╪══════════════════════════╡
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>│ event  ┆ ADSL    ┆ DTHDT    ┆ pl.col(&quot;DTHFL&quot;) == &quot;Y&quot;   ┆ null  ┆ null   ┆ EVNTDESC=&#39;DEATH&#39;         │
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>│ censor ┆ ADSL    ┆ LSTALVDT ┆ null                     ┆ null  ┆ 1      ┆ EVNTDESC=&#39;ALIVE&#39;         │
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>│ event  ┆ ADAE    ┆ ASTDT    ┆ pl.col(&quot;TRTEMFL&quot;) == &quot;Y&quot; ┆ AESEQ ┆ null   ┆ EVNTDESC=&#39;ADVERSE EVENT&#39; │
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>└────────┴─────────┴──────────┴──────────────────────────┴───────┴────────┴──────────────────────────┘
-</span></code></pre></div>
-<p>In <code>set=</code>, strings are <strong>literals</strong> (<code>EVNTDESC="DEATH"</code> is never a column
-lookup); reference source columns with a <code>pl.Expr</code>. <code>SRCDOM</code>/<code>SRCVAR</code>/
-<code>SRCSEQ</code> are stamped automatically from the source's own declaration.</p>
 <h2 id="3-derive-both-parameters-in-one-chain">3. Derive both parameters in one chain<a class="headerlink" href="#3-derive-both-parameters-in-one-chain" title="Permanent link">&para;</a></h2>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">adtte_ns</span> <span class="o">=</span> <span class="p">(</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>    <span class="n">adsl</span><span class="o">.</span><span class="n">adam</span><span class="o">.</span><span class="n">tte</span><span class="o">.</span><span class="n">pin</span><span class="p">(</span><span class="s2">&quot;ADSL&quot;</span><span class="p">,</span> <span class="n">adsl</span><span class="p">)</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    <span class="o">.</span><span class="n">pin</span><span class="p">(</span><span class="s2">&quot;ADAE&quot;</span><span class="p">,</span> <span class="n">adae</span><span class="p">)</span>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="o">.</span><span class="n">param</span><span class="p">(</span>
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>        <span class="s2">&quot;OS&quot;</span><span class="p">,</span>
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>        <span class="s2">&quot;Overall Survival&quot;</span><span class="p">,</span>
-</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>        <span class="n">start_date</span><span class="o">=</span><span class="s2">&quot;TRTSDT&quot;</span><span class="p">,</span>
-</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>        <span class="n">events</span><span class="o">=</span><span class="p">[</span><span class="n">DEATH_EVENT</span><span class="p">],</span>
-</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>        <span class="n">censors</span><span class="o">=</span><span class="p">[</span><span class="n">LASTALIVE_CENSOR</span><span class="p">],</span>
-</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>        <span class="n">retain</span><span class="o">=</span><span class="s2">&quot;censor_at_start&quot;</span><span class="p">,</span>
-</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>    <span class="p">)</span>  <span class="c1"># keep subject 03, censored at STARTDT</span>
-</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>    <span class="o">.</span><span class="n">param</span><span class="p">(</span>
-</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>        <span class="s2">&quot;TTAE&quot;</span><span class="p">,</span>
-</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>        <span class="s2">&quot;Time to First Adverse Event&quot;</span><span class="p">,</span>
-</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>        <span class="n">start_date</span><span class="o">=</span><span class="s2">&quot;TRTSDT&quot;</span><span class="p">,</span>
-</span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a>        <span class="n">events</span><span class="o">=</span><span class="p">[</span><span class="n">AE_EVENT</span><span class="p">],</span>
-</span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a>        <span class="n">censors</span><span class="o">=</span><span class="p">[</span><span class="n">EOS</span><span class="p">],</span>
-</span><span id="__span-3-18"><a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a>        <span class="n">explain</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-</span><span id="__span-3-19"><a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a>    <span class="p">)</span>  <span class="c1"># ← prints the decision trace below</span>
-</span><span id="__span-3-20"><a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a>    <span class="o">.</span><span class="n">aval</span><span class="p">(</span><span class="n">unit</span><span class="o">=</span><span class="s2">&quot;days&quot;</span><span class="p">)</span>  <span class="c1"># AVAL = ADT − STARTDT + 1, AVALU stamped</span>
-</span><span id="__span-3-21"><a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a>    <span class="o">.</span><span class="n">seq</span><span class="p">(</span><span class="s2">&quot;ASEQ&quot;</span><span class="p">,</span> <span class="n">order_by</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;PARAMCD&quot;</span><span class="p">])</span>
-</span><span id="__span-3-22"><a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a><span class="p">)</span>
-</span><span id="__span-3-23"><a id="__codelineno-3-23" name="__codelineno-3-23" href="#__codelineno-3-23"></a><span class="n">adtte</span> <span class="o">=</span> <span class="n">adtte_ns</span><span class="o">.</span><span class="n">to_frame</span><span class="p">()</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">adtte_ns</span> <span class="o">=</span> <span class="p">(</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="n">adsl</span><span class="o">.</span><span class="n">adam</span><span class="o">.</span><span class="n">tte</span><span class="o">.</span><span class="n">param</span><span class="p">(</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>        <span class="s2">&quot;OS&quot;</span><span class="p">,</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>        <span class="s2">&quot;Overall Survival&quot;</span><span class="p">,</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>        <span class="n">start</span><span class="o">=</span><span class="s2">&quot;TRTSDT&quot;</span><span class="p">,</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>        <span class="n">events</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;DEATH&quot;</span><span class="p">:</span> <span class="n">death</span><span class="p">},</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>        <span class="n">censors</span><span class="o">=</span><span class="p">{</span><span class="mi">1</span><span class="p">:</span> <span class="n">alive</span><span class="p">},</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>        <span class="n">retain</span><span class="o">=</span><span class="s2">&quot;censor_at_start&quot;</span><span class="p">,</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>    <span class="p">)</span>  <span class="c1"># keep subject 03, censored at STARTDT</span>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>    <span class="o">.</span><span class="n">param</span><span class="p">(</span>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>        <span class="s2">&quot;TTAE&quot;</span><span class="p">,</span>
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>        <span class="s2">&quot;Time to First Adverse Event&quot;</span><span class="p">,</span>
+</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>        <span class="n">start</span><span class="o">=</span><span class="s2">&quot;TRTSDT&quot;</span><span class="p">,</span>
+</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>        <span class="n">events</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;ADVERSE EVENT&quot;</span><span class="p">:</span> <span class="n">first_ae</span><span class="p">},</span>
+</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>        <span class="n">censors</span><span class="o">=</span><span class="p">{</span><span class="mi">1</span><span class="p">:</span> <span class="n">eos</span><span class="p">},</span>
+</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>        <span class="n">explain</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>    <span class="p">)</span>  <span class="c1"># ← prints the decision trace below</span>
+</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a>    <span class="o">.</span><span class="n">join_adsl</span><span class="p">(</span><span class="s2">&quot;TRT01P&quot;</span><span class="p">)</span>  <span class="c1"># after the last param(): earlier rows would get null</span>
+</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a>    <span class="o">.</span><span class="n">aval</span><span class="p">(</span><span class="n">unit</span><span class="o">=</span><span class="s2">&quot;days&quot;</span><span class="p">)</span>  <span class="c1"># AVAL = ADT − STARTDT + 1, AVALU stamped</span>
+</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a>    <span class="o">.</span><span class="n">seq</span><span class="p">(</span><span class="s2">&quot;ASEQ&quot;</span><span class="p">,</span> <span class="n">order_by</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;PARAMCD&quot;</span><span class="p">])</span>
+</span><span id="__span-2-21"><a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="p">)</span>
+</span><span id="__span-2-22"><a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a><span class="n">adtte</span> <span class="o">=</span> <span class="n">adtte_ns</span><span class="o">.</span><span class="n">to_frame</span><span class="p">()</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>┌─────────┬─────────┬─────────────────────────────┬────────────┬────────────┬──────┬───────────────────┬────────┬──────────┬────────┬───────┬───────┬──────┐
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>│ USUBJID ┆ PARAMCD ┆ PARAM                       ┆ STARTDT    ┆ ADT        ┆ CNSR ┆ EVNTDESC          ┆ SRCDOM ┆ SRCVAR   ┆ SRCSEQ ┆ AVAL  ┆ AVALU ┆ ASEQ │
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>╞═════════╪═════════╪═════════════════════════════╪════════════╪════════════╪══════╪═══════════════════╪════════╪══════════╪════════╪═══════╪═══════╪══════╡
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>│ 01      ┆ OS      ┆ Overall Survival            ┆ 2023-01-01 ┆ 2023-03-01 ┆ 0    ┆ DEATH             ┆ ADSL   ┆ DTHDT    ┆ null   ┆ 60.0  ┆ DAYS  ┆ 1    │
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>│ 02      ┆ OS      ┆ Overall Survival            ┆ 2023-01-02 ┆ 2023-06-30 ┆ 1    ┆ ALIVE             ┆ ADSL   ┆ LSTALVDT ┆ null   ┆ 180.0 ┆ DAYS  ┆ 1    │
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>│ 03      ┆ OS      ┆ Overall Survival            ┆ 2023-01-03 ┆ 2023-01-03 ┆ 1    ┆ NO EVENT OBSERVED ┆ ADSL   ┆ TRTSDT   ┆ null   ┆ 1.0   ┆ DAYS  ┆ 1    │
-</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>│ 01      ┆ TTAE    ┆ Time to First Adverse Event ┆ 2023-01-01 ┆ 2023-01-10 ┆ 0    ┆ ADVERSE EVENT     ┆ ADAE   ┆ ASTDT    ┆ 1      ┆ 10.0  ┆ DAYS  ┆ 2    │
-</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>│ 02      ┆ TTAE    ┆ Time to First Adverse Event ┆ 2023-01-02 ┆ 2023-02-05 ┆ 0    ┆ ADVERSE EVENT     ┆ ADAE   ┆ ASTDT    ┆ 1      ┆ 35.0  ┆ DAYS  ┆ 2    │
-</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>│ 03      ┆ TTAE    ┆ Time to First Adverse Event ┆ 2023-01-03 ┆ 2023-02-01 ┆ 1    ┆ END OF STUDY      ┆ ADSL   ┆ EOSDT    ┆ null   ┆ 30.0  ┆ DAYS  ┆ 2    │
-</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>└─────────┴─────────┴─────────────────────────────┴────────────┴────────────┴──────┴───────────────────┴────────┴──────────┴────────┴───────┴───────┴──────┘
+<div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>┌─────────┬─────────┬────────────┬────────────┬──────┬────────┬──────────┬───────────────────┬─────────┬─────────────────────────────┬────────┬─────────┬───────┬───────┬──────┐
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>│ STUDYID ┆ USUBJID ┆ STARTDT    ┆ ADT        ┆ CNSR ┆ SRCDOM ┆ SRCVAR   ┆ EVNTDESC          ┆ PARAMCD ┆ PARAM                       ┆ SRCSEQ ┆ TRT01P  ┆ AVAL  ┆ AVALU ┆ ASEQ │
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>╞═════════╪═════════╪════════════╪════════════╪══════╪════════╪══════════╪═══════════════════╪═════════╪═════════════════════════════╪════════╪═════════╪═══════╪═══════╪══════╡
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>│ S1      ┆ 01      ┆ 2023-01-01 ┆ 2023-03-01 ┆ 0    ┆ ADSL   ┆ DTHDT    ┆ DEATH             ┆ OS      ┆ Overall Survival            ┆ null   ┆ Drug A  ┆ 60.0  ┆ DAYS  ┆ 1    │
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>│ S1      ┆ 02      ┆ 2023-01-02 ┆ 2023-06-30 ┆ 1    ┆ ADSL   ┆ LSTALVDT ┆ ALIVE             ┆ OS      ┆ Overall Survival            ┆ null   ┆ Placebo ┆ 180.0 ┆ DAYS  ┆ 1    │
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>│ S1      ┆ 03      ┆ 2023-01-03 ┆ 2023-01-03 ┆ 1    ┆ ADSL   ┆ TRTSDT   ┆ NO EVENT OBSERVED ┆ OS      ┆ Overall Survival            ┆ null   ┆ Drug A  ┆ 1.0   ┆ DAYS  ┆ 1    │
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>│ S1      ┆ 01      ┆ 2023-01-01 ┆ 2023-01-10 ┆ 0    ┆ ADAE   ┆ ASTDT    ┆ ADVERSE EVENT     ┆ TTAE    ┆ Time to First Adverse Event ┆ 1      ┆ Drug A  ┆ 10.0  ┆ DAYS  ┆ 2    │
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>│ S1      ┆ 02      ┆ 2023-01-02 ┆ 2023-02-05 ┆ 0    ┆ ADAE   ┆ ASTDT    ┆ ADVERSE EVENT     ┆ TTAE    ┆ Time to First Adverse Event ┆ 1      ┆ Placebo ┆ 35.0  ┆ DAYS  ┆ 2    │
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>│ S1      ┆ 03      ┆ 2023-01-03 ┆ 2023-02-01 ┆ 1    ┆ ADSL   ┆ EOSDT    ┆ END OF STUDY      ┆ TTAE    ┆ Time to First Adverse Event ┆ null   ┆ Drug A  ┆ 30.0  ┆ DAYS  ┆ 2    │
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>└─────────┴─────────┴────────────┴────────────┴──────┴────────┴──────────┴───────────────────┴─────────┴─────────────────────────────┴────────┴─────────┴───────┴───────┴──────┘
 </span></code></pre></div>
 <p>Worth noticing:</p>
 <ul>
-<li>Subject 01's TTAE picked the <strong>earlier</strong> AE, with <code>order=["AESEQ"]</code>
-  breaking same-date ties deterministically (<code>SRCSEQ = 1</code>).</li>
+<li>The first <code>.param()</code> uses the base frame as ADSL and pins it, so the
+  next <code>.param()</code>, <code>.join_adsl()</code> and <code>.km_data()</code> read it too.</li>
+<li>STUDYID comes from ADSL on every row. Other ADSL variables, such as
+  TRT01P, come from <code>.join_adsl()</code> after the last <code>.param()</code>.</li>
+<li>Subject 01's TTAE picked the <strong>earlier</strong> AE; <code>SRCSEQ</code> breaks same-date
+  ties deterministically.</li>
 <li>Subject 03 survived the OS derivation thanks to
-  <code>retain="censor_at_start"</code> — without it Fleet <strong>warns</strong> with a count
-  instead of silently dropping, admiral-style.</li>
-<li><code>SRCDOM</code>/<code>SRCVAR</code> are filled in without anyone typing them.</li>
-<li><code>AVALU</code> is stamped by <code>.aval()</code> — <code>unit="months"</code>/<code>"years"</code> use the CDISC
+  <code>retain="censor_at_start"</code>. Without it Fleet <strong>warns</strong> with the count and
+  the USUBJIDs instead of silently dropping, admiral-style.</li>
+<li><code>AVALU</code> is stamped by <code>.aval()</code>; <code>unit="months"</code>/<code>"years"</code> use the CDISC
   conversions (30.4375 / 365.25).</li>
 </ul>
-<h2 id="4-why-did-subject-03-get-censored-the-decision-trace">4. Why did subject 03 get censored? — the decision trace<a class="headerlink" href="#4-why-did-subject-03-get-censored-the-decision-trace" title="Permanent link">&para;</a></h2>
-<p><code>explain=True</code> prints every candidate per subject with the winner and the
-reason (the inspectability admiral's quosure objects can't offer):</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>TTE decision trace — TTAE (Time to First Adverse Event):
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>┌─────────┬────────┬────────┬────────────┬──────────┬──────────────────────────┐
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>│ USUBJID ┆ kind   ┆ SRCDOM ┆ date       ┆ selected ┆ reason                   │
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>╞═════════╪════════╪════════╪════════════╪══════════╪══════════════════════════╡
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>│ 01      ┆ event  ┆ ADAE   ┆ 2023-01-10 ┆ true     ┆ earliest event           │
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>│ 02      ┆ event  ┆ ADAE   ┆ 2023-02-05 ┆ true     ┆ earliest event           │
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>│ 01      ┆ censor ┆ ADSL   ┆ 2023-03-01 ┆ false    ┆ not selected             │
-</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>│ 02      ┆ censor ┆ ADSL   ┆ 2023-06-30 ┆ false    ┆ not selected             │
-</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>│ 03      ┆ censor ┆ ADSL   ┆ 2023-02-01 ┆ true     ┆ latest censor (no event) │
-</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>└─────────┴────────┴────────┴────────────┴──────────┴──────────────────────────┘
+<h2 id="4-why-did-subject-03-get-censored-the-decision-trace">4. Why did subject 03 get censored? The decision trace<a class="headerlink" href="#4-why-did-subject-03-get-censored-the-decision-trace" title="Permanent link">&para;</a></h2>
+<p><code>explain=True</code> logs every candidate per subject with the selected one and
+the reason:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>TTE decision trace — TTAE (Time to First Adverse Event):
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>┌─────────┬────────┬───────────────┬────────────┬──────────┬────────────────────────┐
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>│ USUBJID ┆ kind   ┆ source        ┆ date       ┆ selected ┆ reason                 │
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>╞═════════╪════════╪═══════════════╪════════════╪══════════╪════════════════════════╡
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>│ 01      ┆ event  ┆ ADVERSE EVENT ┆ 2023-01-10 ┆ true     ┆ earliest event         │
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>│ 02      ┆ event  ┆ ADVERSE EVENT ┆ 2023-02-05 ┆ true     ┆ earliest event         │
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>│ 01      ┆ censor ┆ CNSR 1        ┆ 2023-03-01 ┆ false    ┆ not selected           │
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>│ 02      ┆ censor ┆ CNSR 1        ┆ 2023-06-30 ┆ false    ┆ not selected           │
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>│ 03      ┆ censor ┆ CNSR 1        ┆ 2023-02-01 ┆ true     ┆ last censor (no event) │
+</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>└─────────┴────────┴───────────────┴────────────┴──────────┴────────────────────────┘
 </span></code></pre></div>
-<p>Typos never make it this far: a source naming <code>DTHDTT</code> fails at declaration
-with <code>Did you mean 'DTHDT'?</code>, before a single row is computed.</p>
+<p>A frame without <code>ADT</code> fails before a single row is computed, and the error
+shows the fix: <code>adae.select("USUBJID", ADT="ASTDT")</code>.</p>
 <h2 id="5-straight-into-a-survival-fit">5. Straight into a survival fit<a class="headerlink" href="#5-straight-into-a-survival-fit" title="Permanent link">&para;</a></h2>
-<p><code>km_data()</code> returns exactly what <code>lifelines</code> / <code>scikit-survival</code> consume —
-and group columns you ask for resolve from the pinned ADSL automatically:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">km</span> <span class="o">=</span> <span class="n">adtte_ns</span><span class="o">.</span><span class="n">km_data</span><span class="p">(</span><span class="s2">&quot;OS&quot;</span><span class="p">,</span> <span class="n">by</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;TRT01P&quot;</span><span class="p">])</span>
+<p><code>km_data()</code> returns exactly what <code>lifelines</code> / <code>scikit-survival</code> consume,
+and group columns you ask for resolve from ADSL automatically:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">km</span> <span class="o">=</span> <span class="n">adtte_ns</span><span class="o">.</span><span class="n">km_data</span><span class="p">(</span><span class="s2">&quot;OS&quot;</span><span class="p">,</span> <span class="n">by</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;TRT01P&quot;</span><span class="p">])</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>┌─────────┬──────────┬───────┬─────────┐
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>│ USUBJID ┆ duration ┆ event ┆ TRT01P  │
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>╞═════════╪══════════╪═══════╪═════════╡
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>│ 01      ┆ 60.0     ┆ true  ┆ Drug A  │
-</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>│ 02      ┆ 180.0    ┆ false ┆ Placebo │
-</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>│ 03      ┆ 1.0      ┆ false ┆ Drug A  │
-</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>└─────────┴──────────┴───────┴─────────┘
+<div class="language-text highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>┌─────────┬──────────┬───────┬─────────┐
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>│ USUBJID ┆ duration ┆ event ┆ TRT01P  │
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>╞═════════╪══════════╪═══════╪═════════╡
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>│ 01      ┆ 60.0     ┆ true  ┆ Drug A  │
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>│ 02      ┆ 180.0    ┆ false ┆ Placebo │
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>│ 03      ┆ 1.0      ┆ false ┆ Drug A  │
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>└─────────┴──────────┴───────┴─────────┘
 </span></code></pre></div>
 <!-- docs:no-run -->
 
-<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">lifelines</span><span class="w"> </span><span class="kn">import</span> <span class="n">KaplanMeierFitter</span>  <span class="c1"># optional — not a Fleet dependency</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="n">kmf</span> <span class="o">=</span> <span class="n">KaplanMeierFitter</span><span class="p">()</span>
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="k">for</span> <span class="p">(</span><span class="n">arm</span><span class="p">,),</span> <span class="n">grp</span> <span class="ow">in</span> <span class="n">km</span><span class="o">.</span><span class="n">group_by</span><span class="p">(</span><span class="s2">&quot;TRT01P&quot;</span><span class="p">):</span>
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>    <span class="n">kmf</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">grp</span><span class="p">[</span><span class="s2">&quot;duration&quot;</span><span class="p">],</span> <span class="n">grp</span><span class="p">[</span><span class="s2">&quot;event&quot;</span><span class="p">],</span> <span class="n">label</span><span class="o">=</span><span class="n">arm</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">lifelines</span><span class="w"> </span><span class="kn">import</span> <span class="n">KaplanMeierFitter</span>  <span class="c1"># optional — not a Fleet dependency</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="n">kmf</span> <span class="o">=</span> <span class="n">KaplanMeierFitter</span><span class="p">()</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="k">for</span> <span class="p">(</span><span class="n">arm</span><span class="p">,),</span> <span class="n">grp</span> <span class="ow">in</span> <span class="n">km</span><span class="o">.</span><span class="n">group_by</span><span class="p">(</span><span class="s2">&quot;TRT01P&quot;</span><span class="p">):</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>    <span class="n">kmf</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">grp</span><span class="p">[</span><span class="s2">&quot;duration&quot;</span><span class="p">],</span> <span class="n">grp</span><span class="p">[</span><span class="s2">&quot;event&quot;</span><span class="p">],</span> <span class="n">label</span><span class="o">=</span><span class="n">arm</span><span class="p">)</span>
 </span></code></pre></div>
+<h2 id="6-pfs-stop-the-observation-at-new-therapy">6. PFS: stop the observation at new therapy<a class="headerlink" href="#6-pfs-stop-the-observation-at-new-therapy" title="Permanent link">&para;</a></h2>
+<p><code>stop_at=</code> follows admiral 1.5 <code>derive_param_tte</code> with <code>end_dates</code> and
+<code>event_type = "negative"</code> (ADR-0043). The earliest non-null <code>stop_at</code> date
+of a subject ends the observation. Events and censor records after it are
+dropped, so a subject without progression is censored at the <strong>last
+assessment before new therapy</strong>, not at the new-therapy date.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="n">adsl_pfs</span> <span class="o">=</span> <span class="n">pl</span><span class="o">.</span><span class="n">from_repr</span><span class="p">(</span><span class="s2">&quot;&quot;&quot;</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="s2">┌─────────┬────────────┬────────────┬────────────┐</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="s2">│ USUBJID ┆ TRTSDT     ┆ EOSDT      ┆ NACTDT     │</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="s2">│ ---     ┆ ---        ┆ ---        ┆ ---        │</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="s2">│ str     ┆ date       ┆ date       ┆ date       │</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="s2">╞═════════╪════════════╪════════════╪════════════╡</span>
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="s2">│ A       ┆ 2024-01-01 ┆ 2024-06-30 ┆ 2024-04-01 │</span>
+</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="s2">│ B       ┆ 2024-01-01 ┆ 2024-06-30 ┆ 2024-02-15 │</span>
+</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="s2">│ C       ┆ 2024-01-01 ┆ 2024-06-30 ┆ null       │</span>
+</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="s2">└─────────┴────────────┴────────────┴────────────┘</span>
+</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="s2">&quot;&quot;&quot;</span><span class="p">)</span>
+</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="n">adrs</span> <span class="o">=</span> <span class="n">pl</span><span class="o">.</span><span class="n">from_repr</span><span class="p">(</span><span class="s2">&quot;&quot;&quot;</span>
+</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a><span class="s2">┌─────────┬────────────┬───────┐</span>
+</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a><span class="s2">│ USUBJID ┆ ADT        ┆ AVALC │</span>
+</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a><span class="s2">│ ---     ┆ ---        ┆ ---   │</span>
+</span><span id="__span-8-16"><a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a><span class="s2">│ str     ┆ date       ┆ str   │</span>
+</span><span id="__span-8-17"><a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a><span class="s2">╞═════════╪════════════╪═══════╡</span>
+</span><span id="__span-8-18"><a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a><span class="s2">│ A       ┆ 2024-02-01 ┆ SD    │</span>
+</span><span id="__span-8-19"><a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a><span class="s2">│ A       ┆ 2024-03-01 ┆ SD    │</span>
+</span><span id="__span-8-20"><a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a><span class="s2">│ B       ┆ 2024-02-01 ┆ SD    │</span>
+</span><span id="__span-8-21"><a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a><span class="s2">│ B       ┆ 2024-03-10 ┆ PD    │</span>
+</span><span id="__span-8-22"><a id="__codelineno-8-22" name="__codelineno-8-22" href="#__codelineno-8-22"></a><span class="s2">└─────────┴────────────┴───────┘</span>
+</span><span id="__span-8-23"><a id="__codelineno-8-23" name="__codelineno-8-23" href="#__codelineno-8-23"></a><span class="s2">&quot;&quot;&quot;</span><span class="p">)</span>
+</span><span id="__span-8-24"><a id="__codelineno-8-24" name="__codelineno-8-24" href="#__codelineno-8-24"></a><span class="n">last_assessment</span> <span class="o">=</span> <span class="n">adrs</span><span class="o">.</span><span class="n">select</span><span class="p">(</span>
+</span><span id="__span-8-25"><a id="__codelineno-8-25" name="__codelineno-8-25" href="#__codelineno-8-25"></a>    <span class="s2">&quot;USUBJID&quot;</span><span class="p">,</span> <span class="s2">&quot;ADT&quot;</span><span class="p">,</span> <span class="n">EVNTDESC</span><span class="o">=</span><span class="n">pl</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="s2">&quot;NO PROGRESSION&quot;</span><span class="p">),</span> <span class="n">CNSDTDSC</span><span class="o">=</span><span class="n">pl</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="s2">&quot;LAST ASSESSMENT&quot;</span><span class="p">)</span>
+</span><span id="__span-8-26"><a id="__codelineno-8-26" name="__codelineno-8-26" href="#__codelineno-8-26"></a><span class="p">)</span>
+</span><span id="__span-8-27"><a id="__codelineno-8-27" name="__codelineno-8-27" href="#__codelineno-8-27"></a><span class="n">no_assessment</span> <span class="o">=</span> <span class="n">adsl_pfs</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="s2">&quot;USUBJID&quot;</span><span class="p">,</span> <span class="n">ADT</span><span class="o">=</span><span class="s2">&quot;TRTSDT&quot;</span><span class="p">,</span> <span class="n">EVNTDESC</span><span class="o">=</span><span class="n">pl</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="s2">&quot;NO ASSESSMENT&quot;</span><span class="p">))</span>
+</span><span id="__span-8-28"><a id="__codelineno-8-28" name="__codelineno-8-28" href="#__codelineno-8-28"></a>
+</span><span id="__span-8-29"><a id="__codelineno-8-29" name="__codelineno-8-29" href="#__codelineno-8-29"></a><span class="n">pfs</span> <span class="o">=</span> <span class="p">(</span>
+</span><span id="__span-8-30"><a id="__codelineno-8-30" name="__codelineno-8-30" href="#__codelineno-8-30"></a>    <span class="n">adsl_pfs</span><span class="o">.</span><span class="n">adam</span><span class="o">.</span><span class="n">tte</span><span class="o">.</span><span class="n">param</span><span class="p">(</span>
+</span><span id="__span-8-31"><a id="__codelineno-8-31" name="__codelineno-8-31" href="#__codelineno-8-31"></a>        <span class="s2">&quot;PFS&quot;</span><span class="p">,</span>
+</span><span id="__span-8-32"><a id="__codelineno-8-32" name="__codelineno-8-32" href="#__codelineno-8-32"></a>        <span class="s2">&quot;Progression-Free Survival&quot;</span><span class="p">,</span>
+</span><span id="__span-8-33"><a id="__codelineno-8-33" name="__codelineno-8-33" href="#__codelineno-8-33"></a>        <span class="n">start</span><span class="o">=</span><span class="s2">&quot;TRTSDT&quot;</span><span class="p">,</span>
+</span><span id="__span-8-34"><a id="__codelineno-8-34" name="__codelineno-8-34" href="#__codelineno-8-34"></a>        <span class="n">events</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;PD&quot;</span><span class="p">:</span> <span class="n">adrs</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;AVALC&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;PD&quot;</span><span class="p">)},</span>
+</span><span id="__span-8-35"><a id="__codelineno-8-35" name="__codelineno-8-35" href="#__codelineno-8-35"></a>        <span class="n">censors</span><span class="o">=</span><span class="p">{</span><span class="mi">2</span><span class="p">:</span> <span class="n">last_assessment</span><span class="p">,</span> <span class="mi">3</span><span class="p">:</span> <span class="n">no_assessment</span><span class="p">},</span>  <span class="c1"># key = CNSR</span>
+</span><span id="__span-8-36"><a id="__codelineno-8-36" name="__codelineno-8-36" href="#__codelineno-8-36"></a>        <span class="n">stop_at</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;EOSDT&quot;</span><span class="p">,</span> <span class="s2">&quot;NACTDT&quot;</span><span class="p">],</span>
+</span><span id="__span-8-37"><a id="__codelineno-8-37" name="__codelineno-8-37" href="#__codelineno-8-37"></a>    <span class="p">)</span>
+</span><span id="__span-8-38"><a id="__codelineno-8-38" name="__codelineno-8-38" href="#__codelineno-8-38"></a>    <span class="o">.</span><span class="n">aval</span><span class="p">()</span>
+</span><span id="__span-8-39"><a id="__codelineno-8-39" name="__codelineno-8-39" href="#__codelineno-8-39"></a>    <span class="o">.</span><span class="n">to_frame</span><span class="p">()</span>
+</span><span id="__span-8-40"><a id="__codelineno-8-40" name="__codelineno-8-40" href="#__codelineno-8-40"></a><span class="p">)</span>
+</span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>┌─────────┬────────────┬────────────┬──────┬────────────────┬─────────────────┬──────┐
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>│ USUBJID ┆ STARTDT    ┆ ADT        ┆ CNSR ┆ EVNTDESC       ┆ CNSDTDSC        ┆ AVAL │
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>╞═════════╪════════════╪════════════╪══════╪════════════════╪═════════════════╪══════╡
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>│ A       ┆ 2024-01-01 ┆ 2024-03-01 ┆ 2    ┆ NO PROGRESSION ┆ LAST ASSESSMENT ┆ 61.0 │
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>│ B       ┆ 2024-01-01 ┆ 2024-02-01 ┆ 2    ┆ NO PROGRESSION ┆ LAST ASSESSMENT ┆ 32.0 │
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>│ C       ┆ 2024-01-01 ┆ 2024-01-01 ┆ 3    ┆ NO ASSESSMENT  ┆ null            ┆ 1.0  │
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a>└─────────┴────────────┴────────────┴──────┴────────────────┴─────────────────┴──────┘
+</span></code></pre></div>
+<ul>
+<li>Subject A has no progression: ADT is the last assessment (2024-03-01),
+  not the new-therapy date (2024-04-01).</li>
+<li>Subject B progressed on 2024-03-10, after new therapy on 2024-02-15: the
+  PD does not count, and B is censored at the last assessment before it.</li>
+<li>Subject C has no assessment: the censor frame on <code>TRTSDT</code> keeps C. Without
+  such a frame, C is dropped with a warning.</li>
+<li>For a favorable event (time to response, admiral <code>event_type =
+  "positive"</code>), censor at the stop date: add
+  <code>{1: adsl.select("USUBJID", ADT=pl.min_horizontal("EOSDT", "NACTDT"))}</code> to
+  <code>censors=</code>.</li>
+</ul>
 <h2 id="going-further">Going further<a class="headerlink" href="#going-further" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Window truncation</strong> (admiral 1.5 parity): <code>end_dates=[CensorSource(...)]</code>
-  closes the observation window — events after it don't count, and the end
-  source supplies its own <code>CNSR</code>/<code>EVNTDESC</code>. <code>event_type="positive"</code> covers
-  favorable events (time to response): subjects without one censor at the
-  window end.</li>
 <li><strong>Strata</strong>: <code>by=["AEDECOD"]</code> derives one parameter per term, with
   per-stratum <code>PARAMCD</code> built via an expression in <code>set_values_to</code> (a static
-  <code>PARAMCD</code> across strata is rejected — the 1:1 mapping guard).</li>
+  <code>PARAMCD</code> across strata is rejected: the 1:1 mapping guard). Every source
+  frame carries the <code>by</code> columns.</li>
 <li>The full verb reference lives in the
   <a href="../../api/cheat_sheet/#time-to-event-dfadamtte">cheat sheet</a> and the
   <a href="../../api/ta/#time-to-event--dfadamtte">TA API page</a>.</li>
@@ -2385,7 +2484,7 @@ and group columns you ask for resolve from the pinned ADSL automatically:</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="July 21, 2026 12:38:41 UTC">July 21, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="November 5, 2026 10:01:35 UTC">November 5, 2026</span>
   </span>
 
     

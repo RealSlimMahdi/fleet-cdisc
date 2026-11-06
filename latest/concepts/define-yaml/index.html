@@ -875,6 +875,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#record-filters-row_steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Record filters — row_steps:
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1038,6 +1049,17 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#supplemental-qualifiers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Supplemental qualifiers
+      
+    </span>
+  </a>
   
 </li>
       
@@ -2394,6 +2416,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#record-filters-row_steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Record filters — row_steps:
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2557,6 +2590,17 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#supplemental-qualifiers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Supplemental qualifiers
+      
+    </span>
+  </a>
   
 </li>
       
@@ -2813,8 +2857,11 @@ name or a fully qualified Python dotted path. The runtime dispatch depends
 on the callable's <code>kind</code>:</p>
 <ul>
 <li><strong><code>kind="column"</code></strong> (zero-arg, returns <code>pl.Expr</code>) — stays fully lazy,
-  no DataFrame materialisation.</li>
-<li><strong><code>kind="frame"</code> or <code>kind="param"</code></strong> (receives upstream DataFrame, returns
+  no DataFrame materialisation. It writes the column named as the
+  function, so the function name must be the variable name (or the
+  expression ends with <code>.alias("&lt;variable&gt;")</code>); otherwise <code>from_spec</code>
+  raises <code>SpecError</code>.</li>
+<li><strong><code>kind="frame"</code></strong> (receives upstream DataFrame, returns
   <code>pl.DataFrame</code>) — the pipeline is materialised at that point, the function
   is called, and the result is wrapped back into the namespace.</li>
 </ul>
@@ -2923,6 +2970,27 @@ to <code>define.yaml</code> first):</p>
 </span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>    <span class="s2">&quot;TRTSDT&quot;</span><span class="p">,</span> <span class="n">from_dataset</span><span class="o">=</span><span class="n">ex</span><span class="p">,</span> <span class="n">date_col</span><span class="o">=</span><span class="s2">&quot;EXSTDTC&quot;</span><span class="p">,</span> <span class="n">where</span><span class="o">=</span><span class="n">treated</span>
 </span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="p">)</span><span class="o">.</span><span class="n">to_frame</span><span class="p">()</span>
 </span></code></pre></div>
+<h3 id="record-filters-row_steps">Record filters — <code>row_steps:</code><a class="headerlink" href="#record-filters-row_steps" title="Permanent link">&para;</a></h3>
+<p>A step that removes records has no variable, so it does not sit in
+<code>variables:</code>. It sits in the dataset key <code>row_steps:</code>, in pipeline order
+(ADR-0034). Each step names the variable it follows with <code>after:</code> (<code>null</code>:
+before the first variable), and <code>from_spec()</code> runs it right after that
+variable. <code>whereclauses</code> keeps the records where <code>where:</code> is true; <code>nodup</code>
+keeps one record per <code>subset:</code> after the sort on <code>sort_by:</code>.</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="nt">datasets</span><span class="p">:</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ADSL</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">    </span><span class="nt">row_steps</span><span class="p">:</span>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">algorithm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">whereclauses</span>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">        </span><span class="nt">where</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ARMCD != &quot;SCRNFAIL&quot;</span>
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="w">        </span><span class="nt">after</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ARMCD</span>
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="w">    </span><span class="nt">variables</span><span class="p">:</span>
+</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ARMCD</span>
+</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="w">        </span><span class="nt">derivation</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">algorithm</span><span class="p">:</span><span class="w"> </span><span class="nv">assign</span><span class="p p-Indicator">}</span>
+</span></code></pre></div>
+<p><code>to_spec_yaml()</code> writes these steps from an inline chain. A step it cannot
+write (a <code>pl.Expr</code> filter, <code>derive_param</code>) is written as <code>algorithm: TODO</code>
+with the verb name: <code>from_spec()</code> refuses the file until you write the step.
+Define-XML shows the steps as the dataset comment.</p>
 <hr />
 <h2 id="end-to-end-flow">End-to-End Flow<a class="headerlink" href="#end-to-end-flow" title="Permanent link">&para;</a></h2>
 <pre class="mermaid"><code>graph TD
@@ -2939,17 +3007,17 @@ to <code>define.yaml</code> first):</p>
 by name, then build each dataset:</p>
 <!-- docs:no-run -->
 
-<div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">polars</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pl</span>
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">fleet</span>  <span class="c1"># noqa: F401</span>
-</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
-</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="n">dm</span> <span class="o">=</span> <span class="n">pl</span><span class="o">.</span><span class="n">read_parquet</span><span class="p">(</span><span class="s2">&quot;outputs/sdtm/dm.parquet&quot;</span><span class="p">)</span>
-</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="n">ex</span> <span class="o">=</span> <span class="n">pl</span><span class="o">.</span><span class="n">read_parquet</span><span class="p">(</span><span class="s2">&quot;outputs/sdtm/ex.parquet&quot;</span><span class="p">)</span>
-</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>
-</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="n">adsl</span> <span class="o">=</span> <span class="p">(</span>
-</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a>    <span class="n">dm</span><span class="o">.</span><span class="n">adam</span><span class="o">.</span><span class="n">pin</span><span class="p">(</span><span class="s2">&quot;EX&quot;</span><span class="p">,</span> <span class="n">ex</span><span class="p">)</span>
-</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>    <span class="o">.</span><span class="n">from_spec</span><span class="p">(</span><span class="s2">&quot;examples/cdiscpilot01/adam/define.yaml&quot;</span><span class="p">,</span> <span class="n">dataset</span><span class="o">=</span><span class="s2">&quot;ADSL&quot;</span><span class="p">)</span>
-</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a>    <span class="o">.</span><span class="n">to_frame</span><span class="p">()</span>
-</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">polars</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pl</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">fleet</span>  <span class="c1"># noqa: F401</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="n">dm</span> <span class="o">=</span> <span class="n">pl</span><span class="o">.</span><span class="n">read_parquet</span><span class="p">(</span><span class="s2">&quot;outputs/sdtm/dm.parquet&quot;</span><span class="p">)</span>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="n">ex</span> <span class="o">=</span> <span class="n">pl</span><span class="o">.</span><span class="n">read_parquet</span><span class="p">(</span><span class="s2">&quot;outputs/sdtm/ex.parquet&quot;</span><span class="p">)</span>
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>
+</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="n">adsl</span> <span class="o">=</span> <span class="p">(</span>
+</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a>    <span class="n">dm</span><span class="o">.</span><span class="n">adam</span><span class="o">.</span><span class="n">pin</span><span class="p">(</span><span class="s2">&quot;EX&quot;</span><span class="p">,</span> <span class="n">ex</span><span class="p">)</span>
+</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a>    <span class="o">.</span><span class="n">from_spec</span><span class="p">(</span><span class="s2">&quot;examples/cdiscpilot01/adam/define.yaml&quot;</span><span class="p">,</span> <span class="n">dataset</span><span class="o">=</span><span class="s2">&quot;ADSL&quot;</span><span class="p">)</span>
+</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a>    <span class="o">.</span><span class="n">to_frame</span><span class="p">()</span>
+</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="p">)</span>
 </span></code></pre></div>
 <p><code>StudyContext</code> (via <code>load_study_context(config_path)</code>) resolves the configured
 <code>raw_data</code>, <code>sdtm_data</code>, <code>adam_data</code>, and <code>metadata</code> directories so you don't
@@ -2957,17 +3025,17 @@ hard-code paths; it exposes <code>sdtm_spec</code> / <code>adam_spec</code> / <c
 <h3 id="generating-define-xml-from-the-same-spec">Generating Define-XML from the same spec<a class="headerlink" href="#generating-define-xml-from-the-same-spec" title="Permanent link">&para;</a></h3>
 <p>One CLI command — inside a study workspace, spec and output default from
 <code>study_config.yaml</code>:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>uv<span class="w"> </span>run<span class="w"> </span>fleet<span class="w"> </span>define-xml<span class="w"> </span>--standard<span class="w"> </span>adam<span class="w">                 </span><span class="c1"># config-based defaults</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>uv<span class="w"> </span>run<span class="w"> </span>fleet<span class="w"> </span>define-xml<span class="w"> </span>-s<span class="w"> </span>specs/define.yaml<span class="w"> </span>-o<span class="w"> </span>out.xml<span class="w"> </span>--strict
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>uv<span class="w"> </span>run<span class="w"> </span>fleet<span class="w"> </span>define-xml<span class="w"> </span>--standard<span class="w"> </span>adam<span class="w">                 </span><span class="c1"># config-based defaults</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>uv<span class="w"> </span>run<span class="w"> </span>fleet<span class="w"> </span>define-xml<span class="w"> </span>-s<span class="w"> </span>specs/define.yaml<span class="w"> </span>-o<span class="w"> </span>out.xml<span class="w"> </span>--strict
 </span></code></pre></div>
 <p>The same generation from Python:</p>
 <!-- docs:no-run -->
 
-<div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fleet</span><span class="w"> </span><span class="kn">import</span> <span class="n">DefineSpecGenerator</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="n">DefineSpecGenerator</span><span class="p">(</span><span class="s2">&quot;examples/cdiscpilot01/adam/define.yaml&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span>
-</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>    <span class="s2">&quot;outputs/cdiscpilot01/define_adam.xml&quot;</span>
-</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fleet</span><span class="w"> </span><span class="kn">import</span> <span class="n">DefineSpecGenerator</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="n">DefineSpecGenerator</span><span class="p">(</span><span class="s2">&quot;examples/cdiscpilot01/adam/define.yaml&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span>
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>    <span class="s2">&quot;outputs/cdiscpilot01/define_adam.xml&quot;</span>
+</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="p">)</span>
 </span></code></pre></div>
 <p><code>DefineSpecGenerator</code> emits a <code>&lt;MethodDef&gt;</code> per <strong>Derived</strong> variable (see
 the method text rule above); variables with <code>origin: Collected</code>,
@@ -2987,9 +3055,9 @@ API markup inside <code>TranslatedText</code>; <code>validate_xml=False</code> b
   on a variable or on a value-level entry).</li>
 </ul>
 <p>The generator names each gap, one line per item:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>specs/define.yaml: 2 Define-XML gap(s):
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>  DM.SAFFL: no method text (add a comment: or a derivation: block)
-</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>  VS.AVAL (PARAMCD = SYSBP): no SignificantDigits (required on float)
+<div class="language-text highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>specs/define.yaml: 2 Define-XML gap(s):
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>  DM.SAFFL: no method text (add a comment: or a derivation: block)
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>  VS.AVAL (PARAMCD = SYSBP): no SignificantDigits (required on float)
 </span></code></pre></div>
 <table>
 <thead>
@@ -3021,7 +3089,18 @@ API markup inside <code>TranslatedText</code>; <code>validate_xml=False</code> b
 <li><strong><code>derivations_module:</code></strong> — a dotted module that <code>from_spec</code> imports itself, so
   <code>callable:</code> derivations register without a manual import.</li>
 <li><strong><code>output_format:</code></strong> — per-dataset or spec-level export format (<code>parquet</code>,
-  <code>json</code>, <code>xpt</code>) recorded in the DAG and Define-XML leaf hrefs.</li>
+  <code>dataset-json</code>, <code>xpt</code>) recorded in the DAG and Define-XML leaf hrefs, and
+  the format <code>fleet run</code> writes when no <code>--format</code> is given.</li>
+<li><strong><code>output:</code></strong> — per-dataset Define-XML leaf href, used verbatim. It names
+  the leaf only: <code>fleet run</code> still writes <code>&lt;name&gt;.&lt;ext&gt;</code> and warns when the
+  two differ.</li>
+<li><strong><code>sdtm_role:</code></strong> — per-variable SDTM role (<code>Identifier</code>, <code>Topic</code>,
+  <code>Timing</code>, <code>Grouping Qualifier</code>, <code>Result Qualifier</code>, <code>Synonym Qualifier</code>,
+  <code>Record Qualifier</code>, <code>Variable Qualifier</code>, <code>Rule</code>), written as the ItemRef
+  <code>Role</code>. <code>fleet init define</code> fills it from the CDISC Library; check a
+  sponsor-specific role by hand (ADR 0042). It is apart from <code>role:
+  qualifier</code>, which marks a Non-Standard Variable for <code>SUPP&lt;domain&gt;</code> (see
+  <em>Supplemental qualifiers</em> below).</li>
 <li><strong><code>value_level:</code></strong> — value-level metadata entries emitted as Define-XML
   <code>&lt;ValueListDef&gt;</code> / where-clause elements.</li>
 <li><strong><code>ct: {validate: true, file: ...}</code></strong> — opt the spec into CT validation
@@ -3030,14 +3109,45 @@ API markup inside <code>TranslatedText</code>; <code>validate_xml=False</code> b
 <hr />
 <h2 id="codelist-references">Codelist References<a class="headerlink" href="#codelist-references" title="Permanent link">&para;</a></h2>
 <p>Variables can reference codelists declared in the <code>codelists</code> block:</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SEX</span>
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="w">  </span><span class="nt">label</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Sex</span>
-</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">  </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">text</span>
-</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="w">  </span><span class="nt">codelist</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">C66731</span><span class="w"> </span><span class="c1"># references the oid in codelists[]</span>
-</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="w">  </span><span class="nt">derivation</span><span class="p">:</span>
-</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="w">    </span><span class="nt">algorithm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">assign</span>
-</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="w">    </span><span class="nt">source</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SEX</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SEX</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="w">  </span><span class="nt">label</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Sex</span>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">  </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">text</span>
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="w">  </span><span class="nt">codelist</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">C66731</span><span class="w"> </span><span class="c1"># references the oid in codelists[]</span>
+</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">  </span><span class="nt">derivation</span><span class="p">:</span>
+</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="w">    </span><span class="nt">algorithm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">assign</span>
+</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="w">    </span><span class="nt">source</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SEX</span>
 </span></code></pre></div>
+<p>The terms of a codelist decide its Define-XML form:</p>
+<ul>
+<li>every term has a <code>decode:</code>: <code>CodeListItem</code>;</li>
+<li>no term has a <code>decode:</code> (units, test codes): <code>EnumeratedItem</code>;</li>
+<li>some terms have a <code>decode:</code> and some do not: a <code>SpecError</code> that names the
+  codelist and the first term without one;</li>
+<li><code>external: {dictionary: MedDRA, version: "26.0"}</code> in place of <code>items:</code>:
+  <code>ExternalCodeList</code>.</li>
+</ul>
+<p><code>nci_code:</code> on a codelist or a term writes the NCI <code>Alias</code>, and
+<code>extended: true</code> on a term marks a sponsor term (<code>def:ExtendedValue="Yes"</code>).
+A codelist whose <code>oid</code> is an NCI code (<code>C66731</code>) gets
+<code>def:StandardOID="STD.CT"</code> when <code>study.ct_version</code> is set; <code>standard_oid:</code>
+sets another declared standard (<code>STD.CT.ADAM</code> with <code>study.adam_ct_version</code>).</p>
+<!-- docs:no-run -->
+
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="nt">codelists</span><span class="p">:</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">oid</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">C66731</span>
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Sex</span>
+</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">text</span>
+</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="w">    </span><span class="nt">nci_code</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">C66731</span>
+</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="w">    </span><span class="nt">items</span><span class="p">:</span>
+</span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> coded_value</span><span class="p">:</span><span class="w"> </span><span class="nv">F</span><span class="p p-Indicator">,</span><span class="nt"> decode</span><span class="p">:</span><span class="w"> </span><span class="nv">Female</span><span class="p p-Indicator">,</span><span class="nt"> nci_code</span><span class="p">:</span><span class="w"> </span><span class="nv">C16576</span><span class="w"> </span><span class="p p-Indicator">}</span>
+</span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> coded_value</span><span class="p">:</span><span class="w"> </span><span class="nv">X</span><span class="p p-Indicator">,</span><span class="nt"> decode</span><span class="p">:</span><span class="w"> </span><span class="nv">X</span><span class="p p-Indicator">,</span><span class="nt"> extended</span><span class="p">:</span><span class="w"> </span><span class="nv">true</span><span class="w"> </span><span class="p p-Indicator">}</span>
+</span><span id="__span-15-9"><a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">oid</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">CL.UNIT</span>
+</span><span id="__span-15-10"><a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Unit</span>
+</span><span id="__span-15-11"><a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">text</span>
+</span><span id="__span-15-12"><a id="__codelineno-15-12" name="__codelineno-15-12" href="#__codelineno-15-12"></a><span class="w">    </span><span class="nt">items</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[{</span><span class="nt"> coded_value</span><span class="p">:</span><span class="w"> </span><span class="nv">mg</span><span class="w"> </span><span class="p p-Indicator">},</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> coded_value</span><span class="p">:</span><span class="w"> </span><span class="nv">kg</span><span class="w"> </span><span class="p p-Indicator">}]</span>
+</span></code></pre></div>
+<p>Each dataset variable has its own <code>ItemDef</code> (<code>IT.ADSL.AGE</code>, <code>IT.ADAE.AGE</code>), so
+each one keeps the type, length, origin and codelist of its own dataset.</p>
 <h3 id="controlled-terminology-in-the-spec-path">Controlled terminology in the spec path<a class="headerlink" href="#controlled-terminology-in-the-spec-path" title="Permanent link">&para;</a></h3>
 <p>A spec step and its inline call check the same terms. Inside a study, the
 <code>ct:</code> ID of an <code>assign</code>, or the <code>codelist:</code> of its variable when <code>ct:</code> is
@@ -3045,11 +3155,11 @@ absent, resolves to the class of that ID in the study's <code>codelists.py</code
 module <code>fleet init ct</code> generates. So this entry:</p>
 <!-- docs:no-run -->
 
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">AESEV</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="w">  </span><span class="nt">codelist</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">C66769</span>
-</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">  </span><span class="nt">derivation</span><span class="p">:</span>
-</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="w">    </span><span class="nt">algorithm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">assign</span>
-</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">    </span><span class="nt">source</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ae_severity</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">AESEV</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="w">  </span><span class="nt">codelist</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">C66769</span>
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="w">  </span><span class="nt">derivation</span><span class="p">:</span>
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="w">    </span><span class="nt">algorithm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">assign</span>
+</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="w">    </span><span class="nt">source</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ae_severity</span>
 </span></code></pre></div>
 <p>runs as <code>.assign("AESEV", source="ae_severity", ct=AESEV)</code> with the <code>AESEV</code>
 class of <code>codelists.py</code>, and a raw <code>Mild</code> gives the same warning in both
@@ -3105,9 +3215,9 @@ package gives the package warning too. <code>fleet check</code> fails on all fou
 <p>CDISC publishes ADaM CT on its own dates, and some codelists are only in
 ADaM CT (DTYPE, C81224). A study with ADaM datasets pins both packages in
 <code>study_config.yaml</code>:</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="nt">ct</span><span class="p">:</span>
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="w">  </span><span class="nt">package</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sdtmct-2023-12-15</span>
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="w">  </span><span class="nt">adam_package</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">adamct-2023-06-30</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="nt">ct</span><span class="p">:</span>
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="w">  </span><span class="nt">package</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sdtmct-2023-12-15</span>
+</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="w">  </span><span class="nt">adam_package</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">adamct-2023-06-30</span>
 </span></code></pre></div>
 <ul>
 <li><code>fleet init cfg</code> and <code>fleet new</code> with ADaM datasets pin
@@ -3133,17 +3243,17 @@ codelist, mapped ones included; out-of-codelist values emit a warning
 naming the dataset, variable, and codelist:</p>
 <!-- docs:no-run -->
 
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="nt">ct</span><span class="p">:</span>
-</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="w">  </span><span class="nt">validate</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="w">  </span><span class="nt">file</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ct/cdisc_ct.yaml</span><span class="w">   </span><span class="c1"># optional — loaded into the CT cache before the run</span>
-</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="nt">datasets</span><span class="p">:</span>
-</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">DM</span>
-</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="w">    </span><span class="nt">variables</span><span class="p">:</span>
-</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SEX</span>
-</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a><span class="w">        </span><span class="nt">codelist</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">C66731</span>
-</span><span id="__span-16-9"><a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a><span class="w">        </span><span class="nt">derivation</span><span class="p">:</span>
-</span><span id="__span-16-10"><a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a><span class="w">          </span><span class="nt">algorithm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">assign</span>
-</span><span id="__span-16-11"><a id="__codelineno-16-11" name="__codelineno-16-11" href="#__codelineno-16-11"></a><span class="w">          </span><span class="nt">source</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sex</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="nt">ct</span><span class="p">:</span>
+</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="w">  </span><span class="nt">validate</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="w">  </span><span class="nt">file</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ct/cdisc_ct.yaml</span><span class="w">   </span><span class="c1"># optional — loaded into the CT cache before the run</span>
+</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="nt">datasets</span><span class="p">:</span>
+</span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">DM</span>
+</span><span id="__span-18-6"><a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a><span class="w">    </span><span class="nt">variables</span><span class="p">:</span>
+</span><span id="__span-18-7"><a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SEX</span>
+</span><span id="__span-18-8"><a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a><span class="w">        </span><span class="nt">codelist</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">C66731</span>
+</span><span id="__span-18-9"><a id="__codelineno-18-9" name="__codelineno-18-9" href="#__codelineno-18-9"></a><span class="w">        </span><span class="nt">derivation</span><span class="p">:</span>
+</span><span id="__span-18-10"><a id="__codelineno-18-10" name="__codelineno-18-10" href="#__codelineno-18-10"></a><span class="w">          </span><span class="nt">algorithm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">assign</span>
+</span><span id="__span-18-11"><a id="__codelineno-18-11" name="__codelineno-18-11" href="#__codelineno-18-11"></a><span class="w">          </span><span class="nt">source</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sex</span>
 </span></code></pre></div>
 <p>When datasets are checked with <code>DatasetChecker(spec, check_ct=True)</code>, the values
 are also verified against the spec's own inline <code>codelists:</code>, and codelist
@@ -3171,19 +3281,19 @@ is called</strong>, before any data is materialised.</p>
 Here is the real message for a typo'd key (<code>ct_mp</code> instead of <code>ct_map</code>):</p>
 <!-- docs:no-run -->
 
-<div class="language-python highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># derivation block with a typo:</span>
-</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="c1">#   - name: SEX</span>
-</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="c1">#     codelist: C66731</span>
-</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="c1">#     derivation:</span>
-</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="c1">#       algorithm: assign</span>
-</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="c1">#       source: sex</span>
-</span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="c1">#       ct_mp: {&quot;F&quot;: &quot;F&quot;}         # ← typo: should be ct_map</span>
-</span><span id="__span-17-8"><a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a>
-</span><span id="__span-17-9"><a id="__codelineno-17-9" name="__codelineno-17-9" href="#__codelineno-17-9"></a><span class="n">dm</span> <span class="o">=</span> <span class="n">raw_df</span><span class="o">.</span><span class="n">sdtm</span><span class="o">.</span><span class="n">from_spec</span><span class="p">(</span><span class="s2">&quot;specs/define.yaml&quot;</span><span class="p">,</span> <span class="n">dataset</span><span class="o">=</span><span class="s2">&quot;DM&quot;</span><span class="p">)</span>
-</span><span id="__span-17-10"><a id="__codelineno-17-10" name="__codelineno-17-10" href="#__codelineno-17-10"></a><span class="c1"># fleet.core.exceptions.SpecError:</span>
-</span><span id="__span-17-11"><a id="__codelineno-17-11" name="__codelineno-17-11" href="#__codelineno-17-11"></a><span class="c1"># specs/define.yaml → dataset DM → variable SEX: 1 validation error for SDTMAssignSpec</span>
-</span><span id="__span-17-12"><a id="__codelineno-17-12" name="__codelineno-17-12" href="#__codelineno-17-12"></a><span class="c1"># ct_mp</span>
-</span><span id="__span-17-13"><a id="__codelineno-17-13" name="__codelineno-17-13" href="#__codelineno-17-13"></a><span class="c1">#   Extra inputs are not permitted [type=extra_forbidden, input_value={&#39;F&#39;: &#39;F&#39;}, input_type=dict]</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># derivation block with a typo:</span>
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="c1">#   - name: SEX</span>
+</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="c1">#     codelist: C66731</span>
+</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="c1">#     derivation:</span>
+</span><span id="__span-19-5"><a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a><span class="c1">#       algorithm: assign</span>
+</span><span id="__span-19-6"><a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a><span class="c1">#       source: sex</span>
+</span><span id="__span-19-7"><a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a><span class="c1">#       ct_mp: {&quot;F&quot;: &quot;F&quot;}         # ← typo: should be ct_map</span>
+</span><span id="__span-19-8"><a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a>
+</span><span id="__span-19-9"><a id="__codelineno-19-9" name="__codelineno-19-9" href="#__codelineno-19-9"></a><span class="n">dm</span> <span class="o">=</span> <span class="n">raw_df</span><span class="o">.</span><span class="n">sdtm</span><span class="o">.</span><span class="n">from_spec</span><span class="p">(</span><span class="s2">&quot;specs/define.yaml&quot;</span><span class="p">,</span> <span class="n">dataset</span><span class="o">=</span><span class="s2">&quot;DM&quot;</span><span class="p">)</span>
+</span><span id="__span-19-10"><a id="__codelineno-19-10" name="__codelineno-19-10" href="#__codelineno-19-10"></a><span class="c1"># fleet.core.exceptions.SpecError:</span>
+</span><span id="__span-19-11"><a id="__codelineno-19-11" name="__codelineno-19-11" href="#__codelineno-19-11"></a><span class="c1"># specs/define.yaml → dataset DM → variable SEX: 1 validation error for SDTMAssignSpec</span>
+</span><span id="__span-19-12"><a id="__codelineno-19-12" name="__codelineno-19-12" href="#__codelineno-19-12"></a><span class="c1"># ct_mp</span>
+</span><span id="__span-19-13"><a id="__codelineno-19-13" name="__codelineno-19-13" href="#__codelineno-19-13"></a><span class="c1">#   Extra inputs are not permitted [type=extra_forbidden, input_value={&#39;F&#39;: &#39;F&#39;}, input_type=dict]</span>
 </span></code></pre></div>
 <p>(Note: an <code>assign</code> with a codelist id that no loaded CT holds does <strong>not</strong>
 error — it copies the value through and emits a <code>UserWarning</code> that CT could
@@ -3194,17 +3304,29 @@ optional key.)</p>
 points at, in strict mode, and writes no file. The row passes only when the
 generator gives a valid document. This layer fires <strong>on demand</strong>, not
 automatically during pipeline execution.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>uv<span class="w"> </span>run<span class="w"> </span>fleet<span class="w"> </span>check
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>uv<span class="w"> </span>run<span class="w"> </span>fleet<span class="w"> </span>check
 </span></code></pre></div>
 <p>What it catches:</p>
 <ul>
 <li>a spec that does not conform to <code>define_spec_schema.json</code> (<code>SpecSchemaError</code>,
   with the path of the bad entry);</li>
 <li>a <code>codelist:</code> reference to a codelist that the spec does not declare;</li>
+<li>a key, a value-level variable or a where-clause variable that its dataset
+  does not declare, and a <code>crf_pages</code> document that <code>study.documents</code> does
+  not declare;</li>
+<li>in an SDTMIG 3.4 (or earlier) spec, a <code>role: qualifier</code> variable that
+  cannot move to its generated <code>SUPP&lt;domain&gt;</code> (see <em>Supplemental qualifiers</em>
+  below). The message names <code>SUPP&lt;domain&gt;</code> and the reason;</li>
+<li>a <code>study.ct_version</code> (or <code>adam_ct_version</code>) that is not the date of the CT
+  package that <code>study_config.yaml</code> pins;</li>
 <li>a Define-XML gap: method text, <code>Length</code> or <code>SignificantDigits</code> (see
   <em>Define-XML gaps</em> above);</li>
 <li>a generated document that fails the CDISC XSDs or the semantic lint.</li>
 </ul>
+<p><code>fleet check</code> imports no study code: it does not import the
+<code>derivations_module</code> of the spec, and a <code>callable:</code> derivation is described
+by its <code>comment:</code> or its dotted path. <code>fleet define-xml</code> imports the module to
+write the method text of each <code>callable:</code>.</p>
 <p>The derivation blocks themselves are checked by layer 1: the verb's model
 knows the required keys, so there are no separate per-algorithm rules.</p>
 <p>The same check from Python: <code>DefineSpecGenerator(path, strict=True).to_xml_string()</code>
@@ -3238,7 +3360,7 @@ raises on the first of these problems and returns the XML text otherwise.</p>
 </table>
 <h3 id="json-schema-editor-support">JSON Schema &amp; Editor Support<a class="headerlink" href="#json-schema-editor-support" title="Permanent link">&para;</a></h3>
 <p>The YAML spec is validated against the bundled schema at:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>src/fleet/define_xml/schemas/define_spec_schema.json
+<div class="language-text highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>src/fleet/define_xml/schemas/define_spec_schema.json
 </span></code></pre></div>
 <p>This schema is <strong>generated from the algorithm registry</strong> — its <code>algorithm:</code>
 enum, per-algorithm required fields, and the <code>fleet_spec_version</code> /
@@ -3247,14 +3369,56 @@ drive execution, and a CI test fails if the checked-in schema drifts. So the
 editor red-squiggles you see match exactly what <code>from_spec()</code> will accept —
 including the <code>callable</code> escape hatch and every algorithm the engine can run.
 Regenerate it after registry changes with:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>fleet.define_xml.schema_builder
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>fleet.define_xml.schema_builder
 </span></code></pre></div>
 <p>Add this comment to the top of every spec file to activate YAML language-server auto-complete in
 VS Code or any LSP-enabled editor:</p>
 <!-- docs:no-run -->
 
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1"># yaml-language-server: $schema=../../../src/fleet/define_xml/schemas/define_spec_schema.json</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="c1"># yaml-language-server: $schema=../../../src/fleet/define_xml/schemas/define_spec_schema.json</span>
 </span></code></pre></div>
+<hr />
+<h2 id="supplemental-qualifiers">Supplemental qualifiers<a class="headerlink" href="#supplemental-qualifiers" title="Permanent link">&para;</a></h2>
+<p>An SDTM variable with <code>role: qualifier</code> (or <code>algorithm: nsv</code>) is a
+Non-Standard Variable. <code>fleet run</code> builds it, then moves it to a
+<code>SUPP&lt;domain&gt;</code> dataset (SDTMIG 3.4 section 8.4) and writes the parent
+without it. IDVAR is <code>&lt;domain&gt;SEQ</code>; only DM may have no IDVAR, so another
+domain with no <code>--SEQ</code> stops the run. Later datasets of the same run still
+read the qualifier from the full frame.</p>
+<p>The same define.yaml gives the Define-XML. For SDTMIG 3.4 or earlier,
+<code>fleet define-xml</code> and <code>fleet check</code> leave the qualifier out of the parent
+ItemGroupDef and add a <code>SUPP&lt;domain&gt;</code> ItemGroupDef (ADR 0044):</p>
+<ul>
+<li>the variables STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM, QLABEL,
+  QVAL, QORIG and QEVAL, with the keys STUDYID, RDOMAIN, USUBJID, IDVAR,
+  IDVARVAL and QNAM;</li>
+<li>value-level metadata on QVAL: one where clause <code>QNAM EQ &lt;name&gt;</code> per
+  qualifier, with its label, type, length, codelist, origin and method;</li>
+<li>IDVAR text <code>&lt;domain&gt;SEQ</code> (for DM: null), the rule of <code>fleet run</code>;</li>
+<li>the leaf <code>supp&lt;domain&gt;</code> in the format of the parent.</li>
+</ul>
+<!-- docs:no-run -->
+
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">AE</span>
+</span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="w">  </span><span class="nt">variables</span><span class="p">:</span>
+</span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">AESEQ</span>
+</span><span id="__span-24-4"><a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a><span class="w">      </span><span class="c1"># ...</span>
+</span><span id="__span-24-5"><a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">AETRTEM</span>
+</span><span id="__span-24-6"><a id="__codelineno-24-6" name="__codelineno-24-6" href="#__codelineno-24-6"></a><span class="w">      </span><span class="nt">label</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Treatment Emergent Flag</span>
+</span><span id="__span-24-7"><a id="__codelineno-24-7" name="__codelineno-24-7" href="#__codelineno-24-7"></a><span class="w">      </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">text</span>
+</span><span id="__span-24-8"><a id="__codelineno-24-8" name="__codelineno-24-8" href="#__codelineno-24-8"></a><span class="w">      </span><span class="nt">length</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
+</span><span id="__span-24-9"><a id="__codelineno-24-9" name="__codelineno-24-9" href="#__codelineno-24-9"></a><span class="w">      </span><span class="nt">origin</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Derived</span>
+</span><span id="__span-24-10"><a id="__codelineno-24-10" name="__codelineno-24-10" href="#__codelineno-24-10"></a><span class="w">      </span><span class="nt">role</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">qualifier</span><span class="w">  </span><span class="c1"># fleet run: SUPPAE; define: IG.SUPPAE, QVAL where QNAM EQ AETRTEM</span>
+</span><span id="__span-24-11"><a id="__codelineno-24-11" name="__codelineno-24-11" href="#__codelineno-24-11"></a><span class="w">      </span><span class="nt">derivation</span><span class="p">:</span>
+</span><span id="__span-24-12"><a id="__codelineno-24-12" name="__codelineno-24-12" href="#__codelineno-24-12"></a><span class="w">        </span><span class="nt">algorithm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">assign</span>
+</span><span id="__span-24-13"><a id="__codelineno-24-13" name="__codelineno-24-13" href="#__codelineno-24-13"></a><span class="w">        </span><span class="nt">source</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">trtem</span>
+</span></code></pre></div>
+<p>The define refuses a qualifier that cannot move: the parent has no STUDYID
+or USUBJID, a parent other than DM has no <code>&lt;domain&gt;SEQ</code>, the spec also
+declares <code>SUPP&lt;domain&gt;</code>, the name has more than 8 characters (QNAM), the
+label has more than 40 characters (QLABEL), or the qualifier is a key of the
+parent. Give CRF pages of a qualifier with <code>crf_pages:</code> on the variable: a
+key <code>AE.AETRTEM</code> in an external page map does not reach <code>SUPPAE</code>.</p>
 <hr />
 <h2 id="crf-page-references">CRF Page References<a class="headerlink" href="#crf-page-references" title="Permanent link">&para;</a></h2>
 <p>Variables with <code>origin: Collected</code> can include page references to the annotated
@@ -3277,8 +3441,10 @@ Subject</code>. The Define-XML 2.0 spellings <code>CRF</code> and <code>eDT</cod
   carried with <code>algorithm: assign</code> and <code>source:</code> but still marked <code>Collected</code>
   triggers a generation-time warning suggesting the Predecessor form. When
   freezing an inline pipeline, <code>to_spec_yaml(dataset="ADSL", predecessor="DM")</code>
-  pre-fills these entries for carry-through columns and pure copies — the
-  emitted YAML stays the explicit, reviewable source of truth.</li>
+  pre-fills these entries for carry-through columns and pure copies of a
+  column present at the start of the chain. A column a verb added with no
+  lineage (<code>merge</code>) gets a TODO stub, never a Predecessor. The emitted YAML
+  stays the explicit, reviewable source of truth.</li>
 <li><strong><code>Derived</code></strong> describes the derivation in its <code>MethodDef</code>.</li>
 <li><strong><code>Assigned</code> / <code>Protocol</code></strong> show the <code>comment:</code> — e.g.
   <code>comment: DM.ARM</code> renders <code>Assigned: DM.ARM</code>.</li>
@@ -3287,96 +3453,106 @@ Subject</code>. The Define-XML 2.0 spellings <code>CRF</code> and <code>eDT</cod
 <li>A variable with value-level metadata and no <code>comment:</code> renders
   <code>See Value Level Metadata</code>.</li>
 </ul>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">COUNTRY</span>
-</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="w">  </span><span class="nt">label</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Country</span>
-</span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="w">  </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">text</span>
-</span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="w">  </span><span class="nt">origin</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Predecessor</span>
-</span><span id="__span-22-5"><a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a><span class="w">  </span><span class="nt">predecessor</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">DM.COUNTRY</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">COUNTRY</span>
+</span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="w">  </span><span class="nt">label</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Country</span>
+</span><span id="__span-25-3"><a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a><span class="w">  </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">text</span>
+</span><span id="__span-25-4"><a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a><span class="w">  </span><span class="nt">origin</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Predecessor</span>
+</span><span id="__span-25-5"><a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a><span class="w">  </span><span class="nt">predecessor</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">DM.COUNTRY</span>
 </span></code></pre></div>
 <h3 id="setup-declare-the-acrf-document">Setup: declare the aCRF document<a class="headerlink" href="#setup-declare-the-acrf-document" title="Permanent link">&para;</a></h3>
 <p>Scaffold the block with one command (config-context: it edits the study's
 own define.yaml; <code>--standard adam|both</code> covers the ADaM spec too):</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>uv<span class="w"> </span>run<span class="w"> </span>fleet<span class="w"> </span>add-acrf<span class="w"> </span>--href<span class="w"> </span>blankcrf.pdf
-</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>uv<span class="w"> </span>run<span class="w"> </span>fleet<span class="w"> </span>add-acrf<span class="w"> </span>--href<span class="w"> </span>blankcrf.pdf<span class="w"> </span>--page-map<span class="w"> </span>acrf_pages.yaml<span class="w"> </span>--standard<span class="w"> </span>both
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a>uv<span class="w"> </span>run<span class="w"> </span>fleet<span class="w"> </span>add-acrf<span class="w"> </span>--href<span class="w"> </span>blankcrf.pdf
+</span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a>uv<span class="w"> </span>run<span class="w"> </span>fleet<span class="w"> </span>add-acrf<span class="w"> </span>--href<span class="w"> </span>blankcrf.pdf<span class="w"> </span>--page-map<span class="w"> </span>acrf_pages.yaml<span class="w"> </span>--standard<span class="w"> </span>both
 </span></code></pre></div>
 <p>Which adds a <code>documents</code> block to the <code>study:</code> section:</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="nt">study</span><span class="p">:</span>
-</span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="w">  </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">CDISCPILOT01</span>
-</span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a><span class="w">  </span><span class="nt">standard</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SDTMIG</span>
-</span><span id="__span-24-4"><a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a><span class="w">  </span><span class="nt">standard_version</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;3.4&quot;</span>
-</span><span id="__span-24-5"><a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a><span class="w">  </span><span class="nt">documents</span><span class="p">:</span>
-</span><span id="__span-24-6"><a id="__codelineno-24-6" name="__codelineno-24-6" href="#__codelineno-24-6"></a><span class="w">    </span><span class="nt">annotated_crf</span><span class="p">:</span>
-</span><span id="__span-24-7"><a id="__codelineno-24-7" name="__codelineno-24-7" href="#__codelineno-24-7"></a><span class="w">      </span><span class="nt">href</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">blankcrf.pdf</span><span class="w"> </span><span class="c1"># path in the submission package</span>
-</span><span id="__span-24-8"><a id="__codelineno-24-8" name="__codelineno-24-8" href="#__codelineno-24-8"></a><span class="w">      </span><span class="nt">title</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Annotated Case Report Form</span><span class="w"> </span><span class="c1"># displayed in Define-XML</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="nt">study</span><span class="p">:</span>
+</span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="w">  </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">CDISCPILOT01</span>
+</span><span id="__span-27-3"><a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a><span class="w">  </span><span class="nt">standard</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SDTMIG</span>
+</span><span id="__span-27-4"><a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a><span class="w">  </span><span class="nt">standard_version</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;3.4&quot;</span>
+</span><span id="__span-27-5"><a id="__codelineno-27-5" name="__codelineno-27-5" href="#__codelineno-27-5"></a><span class="w">  </span><span class="nt">documents</span><span class="p">:</span>
+</span><span id="__span-27-6"><a id="__codelineno-27-6" name="__codelineno-27-6" href="#__codelineno-27-6"></a><span class="w">    </span><span class="nt">annotated_crf</span><span class="p">:</span>
+</span><span id="__span-27-7"><a id="__codelineno-27-7" name="__codelineno-27-7" href="#__codelineno-27-7"></a><span class="w">      </span><span class="nt">href</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">blankcrf.pdf</span><span class="w"> </span><span class="c1"># path in the submission package</span>
+</span><span id="__span-27-8"><a id="__codelineno-27-8" name="__codelineno-27-8" href="#__codelineno-27-8"></a><span class="w">      </span><span class="nt">title</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Annotated Case Report Form</span><span class="w"> </span><span class="c1"># displayed in Define-XML</span>
 </span></code></pre></div>
 <p>This emits the top-level <code>&lt;def:AnnotatedCRF&gt;</code> container and the
 <code>&lt;def:leaf&gt;</code> element that the XSLT needs to render document links.</p>
 <h3 id="layer-1-simple-page-strings-most-common">Layer 1 — Simple page strings (most common)<a class="headerlink" href="#layer-1-simple-page-strings-most-common" title="Permanent link">&para;</a></h3>
 <p>Add <code>crf_pages</code> to any collected variable:</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="nt">variables</span><span class="p">:</span>
-</span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SEX</span>
-</span><span id="__span-25-3"><a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a><span class="w">    </span><span class="nt">label</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Sex</span>
-</span><span id="__span-25-4"><a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">text</span>
-</span><span id="__span-25-5"><a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a><span class="w">    </span><span class="nt">origin</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Collected</span>
-</span><span id="__span-25-6"><a id="__codelineno-25-6" name="__codelineno-25-6" href="#__codelineno-25-6"></a><span class="w">    </span><span class="nt">crf_pages</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;8&quot;</span><span class="w"> </span><span class="c1"># single page</span>
-</span><span id="__span-25-7"><a id="__codelineno-25-7" name="__codelineno-25-7" href="#__codelineno-25-7"></a><span class="w">    </span><span class="nt">derivation</span><span class="p">:</span>
-</span><span id="__span-25-8"><a id="__codelineno-25-8" name="__codelineno-25-8" href="#__codelineno-25-8"></a><span class="w">      </span><span class="nt">algorithm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">assign</span>
-</span><span id="__span-25-9"><a id="__codelineno-25-9" name="__codelineno-25-9" href="#__codelineno-25-9"></a><span class="w">      </span><span class="nt">source</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sex</span>
-</span><span id="__span-25-10"><a id="__codelineno-25-10" name="__codelineno-25-10" href="#__codelineno-25-10"></a><span class="w">      </span><span class="nt">ct</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">C66731</span>
-</span><span id="__span-25-11"><a id="__codelineno-25-11" name="__codelineno-25-11" href="#__codelineno-25-11"></a>
-</span><span id="__span-25-12"><a id="__codelineno-25-12" name="__codelineno-25-12" href="#__codelineno-25-12"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">RACE</span>
-</span><span id="__span-25-13"><a id="__codelineno-25-13" name="__codelineno-25-13" href="#__codelineno-25-13"></a><span class="w">    </span><span class="nt">label</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Race</span>
-</span><span id="__span-25-14"><a id="__codelineno-25-14" name="__codelineno-25-14" href="#__codelineno-25-14"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">text</span>
-</span><span id="__span-25-15"><a id="__codelineno-25-15" name="__codelineno-25-15" href="#__codelineno-25-15"></a><span class="w">    </span><span class="nt">origin</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Collected</span>
-</span><span id="__span-25-16"><a id="__codelineno-25-16" name="__codelineno-25-16" href="#__codelineno-25-16"></a><span class="w">    </span><span class="nt">crf_pages</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;8</span><span class="nv"> </span><span class="s">9&quot;</span><span class="w"> </span><span class="c1"># space-separated multiple pages</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="nt">variables</span><span class="p">:</span>
+</span><span id="__span-28-2"><a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SEX</span>
+</span><span id="__span-28-3"><a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a><span class="w">    </span><span class="nt">label</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Sex</span>
+</span><span id="__span-28-4"><a id="__codelineno-28-4" name="__codelineno-28-4" href="#__codelineno-28-4"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">text</span>
+</span><span id="__span-28-5"><a id="__codelineno-28-5" name="__codelineno-28-5" href="#__codelineno-28-5"></a><span class="w">    </span><span class="nt">origin</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Collected</span>
+</span><span id="__span-28-6"><a id="__codelineno-28-6" name="__codelineno-28-6" href="#__codelineno-28-6"></a><span class="w">    </span><span class="nt">crf_pages</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;8&quot;</span><span class="w"> </span><span class="c1"># single page</span>
+</span><span id="__span-28-7"><a id="__codelineno-28-7" name="__codelineno-28-7" href="#__codelineno-28-7"></a><span class="w">    </span><span class="nt">derivation</span><span class="p">:</span>
+</span><span id="__span-28-8"><a id="__codelineno-28-8" name="__codelineno-28-8" href="#__codelineno-28-8"></a><span class="w">      </span><span class="nt">algorithm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">assign</span>
+</span><span id="__span-28-9"><a id="__codelineno-28-9" name="__codelineno-28-9" href="#__codelineno-28-9"></a><span class="w">      </span><span class="nt">source</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sex</span>
+</span><span id="__span-28-10"><a id="__codelineno-28-10" name="__codelineno-28-10" href="#__codelineno-28-10"></a><span class="w">      </span><span class="nt">ct</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">C66731</span>
+</span><span id="__span-28-11"><a id="__codelineno-28-11" name="__codelineno-28-11" href="#__codelineno-28-11"></a>
+</span><span id="__span-28-12"><a id="__codelineno-28-12" name="__codelineno-28-12" href="#__codelineno-28-12"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">RACE</span>
+</span><span id="__span-28-13"><a id="__codelineno-28-13" name="__codelineno-28-13" href="#__codelineno-28-13"></a><span class="w">    </span><span class="nt">label</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Race</span>
+</span><span id="__span-28-14"><a id="__codelineno-28-14" name="__codelineno-28-14" href="#__codelineno-28-14"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">text</span>
+</span><span id="__span-28-15"><a id="__codelineno-28-15" name="__codelineno-28-15" href="#__codelineno-28-15"></a><span class="w">    </span><span class="nt">origin</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Collected</span>
+</span><span id="__span-28-16"><a id="__codelineno-28-16" name="__codelineno-28-16" href="#__codelineno-28-16"></a><span class="w">    </span><span class="nt">crf_pages</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;8</span><span class="nv"> </span><span class="s">9&quot;</span><span class="w"> </span><span class="c1"># space-separated multiple pages</span>
 </span></code></pre></div>
 <p>The string value maps directly to the <code>PageRefs</code> attribute with
-<code>Type="PhysicalRef"</code>.</p>
+<code>Type="PhysicalRef"</code>. A number (<code>crf_pages: 8</code> in YAML) is read as the page
+string <code>"8"</code>. Without <code>study.documents.annotated_crf</code>, the pages cannot be
+written: Fleet gives a warning that names each variable.</p>
+<p>A value-level variable takes its own pages: the key of its page map entry is
+<code>DATASET.VARIABLE.&lt;where values&gt;</code> (for example <code>LB.LBORRES.ALB</code>), and the
+parent <code>DATASET.VARIABLE</code> is the fallback.</p>
 <h3 id="layer-2-rich-references-named-destinations-page-ranges">Layer 2 — Rich references (named destinations, page ranges)<a class="headerlink" href="#layer-2-rich-references-named-destinations-page-ranges" title="Permanent link">&para;</a></h3>
 <p>For PDF bookmarks or page ranges, use the dict form:</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SEX</span>
-</span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="w">  </span><span class="nt">origin</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Collected</span>
-</span><span id="__span-26-3"><a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a><span class="w">  </span><span class="nt">crf_pages</span><span class="p">:</span>
-</span><span id="__span-26-4"><a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a><span class="w">    </span><span class="nt">pages</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;DM_SEX&quot;</span><span class="w"> </span><span class="c1"># PDF bookmark name</span>
-</span><span id="__span-26-5"><a id="__codelineno-26-5" name="__codelineno-26-5" href="#__codelineno-26-5"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">NamedDestination</span><span class="w"> </span><span class="c1"># or PhysicalRef (default)</span>
-</span><span id="__span-26-6"><a id="__codelineno-26-6" name="__codelineno-26-6" href="#__codelineno-26-6"></a>
-</span><span id="__span-26-7"><a id="__codelineno-26-7" name="__codelineno-26-7" href="#__codelineno-26-7"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">RACE</span>
-</span><span id="__span-26-8"><a id="__codelineno-26-8" name="__codelineno-26-8" href="#__codelineno-26-8"></a><span class="w">  </span><span class="nt">origin</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Collected</span>
-</span><span id="__span-26-9"><a id="__codelineno-26-9" name="__codelineno-26-9" href="#__codelineno-26-9"></a><span class="w">  </span><span class="nt">crf_pages</span><span class="p">:</span>
-</span><span id="__span-26-10"><a id="__codelineno-26-10" name="__codelineno-26-10" href="#__codelineno-26-10"></a><span class="w">    </span><span class="nt">pages</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;8</span><span class="nv"> </span><span class="s">9&quot;</span>
-</span><span id="__span-26-11"><a id="__codelineno-26-11" name="__codelineno-26-11" href="#__codelineno-26-11"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">PhysicalRef</span>
-</span><span id="__span-26-12"><a id="__codelineno-26-12" name="__codelineno-26-12" href="#__codelineno-26-12"></a><span class="w">    </span><span class="nt">first_page</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;8&quot;</span><span class="w"> </span><span class="c1"># optional range attributes</span>
-</span><span id="__span-26-13"><a id="__codelineno-26-13" name="__codelineno-26-13" href="#__codelineno-26-13"></a><span class="w">    </span><span class="nt">last_page</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;9&quot;</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SEX</span>
+</span><span id="__span-29-2"><a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="w">  </span><span class="nt">origin</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Collected</span>
+</span><span id="__span-29-3"><a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a><span class="w">  </span><span class="nt">crf_pages</span><span class="p">:</span>
+</span><span id="__span-29-4"><a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a><span class="w">    </span><span class="nt">pages</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;DM_SEX&quot;</span><span class="w"> </span><span class="c1"># PDF bookmark name</span>
+</span><span id="__span-29-5"><a id="__codelineno-29-5" name="__codelineno-29-5" href="#__codelineno-29-5"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">NamedDestination</span><span class="w"> </span><span class="c1"># or PhysicalRef (default)</span>
+</span><span id="__span-29-6"><a id="__codelineno-29-6" name="__codelineno-29-6" href="#__codelineno-29-6"></a>
+</span><span id="__span-29-7"><a id="__codelineno-29-7" name="__codelineno-29-7" href="#__codelineno-29-7"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">RACE</span>
+</span><span id="__span-29-8"><a id="__codelineno-29-8" name="__codelineno-29-8" href="#__codelineno-29-8"></a><span class="w">  </span><span class="nt">origin</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Collected</span>
+</span><span id="__span-29-9"><a id="__codelineno-29-9" name="__codelineno-29-9" href="#__codelineno-29-9"></a><span class="w">  </span><span class="nt">crf_pages</span><span class="p">:</span>
+</span><span id="__span-29-10"><a id="__codelineno-29-10" name="__codelineno-29-10" href="#__codelineno-29-10"></a><span class="w">    </span><span class="nt">pages</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;8</span><span class="nv"> </span><span class="s">9&quot;</span>
+</span><span id="__span-29-11"><a id="__codelineno-29-11" name="__codelineno-29-11" href="#__codelineno-29-11"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">PhysicalRef</span>
+</span><span id="__span-29-12"><a id="__codelineno-29-12" name="__codelineno-29-12" href="#__codelineno-29-12"></a><span class="w">    </span><span class="nt">first_page</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;8&quot;</span><span class="w"> </span><span class="c1"># optional range attributes</span>
+</span><span id="__span-29-13"><a id="__codelineno-29-13" name="__codelineno-29-13" href="#__codelineno-29-13"></a><span class="w">    </span><span class="nt">last_page</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;9&quot;</span>
 </span></code></pre></div>
+<p><code>doc:</code> names the <code>href</code> of the annotated CRF or of a supplemental document.
+A <code>doc:</code> that matches no declared document stops generation with a
+<code>SpecError</code> that names the variable.</p>
 <h3 id="layer-3-external-page-map-edc-driven-workflows">Layer 3 — External page map (EDC-driven workflows)<a class="headerlink" href="#layer-3-external-page-map-edc-driven-workflows" title="Permanent link">&para;</a></h3>
 <p>For studies where CRF annotations are extracted from an EDC system, point
 to an external YAML file:</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="nt">study</span><span class="p">:</span>
-</span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="w">  </span><span class="nt">documents</span><span class="p">:</span>
-</span><span id="__span-27-3"><a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a><span class="w">    </span><span class="nt">annotated_crf</span><span class="p">:</span>
-</span><span id="__span-27-4"><a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a><span class="w">      </span><span class="nt">href</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">blankcrf.pdf</span>
-</span><span id="__span-27-5"><a id="__codelineno-27-5" name="__codelineno-27-5" href="#__codelineno-27-5"></a><span class="w">      </span><span class="nt">page_map</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">acrf_pages.yaml</span><span class="w"> </span><span class="c1"># relative to the define.yaml directory</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="nt">study</span><span class="p">:</span>
+</span><span id="__span-30-2"><a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="w">  </span><span class="nt">documents</span><span class="p">:</span>
+</span><span id="__span-30-3"><a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a><span class="w">    </span><span class="nt">annotated_crf</span><span class="p">:</span>
+</span><span id="__span-30-4"><a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a><span class="w">      </span><span class="nt">href</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">blankcrf.pdf</span>
+</span><span id="__span-30-5"><a id="__codelineno-30-5" name="__codelineno-30-5" href="#__codelineno-30-5"></a><span class="w">      </span><span class="nt">page_map</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">acrf_pages.yaml</span><span class="w"> </span><span class="c1"># relative to the define.yaml directory</span>
 </span></code></pre></div>
 <p>The page map file uses <code>DOMAIN.VARIABLE</code> keys:</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="c1"># acrf_pages.yaml — auto-generated from EDC export</span>
-</span><span id="__span-28-2"><a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a><span class="nt">DM.SEX</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;7&quot;</span>
-</span><span id="__span-28-3"><a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a><span class="nt">DM.BRTHDTC</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;8&quot;</span>
-</span><span id="__span-28-4"><a id="__codelineno-28-4" name="__codelineno-28-4" href="#__codelineno-28-4"></a><span class="nt">AE.AETERM</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;12</span><span class="nv"> </span><span class="s">13&quot;</span>
-</span><span id="__span-28-5"><a id="__codelineno-28-5" name="__codelineno-28-5" href="#__codelineno-28-5"></a><span class="nt">VS.VSTESTCD</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;20&quot;</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-31-1"><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="c1"># acrf_pages.yaml — auto-generated from EDC export</span>
+</span><span id="__span-31-2"><a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a><span class="nt">DM.SEX</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;7&quot;</span>
+</span><span id="__span-31-3"><a id="__codelineno-31-3" name="__codelineno-31-3" href="#__codelineno-31-3"></a><span class="nt">DM.BRTHDTC</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;8&quot;</span>
+</span><span id="__span-31-4"><a id="__codelineno-31-4" name="__codelineno-31-4" href="#__codelineno-31-4"></a><span class="nt">AE.AETERM</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;12</span><span class="nv"> </span><span class="s">13&quot;</span>
+</span><span id="__span-31-5"><a id="__codelineno-31-5" name="__codelineno-31-5" href="#__codelineno-31-5"></a><span class="nt">VS.VSTESTCD</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;20&quot;</span>
 </span></code></pre></div>
 <p>Inline <code>crf_pages</code> on individual variables always take precedence over the
-external page map.</p>
+external page map. A <code>page_map</code> file that does not exist stops generation
+with a <code>SpecError</code>. Page map keys that match no variable of the spec give one
+warning that lists them.</p>
 <h3 id="supplemental-documents">Supplemental documents<a class="headerlink" href="#supplemental-documents" title="Permanent link">&para;</a></h3>
 <p>Additional supporting documents (reviewer's guide, protocol, etc.) can be
 declared alongside the annotated CRF:</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="nt">study</span><span class="p">:</span>
-</span><span id="__span-29-2"><a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="w">  </span><span class="nt">documents</span><span class="p">:</span>
-</span><span id="__span-29-3"><a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a><span class="w">    </span><span class="nt">annotated_crf</span><span class="p">:</span>
-</span><span id="__span-29-4"><a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a><span class="w">      </span><span class="nt">href</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">blankcrf.pdf</span>
-</span><span id="__span-29-5"><a id="__codelineno-29-5" name="__codelineno-29-5" href="#__codelineno-29-5"></a><span class="w">    </span><span class="nt">supplemental_docs</span><span class="p">:</span>
-</span><span id="__span-29-6"><a id="__codelineno-29-6" name="__codelineno-29-6" href="#__codelineno-29-6"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">LF.ReviewerGuide</span>
-</span><span id="__span-29-7"><a id="__codelineno-29-7" name="__codelineno-29-7" href="#__codelineno-29-7"></a><span class="w">        </span><span class="nt">href</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">reviewers-guide.pdf</span>
-</span><span id="__span-29-8"><a id="__codelineno-29-8" name="__codelineno-29-8" href="#__codelineno-29-8"></a><span class="w">        </span><span class="nt">title</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Reviewer&#39;s Guide</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-32-1"><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a><span class="nt">study</span><span class="p">:</span>
+</span><span id="__span-32-2"><a id="__codelineno-32-2" name="__codelineno-32-2" href="#__codelineno-32-2"></a><span class="w">  </span><span class="nt">documents</span><span class="p">:</span>
+</span><span id="__span-32-3"><a id="__codelineno-32-3" name="__codelineno-32-3" href="#__codelineno-32-3"></a><span class="w">    </span><span class="nt">annotated_crf</span><span class="p">:</span>
+</span><span id="__span-32-4"><a id="__codelineno-32-4" name="__codelineno-32-4" href="#__codelineno-32-4"></a><span class="w">      </span><span class="nt">href</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">blankcrf.pdf</span>
+</span><span id="__span-32-5"><a id="__codelineno-32-5" name="__codelineno-32-5" href="#__codelineno-32-5"></a><span class="w">    </span><span class="nt">supplemental_docs</span><span class="p">:</span>
+</span><span id="__span-32-6"><a id="__codelineno-32-6" name="__codelineno-32-6" href="#__codelineno-32-6"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">LF.ReviewerGuide</span>
+</span><span id="__span-32-7"><a id="__codelineno-32-7" name="__codelineno-32-7" href="#__codelineno-32-7"></a><span class="w">        </span><span class="nt">href</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">reviewers-guide.pdf</span>
+</span><span id="__span-32-8"><a id="__codelineno-32-8" name="__codelineno-32-8" href="#__codelineno-32-8"></a><span class="w">        </span><span class="nt">title</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Reviewer&#39;s Guide</span>
 </span></code></pre></div>
 <p>These emit <code>&lt;def:SupplementalDoc&gt;</code> and corresponding <code>&lt;def:leaf&gt;</code> elements.</p>
 <hr />
@@ -3408,7 +3584,7 @@ declared alongside the annotated CRF:</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="November 3, 2026 20:16:30 UTC">November 3, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="November 5, 2026 10:02:21 UTC">November 5, 2026</span>
   </span>
 
     

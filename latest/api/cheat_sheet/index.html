@@ -2486,13 +2486,13 @@
 </tr>
 <tr>
 <td><a class="autorefs autorefs-internal" title="            derive_summary_records" href="../adam/#fleet.adam.AdamNamespace.derive_summary_records"><code>.derive_summary_records()</code></a></td>
-<td>Aggregate by group and append summary rows.</td>
-<td><code>.derive_summary_records(by=["USUBJID"], ...)</code></td>
+<td>Aggregate by group and append summary rows (<code>where=</code> filters the source).</td>
+<td><code>.derive_summary_records(by=["USUBJID"], ..., where=pl.col("DTYPE").is_null())</code></td>
 </tr>
 <tr>
 <td><a class="autorefs autorefs-internal" title="            derive_locf_records" href="../adam/#fleet.adam.AdamNamespace.derive_locf_records"><code>.derive_locf_records()</code></a></td>
-<td>LOCF forward-fill within patient groups.</td>
-<td><code>.derive_locf_records(by=["USUBJID","PARAMCD"])</code></td>
+<td>Add LOCF records (DTYPE "LOCF") for the expected visits.</td>
+<td><code>.derive_locf_records(dataset_ref=visits, by=["USUBJID","PARAMCD"], order_by=["AVISITN"])</code></td>
 </tr>
 <tr>
 <td><a class="autorefs autorefs-internal" title="            derive_param" href="../adam/#fleet.adam.AdamNamespace.derive_param"><code>.derive_param()</code></a></td>
@@ -2553,8 +2553,8 @@
 </tr>
 <tr>
 <td><a class="autorefs autorefs-internal" title="            age_from_dates" href="../adsl/#fleet.adam.ADSLNamespace.age_from_dates"><code>.age_from_dates()</code></a></td>
-<td>Compute age between two dates.</td>
-<td><code>.age_from_dates("AGE", birth="BRTHDT", reference="RFSTDTC")</code></td>
+<td>Age in completed years between two dates (<code>unit="decimal"</code> for days / 365.25).</td>
+<td><code>.age_from_dates("AAGE", birth_date="BRTHDT", reference_date="TRTSDT")</code></td>
 </tr>
 <tr>
 <td><a class="autorefs autorefs-internal" title="            derive_period" href="../adsl/#fleet.adam.ADSLNamespace.derive_period"><code>.derive_period()</code></a></td>
@@ -2673,9 +2673,9 @@
 </tbody>
 </table>
 <h2 id="time-to-event-dfadamtte">Time-to-event (<code>df.adam.tte</code>)<a class="headerlink" href="#time-to-event-dfadamtte" title="Permanent link">&para;</a></h2>
-<p>Typed <code>EventSource</code> / <code>CensorSource</code> objects describe the candidates; the
-prebuilt library (<code>DEATH_EVENT</code>, <code>AE_EVENT</code>, ...) is browsable via
-<code>prebuilt_sources_frame()</code>. Source frames attach by nickname with <code>.pin()</code>.</p>
+<p>Each event or censor source is a plain frame with <code>USUBJID</code> and <code>ADT</code>. The key of
+<code>events=</code> is the EVNTDESC; the key of <code>censors=</code> is the CNSR. Records after the
+first <code>stop_at=</code> date are dropped (ADR-0043).</p>
 <table>
 <thead>
 <tr>
@@ -2688,7 +2688,7 @@ prebuilt library (<code>DEATH_EVENT</code>, <code>AE_EVENT</code>, ...) is brows
 <tr>
 <td><a class="autorefs autorefs-internal" title="            param" href="../ta/#fleet.adam.TTENamespace.param"><code>.param()</code></a></td>
 <td>Derive one TTE parameter: earliest event wins, else latest censor.</td>
-<td><code>.param("OS", "Overall Survival", start_date="TRTSDT", events=[...])</code></td>
+<td><code>.param("PFS", start="TRTSDT", events={"PD": pd}, censors={2: last_assessment}, stop_at=["EOSDT", "NACTDT"])</code></td>
 </tr>
 <tr>
 <td><a class="autorefs autorefs-internal" title="            aval" href="../ta/#fleet.adam.TTENamespace.aval"><code>.aval()</code></a></td>
@@ -2814,7 +2814,7 @@ domain — see the <a href="../../concepts/tdd/">Trial Design concepts page</a>.
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="November 3, 2026 14:34:09 UTC">November 3, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="November 5, 2026 09:41:24 UTC">November 5, 2026</span>
   </span>
 
     

@@ -3145,12 +3145,12 @@ Fleet reads only this key from <code>.env</code>; set <code>CDISC_BASE_URL</code
 <tr>
 <td><code>--out</code> / <code>--output</code> / <code>-o</code></td>
 <td><em>(none)</em></td>
-<td>Output directory for every dataset. Default: the configured data/sdtm and data/adam directories.</td>
+<td>Output directory for every dataset. Default: the configured data/sdtm and data/adam directories. Fleet only writes here: inputs are read from the run, a declared path:, the raw directory (type: raw) or the data directory of the input's standard (type: dataset).</td>
 </tr>
 <tr>
 <td><code>--format</code></td>
-<td><code>parquet</code></td>
-<td>Output format (default: parquet). Choices: <code>parquet</code>, <code>xpt</code>, <code>dataset-json</code>.</td>
+<td><em>(none)</em></td>
+<td>Output format of every dataset. Default: the output_format of the dataset, else of define.yaml, else parquet (the rule of the Define-XML leaf). Choices: <code>parquet</code>, <code>xpt</code>, <code>dataset-json</code>.</td>
 </tr>
 <tr>
 <td><code>--strict</code> / <code>--no-strict</code></td>
@@ -3200,9 +3200,14 @@ Fleet reads only this key from <code>.env</code>; set <code>CDISC_BASE_URL</code
 <td>IG version. Default: the sdtm/adam ig_version declared in the discovered study_config.yaml (3.4 / 1.3 outside a study).</td>
 </tr>
 <tr>
+<td><code>--define</code></td>
+<td><em>(none)</em></td>
+<td>Define-XML file that CORE checks with the datasets (CORE -dxp). Opt-in: Fleet never passes a define by default.</td>
+</tr>
+<tr>
 <td><code>--custom-rules</code></td>
 <td><em>(none)</em></td>
-<td>Directory of custom validation rule YAML files. Default: validation.custom_rules from the discovered study_config.yaml.</td>
+<td>Directory of custom validation rule YAML files, relative to the working directory. Default: validation.custom_rules from the discovered study_config.yaml.</td>
 </tr>
 <tr>
 <td><code>--timeout</code></td>
@@ -3628,7 +3633,12 @@ Fleet reads only this key from <code>.env</code>; set <code>CDISC_BASE_URL</code
 <tr>
 <td><code>--groupby</code></td>
 <td><em>(none)</em></td>
-<td>Treatment-arm column. Default: auto-detect (TRTA → TRT01A → TRT01P).</td>
+<td>Treatment-arm column. Default: the spec's columns: field when it declares one, else auto-detect (TRTA → TRT01A → TRT01P).</td>
+</tr>
+<tr>
+<td><code>--adsl-groupby</code></td>
+<td><em>(none)</em></td>
+<td>ADSL arm column for the big N when ADSL lacks the analysis arm (e.g. TRT01A for an ADAE grouped by TRTA). Sets adsl_group_col.</td>
 </tr>
 <tr>
 <td><code>--title</code></td>
@@ -3704,7 +3714,12 @@ Fleet reads only this key from <code>.env</code>; set <code>CDISC_BASE_URL</code
 <tr>
 <td><code>--groupby</code></td>
 <td><em>(none)</em></td>
-<td>Treatment-arm column for specs without a groupby axis. Default: auto-detect (TRTA → TRT01A → TRT01P).</td>
+<td>Treatment-arm column for specs without a groupby axis. Default: the spec's columns: field when it declares one, else auto-detect (TRTA → TRT01A → TRT01P).</td>
+</tr>
+<tr>
+<td><code>--adsl-groupby</code></td>
+<td><em>(none)</em></td>
+<td>ADSL arm column for the big N when ADSL lacks the analysis arm (e.g. TRT01A for an ADAE grouped by TRTA). Sets adsl_group_col.</td>
 </tr>
 <tr>
 <td><code>--title</code></td>
@@ -3766,7 +3781,17 @@ Fleet reads only this key from <code>.env</code>; set <code>CDISC_BASE_URL</code
 <tr>
 <td><code>--groupby</code></td>
 <td><em>(none)</em></td>
-<td>Treatment-arm column. Default: auto-detect (TRTA → TRT01A → TRT01P).</td>
+<td>Treatment-arm column. Default: auto-detect (TRTA → TRT01A → TRT01P); TRT01A → TRT01P for the ADSL domains dm and ds.</td>
+</tr>
+<tr>
+<td><code>--adsl-groupby</code></td>
+<td><em>(none)</em></td>
+<td>ADSL arm column for the big N when ADSL lacks the analysis arm (e.g. TRT01A for an ADAE grouped by TRTA). Sets adsl_group_col.</td>
+</tr>
+<tr>
+<td><code>--population</code></td>
+<td><em>(none)</em></td>
+<td>ADSL population filter, passed to the spec's adsl_filter and shown in a footnote, e.g. 'pl.col("SAFFL") == "Y"'. Default: none (all ADSL subjects).</td>
 </tr>
 <tr>
 <td><code>--title</code></td>
@@ -3802,6 +3827,7 @@ Fleet reads only this key from <code>.env</code>; set <code>CDISC_BASE_URL</code
 </table>
 <hr />
 <h2 id="fleet-define-xml"><code>fleet define-xml</code><a class="headerlink" href="#fleet-define-xml" title="Permanent link">&para;</a></h2>
+<p>Generate Define-XML 2.1 from a define.yaml specification. This imports the spec's derivations_module (study Python code) to describe callable: derivations: run it only on a study you trust.</p>
 <table>
 <thead>
 <tr>
@@ -3839,7 +3865,7 @@ Fleet reads only this key from <code>.env</code>; set <code>CDISC_BASE_URL</code
 <tr>
 <td><code>--enrich-methods</code></td>
 <td><em>(none)</em></td>
-<td>Kept for old scripts: MethodDefs are on by default. Every Derived variable with a comment: or a derivation: gets a MethodDef.</td>
+<td>Kept for old scripts: MethodDefs are on by default. Every Derived variable with a comment: or a derivation: gets a MethodDef. This imports the spec's derivations_module (study Python code).</td>
 </tr>
 <tr>
 <td><code>--strict</code></td>
@@ -4065,7 +4091,7 @@ Fleet reads only this key from <code>.env</code>; set <code>CDISC_BASE_URL</code
 <tr>
 <td><code>--kind</code></td>
 <td><code>column</code></td>
-<td>Derivation kind: column / frame / param (default: column). Choices: <code>column</code>, <code>frame</code>, <code>param</code>.</td>
+<td>Derivation kind: column / frame (default: column). For a new parameter row, use .adam.derive_param(). Choices: <code>column</code>, <code>frame</code>.</td>
 </tr>
 <tr>
 <td><code>--config</code> / <code>-c</code></td>
@@ -4138,7 +4164,7 @@ Fleet reads only this key from <code>.env</code>; set <code>CDISC_BASE_URL</code
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="November 3, 2026 21:47:21 UTC">November 3, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="November 5, 2026 10:06:06 UTC">November 5, 2026</span>
   </span>
 
     
