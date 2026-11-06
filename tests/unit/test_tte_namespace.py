@@ -16,6 +16,7 @@ import polars as pl
 import pytest
 
 import fleet  # noqa: F401 — triggers namespace registration
+from fleet.core.exceptions import DerivationError
 from tests.helpers import shuffle_rows
 
 # ------------------------------------------------------------------ #
@@ -270,20 +271,24 @@ STOP_ADRS = """
 """
 
 
+STOPS = {"EOSDT": (4, "END OF STUDY"), "NACTDT": (2, "NEW ANTICANCER THERAPY")}
+
+
 def _pfs(censors: dict[int, pl.DataFrame] | None = None, **kwargs) -> pl.DataFrame:
     adsl = pl.from_repr(STOP_ADSL)
     adrs = pl.from_repr(STOP_ADRS)
     last_assessment = adrs.select("USUBJID", "ADT", CNSDTDSC=pl.lit("LAST ASSESSMENT"))
+    if censors is None:
+        censors = {1: last_assessment, 3: adsl.select("USUBJID", ADT="TRTSDT")}
+        kwargs.setdefault("keep_reason", [3])
     return (
         adsl.adam.tte.param(
             "PFS",
             "Progression-Free Survival",
             start="TRTSDT",
             events={"PD": adrs.filter(pl.col("AVALC") == "PD")},
-            censors=censors
-            if censors is not None
-            else {2: last_assessment, 3: adsl.select("USUBJID", ADT="TRTSDT")},
-            stop_at=["EOSDT", "NACTDT"],
+            censors=censors,
+            stop_at=kwargs.pop("stop_at", STOPS),
             **kwargs,
         )
         .aval()
@@ -320,7 +325,7 @@ class TestStopAt:
         """D's only assessment is after NACTDT: no record is left."""
         adrs = pl.from_repr(STOP_ADRS)
         with pytest.warns(UserWarning, match=r"1 subject\(s\).*stop_at date.*\['D'\]"):
-            result = _pfs({2: adrs.select("USUBJID", "ADT")})
+            result = _pfs({1: adrs.select("USUBJID", "ADT")})
         assert "D" not in result["USUBJID"].to_list()
 
     def test_start_censor_keeps_subject_without_record(self):
@@ -331,7 +336,7 @@ class TestStopAt:
         """admiral: on one censor date, the last censor source in the list wins."""
         adsl = pl.from_repr(STOP_ADSL)
         on_start = adsl.select("USUBJID", ADT="TRTSDT")
-        result = _pfs({2: on_start, 3: on_start})
+        result = _pfs({1: on_start, 3: on_start}, keep_reason=[1, 3])
         assert set(result.filter(pl.col("CNSR") != 0)["CNSR"]) == {3}
 
     def test_positive_event_censors_at_the_stop_date(self):
@@ -339,10 +344,18 @@ class TestStopAt:
         adsl = pl.from_repr(STOP_ADSL)
         stop = adsl.select("USUBJID", ADT=pl.min_horizontal("EOSDT", "NACTDT"))
         a = _row(_pfs({1: stop}), "A")
-        assert (a["ADT"], a["CNSR"]) == (date(2024, 4, 1), 1)
+        assert (a["ADT"], a["CNSR"], a["EVNTDESC"]) == (
+            date(2024, 4, 1),
+            2,
+            "NEW ANTICANCER THERAPY",
+        )
 
     def test_admiral_end_dates_example(self):
-        """admiral 1.5 derive_param_tte example "End of the observation period"."""
+        """admiral 1.5 derive_param_tte example "End of the observation period".
+
+        admiral gives CNSR 1 to both end dates (the censor_source default).
+        Fleet asks a distinct CNSR per stop, so 01 and 02 get 2 and 4.
+        """
         adsl = pl.from_repr("""
 ┌─────────┬────────────┬────────────┬────────────┐
 │ USUBJID ┆ TRTSDT     ┆ EOSDT      ┆ NEWDRGDT   │
@@ -382,7 +395,7 @@ class TestStopAt:
                     1: adqs.filter(pl.col("CHG").is_not_null()),
                     3: adsl.select("USUBJID", ADT="TRTSDT"),
                 },
-                stop_at=["EOSDT", "NEWDRGDT"],
+                stop_at={"EOSDT": (2, "END OF STUDY"), "NEWDRGDT": (4, "NEW DRUG")},
             )
             .aval()
             .to_frame()
@@ -394,8 +407,186 @@ class TestStopAt:
             date(2021, 3, 15),
             date(2021, 3, 10),
         ]
-        assert result["CNSR"].to_list() == [1, 1, 0, 3]
+        assert result["CNSR"].to_list() == [2, 4, 0, 3]
         assert result["AVAL"].to_list() == [60.0, 19.0, 43.0, 1.0]
+
+
+# ------------------------------------------------------------------ #
+# c1-355 follow-up: the stop gives CNSR and EVNTDESC (ADR-0043)        #
+# ------------------------------------------------------------------ #
+
+REASON_ADSL = """
+┌─────────┬────────────┬────────────┬────────────┬────────────┐
+│ USUBJID ┆ TRTSDT     ┆ EOSDT      ┆ NACTDT     ┆ DCUTDT     │
+│ ---     ┆ ---        ┆ ---        ┆ ---        ┆ ---        │
+│ str     ┆ date       ┆ date       ┆ date       ┆ date       │
+╞═════════╪════════════╪════════════╪════════════╪════════════╡
+│ A       ┆ 2024-01-01 ┆ 2024-06-30 ┆ 2024-04-01 ┆ 2024-12-31 │
+│ B       ┆ 2024-01-01 ┆ 2024-05-31 ┆ null       ┆ 2024-12-31 │
+│ C       ┆ 2024-01-01 ┆ null       ┆ null       ┆ null       │
+│ D       ┆ 2024-01-01 ┆ 2024-06-30 ┆ 2024-02-01 ┆ 2024-12-31 │
+│ E       ┆ 2024-01-01 ┆ 2024-06-30 ┆ null       ┆ 2024-12-31 │
+│ F       ┆ 2024-01-01 ┆ 2024-03-31 ┆ null       ┆ 2024-03-31 │
+└─────────┴────────────┴────────────┴────────────┴────────────┘
+"""
+
+REASON_ADRS = """
+┌─────────┬────────────┬───────┐
+│ USUBJID ┆ ADT        ┆ AVALC │
+│ ---     ┆ ---        ┆ ---   │
+│ str     ┆ date       ┆ str   │
+╞═════════╪════════════╪═══════╡
+│ A       ┆ 2024-03-01 ┆ SD    │
+│ B       ┆ 2024-05-15 ┆ SD    │
+│ C       ┆ 2024-02-10 ┆ SD    │
+│ E       ┆ 2024-02-20 ┆ PD    │
+│ F       ┆ 2024-03-10 ┆ SD    │
+└─────────┴────────────┴───────┘
+"""
+
+REASON_STOPS = {
+    "EOSDT": (4, "END OF STUDY"),
+    "NACTDT": (2, "NEW ANTICANCER THERAPY"),
+    "DCUTDT": (5, "DATA CUT-OFF"),
+}
+
+
+def _reason_frames() -> dict:
+    adsl = pl.from_repr(REASON_ADSL)
+    adrs = pl.from_repr(REASON_ADRS)
+    last_assessment = adrs.select(
+        "USUBJID",
+        "ADT",
+        EVNTDESC=pl.lit("NO PROGRESSION"),
+        CNSDTDSC=pl.lit("LAST ADEQUATE TUMOR ASSESSMENT"),
+    )
+    no_baseline = adsl.filter(pl.col("USUBJID") == "D").select(
+        "USUBJID", ADT="TRTSDT", EVNTDESC=pl.lit("NO BASELINE ASSESSMENT")
+    )
+    return dict(
+        start="TRTSDT",
+        events={"PROGRESSIVE DISEASE": adrs.filter(pl.col("AVALC") == "PD")},
+        censors={1: last_assessment, 3: no_baseline},
+    )
+
+
+def _reason_pfs(**kwargs) -> pl.DataFrame:
+    args = _reason_frames() | {"stop_at": REASON_STOPS, "keep_reason": [3]} | kwargs
+    adsl = pl.from_repr(REASON_ADSL)
+    return (
+        adsl.adam.tte.param("PFS", "Progression-Free Survival", **args)
+        .aval()
+        .to_frame()
+        .sort("USUBJID")
+    )
+
+
+class TestStopReason:
+    def test_the_stop_gives_cnsr_and_evntdesc_the_frame_gives_the_date(self):
+        """Subject A: censored at the last assessment, reason new anticancer therapy."""
+        a = _row(_reason_pfs(), "A")
+        assert (a["ADT"], a["AVAL"], a["CNSR"], a["EVNTDESC"], a["CNSDTDSC"]) == (
+            date(2024, 3, 1),
+            61.0,
+            2,
+            "NEW ANTICANCER THERAPY",
+            "LAST ADEQUATE TUMOR ASSESSMENT",
+        )
+
+    def test_end_of_study_when_it_is_the_first_stop(self):
+        b = _row(_reason_pfs(), "B")
+        assert (b["ADT"], b["AVAL"], b["CNSR"], b["EVNTDESC"]) == (
+            date(2024, 5, 15),
+            136.0,
+            4,
+            "END OF STUDY",
+        )
+
+    def test_no_stop_date_keeps_the_censor_key(self):
+        c = _row(_reason_pfs(), "C")
+        assert (c["ADT"], c["CNSR"], c["EVNTDESC"]) == (date(2024, 2, 10), 1, "NO PROGRESSION")
+
+    def test_keep_reason_keeps_the_frame_cnsr_before_a_stop(self):
+        d = _row(_reason_pfs(), "D")
+        assert (d["ADT"], d["CNSR"], d["EVNTDESC"]) == (
+            date(2024, 1, 1),
+            3,
+            "NO BASELINE ASSESSMENT",
+        )
+
+    def test_without_keep_reason_the_stop_gives_the_reason(self):
+        d = _row(_reason_pfs(keep_reason=None), "D")
+        assert (d["ADT"], d["CNSR"], d["EVNTDESC"]) == (
+            date(2024, 1, 1),
+            2,
+            "NEW ANTICANCER THERAPY",
+        )
+
+    def test_an_event_keeps_cnsr_0_and_its_evntdesc(self):
+        e = _row(_reason_pfs(), "E")
+        assert (e["ADT"], e["CNSR"], e["EVNTDESC"]) == (
+            date(2024, 2, 20),
+            0,
+            "PROGRESSIVE DISEASE",
+        )
+
+    def test_two_stops_on_one_date_take_the_first_in_dict_order(self):
+        f = _row(_reason_pfs(), "F")
+        assert (f["ADT"], f["CNSR"], f["EVNTDESC"]) == (date(2024, 3, 10), 4, "END OF STUDY")
+        reverse = dict(reversed(REASON_STOPS.items()))
+        f = _row(_reason_pfs(stop_at=reverse), "F")
+        assert (f["CNSR"], f["EVNTDESC"]) == (5, "DATA CUT-OFF")
+
+    def test_the_trace_names_the_rule_of_the_cnsr(self):
+        from fleet.adam.tte import select_tte
+
+        args = _reason_frames()
+        _, trace = select_tte(
+            universe=pl.from_repr(REASON_ADSL),
+            subject_keys=["USUBJID"],
+            stop_at=REASON_STOPS,
+            keep_reason=[3],
+            **args,
+        )
+        selected = trace.filter(pl.col("selected")).sort("USUBJID")
+        assert selected.select("USUBJID", "cnsr_from").rows() == [
+            ("A", "stop_at NACTDT"),
+            ("B", "stop_at EOSDT"),
+            ("C", "censors key"),
+            ("D", "keep_reason"),
+            ("E", "event"),
+            ("F", "stop_at EOSDT"),
+        ]
+
+    def test_a_list_stop_at_raises_and_shows_the_dict_form(self):
+        with pytest.raises(DerivationError, match=r"stop_at= is a dict.*\"EOSDT\": \(4,"):
+            _reason_pfs(stop_at=["EOSDT", "NACTDT"])
+
+    @pytest.mark.parametrize(
+        "stop_at",
+        [
+            {"EOSDT": 4},
+            {"EOSDT": (0, "END OF STUDY")},
+            {"EOSDT": (True, "END OF STUDY")},
+            {"EOSDT": (4, "")},
+            {"EOSDT": ("4", "END OF STUDY")},
+        ],
+    )
+    def test_a_bad_stop_value_raises(self, stop_at):
+        with pytest.raises(DerivationError, match=r"each value is \(CNSR, EVNTDESC\)"):
+            _reason_pfs(stop_at=stop_at)
+
+    def test_a_cnsr_shared_by_two_stops_raises(self):
+        with pytest.raises(DerivationError, match=r"CNSR \[4\] is given to two stop columns"):
+            _reason_pfs(stop_at={"EOSDT": (4, "END OF STUDY"), "DCUTDT": (4, "DATA CUT-OFF")})
+
+    def test_a_cnsr_shared_by_a_stop_and_a_censor_raises(self):
+        with pytest.raises(DerivationError, match=r"CNSR \[1\] is both a stop_at code"):
+            _reason_pfs(stop_at={"EOSDT": (1, "END OF STUDY")})
+
+    def test_keep_reason_must_name_a_censor_key(self):
+        with pytest.raises(DerivationError, match=r"keep_reason=\[7\]: \[7\] are not keys"):
+            _reason_pfs(keep_reason=[7])
 
 
 # ------------------------------------------------------------------ #
@@ -512,7 +703,7 @@ class TestValidation:
 
     def test_stop_at_column_has_did_you_mean(self, adsl):
         with pytest.raises(Exception, match="Did you mean 'EOSDT'"):
-            _os(adsl.adam.tte, adsl, stop_at=["EOSDTT"])
+            _os(adsl.adam.tte, adsl, stop_at={"EOSDTT": (2, "END OF STUDY")})
 
     def test_paramcd_collision_raises(self, adsl):
         """admiral #10: deriving an already-present PARAMCD errors."""

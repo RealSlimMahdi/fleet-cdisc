@@ -450,7 +450,7 @@ class TestTimeToEvent:
             events={"AE": late},
             censors={},
             subject_keys=["USUBJID"],
-            stop_at=["NACTDT"],
+            stop_at={"NACTDT": (2, "NEW ANTICANCER THERAPY")},
             retain="censor_at_start",
         )
 

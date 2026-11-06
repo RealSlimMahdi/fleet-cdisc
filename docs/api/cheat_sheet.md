@@ -114,12 +114,15 @@ This cheat sheet summarises the most common verbs across Fleet namespaces. **Eve
 ## Time-to-event (`df.adam.tte`)
 
 Each event or censor source is a plain frame with `USUBJID` and `ADT`. The key of
-`events=` is the EVNTDESC; the key of `censors=` is the CNSR. Records after the
-first `stop_at=` date are dropped (ADR-0043).
+`events=` is the EVNTDESC; the key of `censors=` is the CNSR. `stop_at=` maps an
+ADSL date column to `(CNSR, EVNTDESC)`: records after the first stop date are
+dropped, and a censored subject takes the date from the censor frame and the
+reason from the stop. `keep_reason=` names censor keys that keep their own
+reason (ADR-0043).
 
 | Verb                                                             | Description                                                        | Example                                                              |
 | ---------------------------------------------------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------- |
-| [`.param()`][fleet.adam.TTENamespace.param]                      | Derive one TTE parameter: earliest event wins, else latest censor. | `.param("PFS", start="TRTSDT", events={"PD": pd}, censors={2: last_assessment}, stop_at=["EOSDT", "NACTDT"])` |
+| [`.param()`][fleet.adam.TTENamespace.param]                      | Derive one TTE parameter: earliest event wins, else latest censor. | `.param("PFS", start="TRTSDT", events={"PD": pd}, censors={1: last_assessment}, stop_at={"EOSDT": (4, "END OF STUDY"), "NACTDT": (2, "NEW ANTICANCER THERAPY")})` |
 | [`.aval()`][fleet.adam.TTENamespace.aval]                        | AVAL (+AVALU) from STARTDT/ADT with CDISC unit conventions.        | `.aval(unit="months")`                                                |
 | [`.km_data()`][fleet.adam.TTENamespace.km_data]                  | `(duration, event)` frame for lifelines / scikit-survival.         | `.km_data("OS", by=["TRT01P"])`                                       |
 

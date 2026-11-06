@@ -3,8 +3,9 @@
 Each event or censor source is a plain Polars frame with the subject keys and
 an ``ADT`` column. :func:`select_tte` selects one record per subject: the
 first event on or before the first stop date (``CNSR = 0``), else the last
-censor record on or before it (``CNSR`` = the key of its frame). It also
-returns a decision trace that tells why each record was selected.
+censor record on or before it. The censor record gives the date; the stop
+gives CNSR and EVNTDESC (ADR-0043). It also returns a decision trace that
+tells why each record was selected and which rule gave the CNSR.
 """
 
 from __future__ import annotations
@@ -31,6 +32,12 @@ _SRC = "__tte_source__"
 _IDX = "__tte_src_idx__"
 _START = "__startdt__"
 _STOP = "__stopdt__"
+_STOP_COL = "__stop_col__"
+_STOP_CNSR = "__stop_cnsr__"
+_STOP_DESC = "__stop_desc__"
+_FROM = "__cnsr_from__"
+
+_STOP_AT_FORM = 'stop_at={"EOSDT": (4, "END OF STUDY"), "NACTDT": (2, "NEW ANTICANCER THERAPY")}'
 
 
 def _hint(col: str, available: list[str]) -> str:
@@ -155,6 +162,120 @@ def _sources(
     ]
 
 
+def _check_stop_at(
+    stop_at: object, censors: dict[int, object], keep_reason: object
+) -> tuple[dict[str, tuple[int, str]], list[int]]:
+    """Validate *stop_at* (column -> (CNSR, EVNTDESC)) and *keep_reason* (censor keys)."""
+    if stop_at is None:
+        stop_at = {}
+    if not isinstance(stop_at, dict):
+        raise DerivationError(
+            f"stop_at= is a dict: ADSL date column -> (CNSR, EVNTDESC). Got {stop_at!r}. "
+            f"The stop gives the reason of the censoring, for example {_STOP_AT_FORM}."
+        )
+    out: dict[str, tuple[int, str]] = {}
+    for col, value in stop_at.items():
+        ok = (
+            isinstance(col, str)
+            and isinstance(value, tuple | list)
+            and len(value) == 2
+            and isinstance(value[0], int)
+            and not isinstance(value[0], bool)
+            and value[0] >= 1
+            and isinstance(value[1], str)
+            and bool(value[1])
+        )
+        if not ok:
+            raise DerivationError(
+                f"stop_at={{{col!r}: {value!r}}}: each value is (CNSR, EVNTDESC), an integer "
+                f">= 1 and a non-empty text. For example {_STOP_AT_FORM}."
+            )
+        out[col] = (value[0], value[1])
+    codes = [code for code, _ in out.values()]
+    repeated = sorted({c for c in codes if codes.count(c) > 1})
+    if repeated:
+        raise DerivationError(
+            f"stop_at=: CNSR {repeated} is given to two stop columns. Each stop needs its own "
+            "CNSR, so that a CNSR value names one reason."
+        )
+    shared = sorted(set(codes) & set(censors))
+    if shared:
+        raise DerivationError(
+            f"CNSR {shared} is both a stop_at code and a censors= key. Give each reason its "
+            "own CNSR: the stop codes and the censor keys must be distinct."
+        )
+    keep = list(keep_reason or [])
+    unknown = [k for k in keep if k not in censors]
+    if unknown:
+        raise DerivationError(
+            f"keep_reason={keep!r}: {unknown} are not keys of censors= {sorted(censors)}. "
+            "keep_reason names the censor frames that keep their own CNSR and EVNTDESC."
+        )
+    return out, keep
+
+
+def _stop_frame(
+    adsl: pl.DataFrame,
+    subject_keys: list[str],
+    stop_at: dict[str, tuple[int, str]],
+    date_dtype: pl.DataType,
+) -> pl.DataFrame:
+    """Per subject: the first stop date, its column, its CNSR and its EVNTDESC.
+
+    On a date tie, the first column in *stop_at* order wins.
+    """
+    dates = {c: pl.col(c).cast(date_dtype) for c in stop_at}
+    first = pl.min_horizontal(list(dates.values()))
+    column = pl.coalesce([pl.when(expr == first).then(pl.lit(col)) for col, expr in dates.items()])
+    return adsl.select(subject_keys + [first.alias(_STOP), column.alias(_STOP_COL)]).with_columns(
+        pl.col(_STOP_COL)
+        .replace_strict({c: v[0] for c, v in stop_at.items()}, default=None, return_dtype=pl.Int64)
+        .alias(_STOP_CNSR),
+        pl.col(_STOP_COL)
+        .replace_strict({c: v[1] for c, v in stop_at.items()}, default=None, return_dtype=pl.String)
+        .alias(_STOP_DESC),
+    )
+
+
+def _censor_reason(
+    rows: pl.DataFrame,
+    stops: pl.DataFrame | None,
+    subject_keys: list[str],
+    keep_reason: list[int],
+) -> pl.DataFrame:
+    """Set CNSR and EVNTDESC of the censored rows from the stop, and name the rule."""
+    if "EVNTDESC" not in rows.columns:
+        rows = rows.with_columns(pl.lit(None, dtype=pl.String).alias("EVNTDESC"))
+    if stops is None:
+        rows = rows.with_columns(
+            pl.lit(None, dtype=pl.String).alias(_STOP_COL),
+            pl.lit(None, dtype=pl.Int64).alias(_STOP_CNSR),
+            pl.lit(None, dtype=pl.String).alias(_STOP_DESC),
+        )
+    else:
+        rows = rows.join(
+            stops.select(subject_keys + [_STOP_COL, _STOP_CNSR, _STOP_DESC]),
+            on=subject_keys,
+            how="left",
+            nulls_equal=True,
+        )
+    censor = pl.col(_KIND) == "censor"
+    kept = censor & (pl.col(_CNSR).is_in(keep_reason) if keep_reason else pl.lit(False))
+    by_stop = censor & ~kept & pl.col(_STOP_CNSR).is_not_null()
+    return rows.with_columns(
+        pl.when(by_stop).then(pl.col(_STOP_CNSR)).otherwise(pl.col(_CNSR)).alias(_CNSR),
+        pl.when(by_stop).then(pl.col(_STOP_DESC)).otherwise(pl.col("EVNTDESC")).alias("EVNTDESC"),
+        pl.when(~censor)
+        .then(pl.lit("event"))
+        .when(kept)
+        .then(pl.lit("keep_reason"))
+        .when(by_stop)
+        .then(pl.concat_str(pl.lit("stop_at "), pl.col(_STOP_COL)))
+        .otherwise(pl.lit("censors key"))
+        .alias(_FROM),
+    ).drop(_STOP_COL, _STOP_CNSR, _STOP_DESC)
+
+
 def param_label(paramcd: str, domain: str = "ADTTE") -> str:
     """Return the PARAM of *paramcd* from the study's controlled terminology.
 
@@ -231,7 +352,8 @@ def select_tte(
     events: dict[str, pl.DataFrame | pl.LazyFrame],
     censors: dict[int, pl.DataFrame | pl.LazyFrame],
     subject_keys: list[str],
-    stop_at: list[str] | None = None,
+    stop_at: dict[str, tuple[int, str]] | None = None,
+    keep_reason: list[int] | None = None,
     by: list[str] | None = None,
     create_datetime: bool = False,
     retain: Literal["drop", "censor_at_start"] = "drop",
@@ -241,8 +363,12 @@ def select_tte(
     The stop date of a subject is the earliest non-null *stop_at* date in
     *universe*. Event and censor records after it are dropped. The first
     event left wins (``CNSR = 0``, ``EVNTDESC`` = its key). A subject
-    without an event takes the last censor record left (``CNSR`` = its
-    key); on a date tie the censor frame given last wins. An event or
+    without an event takes the date of the last censor record left; on a
+    date tie the censor frame given last wins. CNSR and EVNTDESC of a
+    censored subject come from, in this order: the censor frame when its
+    key is in *keep_reason*; else the stop of the subject (on a stop date
+    tie, the first column in *stop_at* order); else the censor frame (CNSR
+    = its key). CNSDTDSC always comes from the censor frame. An event or
     censor date before the start date is set to the start date; the CNSR
     does not change.
 
@@ -257,8 +383,12 @@ def select_tte(
             subject keys and ``ADT``; ``EVNTDESC`` comes from a frame
             column, else it is null and a warning names the frame.
         subject_keys: Subject identifier columns (usually ``["USUBJID"]``).
-        stop_at: Date columns in *universe*; the earliest non-null one
-            ends the observation of the subject.
+        stop_at: ``ADSL date column -> (CNSR, EVNTDESC)``. The earliest
+            non-null date ends the observation of the subject; its CNSR
+            and EVNTDESC go onto a censored row.
+        keep_reason: Censor keys whose frame keeps its own CNSR and
+            EVNTDESC, also before a stop (for example no baseline
+            assessment).
         by: Stratum columns, present in every event frame.  A censor frame
             with none of them (for example from ADSL) is crossed with the
             strata of the event frames; a frame with only some raises.
@@ -274,18 +404,31 @@ def select_tte(
     Returns:
         tuple[pl.DataFrame, pl.DataFrame]: The selected rows, and the
             decision trace (one row per candidate: ``kind``, ``source``,
-            ``date``, ``selected``, ``reason``; also a row per record after
-            the stop date and per subject with no record).
+            ``date``, ``selected``, ``reason``, ``cnsr_from``; also a row
+            per record after the stop date and per subject with no
+            record). ``cnsr_from`` names the rule that gave the CNSR of
+            the selected row: ``event``, ``keep_reason``, ``stop_at
+            <column>``, ``censors key`` or ``retain``.
 
     Raises:
         DerivationError: On a missing column (with a did-you-mean hint), a
             date column that is not Date/Datetime, a bad dict key, a
-            *retain* value other than ``"drop"`` or ``"censor_at_start"``,
-            or a subject with two different rows in ADSL.
+            *stop_at* that is not a dict of ``(CNSR, EVNTDESC)``, a CNSR
+            used twice in *stop_at* or in both *stop_at* and *censors*, a
+            *keep_reason* key that is not in *censors*, a *retain* value
+            other than ``"drop"`` or ``"censor_at_start"``, or a subject
+            with two different rows in ADSL.
 
     References:
         admiral 1.5 ``derive_param_tte`` (``end_dates``,
-        ``event_type = "negative"``); ADR-0043
+        ``event_type = "negative"``; a censor record takes the CNSR and
+        ``set_values_to`` of the first end date unless
+        ``consider_end_dates = FALSE``); FDA Guidance for Industry,
+        Clinical Trial Endpoints for the Approval of Cancer Drugs and
+        Biologics (2018), PFS censoring table; EMA Guideline on the
+        evaluation of anticancer medicinal products, Appendix 1 on
+        methodological considerations for PFS; CDISC ADaM BDS-TTE v1.0
+        (CNSR, EVNTDESC, CNSDTDSC); ADR-0043
         (docs/adr/0043-tte-censors-at-the-last-record-before-the-stop-date.md).
 
     Examples:
@@ -295,9 +438,12 @@ def select_tte(
                 universe=adsl,
                 start="TRTSDT",
                 events={"PD": adrs.filter(pl.col("AVALC") == "PD")},
-                censors={2: adrs.select("USUBJID", "ADT")},
+                censors={1: adrs.select("USUBJID", "ADT")},
                 subject_keys=["USUBJID"],
-                stop_at=["EOSDT", "NACTDT"],
+                stop_at={
+                    "EOSDT": (4, "END OF STUDY"),
+                    "NACTDT": (2, "NEW ANTICANCER THERAPY"),
+                },
             )
     """
     if retain not in ("drop", "censor_at_start"):
@@ -305,29 +451,30 @@ def select_tte(
             f"retain={retain!r} is not supported. Choose 'drop' or 'censor_at_start'."
         )
     by = by or []
-    stop_at = stop_at or []
     sources = _sources(events, censors)
+    stop_codes, keep = _check_stop_at(stop_at, censors, keep_reason)
+    stop_cols = list(stop_codes)
     keys = subject_keys + by
 
     no_desc = [lb for lb, kd, _, fr in sources if kd == "censor" and "EVNTDESC" not in fr.columns]
     if no_desc:
         warnings.warn(
             f"TTE censor frame(s) {', '.join(no_desc)} have no EVNTDESC column, so EVNTDESC "
-            "is null on their rows. Give the reason of the censoring on the frame, for "
+            "is null on their rows when no stop_at date gives it. Give the reason of the censoring on the frame, for "
             'example adsl.select("USUBJID", ADT="LSTALVDT", EVNTDESC=pl.lit("ALIVE")).',
             UserWarning,
             stacklevel=3,
         )
 
-    _check_columns("ADSL", universe, subject_keys + [start, *stop_at])
-    for col in [start, *stop_at]:
+    _check_columns("ADSL", universe, subject_keys + [start, *stop_cols])
+    for col in [start, *stop_cols]:
         _check_date("ADSL", universe, col)
 
     date_dtype: pl.DataType = pl.Datetime("us") if create_datetime else pl.Date
     flags = _start_flags(universe.columns, start, create_datetime)
     adsl = refuse_repeated_keys(
         "param()",
-        universe.select(list(dict.fromkeys([*subject_keys, start, *stop_at, *flags]))),
+        universe.select(list(dict.fromkeys([*subject_keys, start, *stop_cols, *flags]))),
         subject_keys,
         source="ADSL",
     )
@@ -336,21 +483,15 @@ def select_tte(
         + [pl.col(start).cast(date_dtype).alias(_START)]
         + [pl.col(src).alias(dst) for src, dst in flags.items()]
     )
-    stops = (
-        adsl.select(
-            subject_keys
-            + [pl.min_horizontal([pl.col(c).cast(date_dtype) for c in stop_at]).alias(_STOP)]
-        )
-        if stop_at
-        else None
-    )
+    stops = _stop_frame(adsl, subject_keys, stop_codes, date_dtype) if stop_codes else None
+    stop_dates = stops.select(subject_keys + [_STOP]) if stops is not None else None
 
     frames = _cross_strata(sources, by, keys)
     pools: dict[str, list[pl.DataFrame]] = {"event": [], "censor": []}
     late: list[pl.DataFrame] = []
     for index, (label, kind, cnsr, frame) in enumerate(frames):
         cand, after = _candidates(
-            label, kind, cnsr, index, frame, keys, stops, subject_keys, date_dtype
+            label, kind, cnsr, index, frame, keys, stop_dates, subject_keys, date_dtype
         )
         if not cand.is_empty():
             pools[kind].append(cand)
@@ -402,7 +543,7 @@ def select_tte(
     )
 
     unresolved = rows.filter(pl.col(_KIND).is_null())
-    rows = rows.filter(pl.col(_KIND).is_not_null())
+    rows = _censor_reason(rows.filter(pl.col(_KIND).is_not_null()), stops, subject_keys, keep)
     if unresolved.height:
         if retain == "censor_at_start":
             filled = unresolved.with_columns(
@@ -412,11 +553,12 @@ def select_tte(
                 pl.lit("NO EVENT OBSERVED").alias("EVNTDESC"),
                 pl.lit("ADSL").alias("SRCDOM"),
                 pl.lit(start).alias("SRCVAR"),
+                pl.lit("retain").alias(_FROM),
             )
             rows = pl.concat([rows, filled], how="diagonal_relaxed") if rows.height else filled
         else:
             ids = unresolved.get_column(subject_keys[-1]).unique(maintain_order=True)
-            window = " on or before the first stop_at date" if stop_at else ""
+            window = " on or before the first stop_at date" if stop_cols else ""
             fix = (
                 f"Add a censor frame: a frame with none of the by columns {by} is crossed "
                 f'with the strata, for example {{3: adsl.select("USUBJID", ADT="EOSDT")}}. '
@@ -470,6 +612,7 @@ def select_tte(
                         if kept
                         else "dropped: no event or censor record"
                     ).alias("reason"),
+                    pl.lit("retain" if kept else None, dtype=pl.String).alias("cnsr_from"),
                 ]
             )
         )
@@ -478,7 +621,7 @@ def select_tte(
 
     start_name, adt_name = ("STARTDTM", "ADTM") if create_datetime else ("STARTDT", "ADT")
     rows = rows.rename({_START: start_name, _ADT: adt_name, _CNSR: "CNSR"}).drop(
-        _KIND, _SRC, _IDX, "__floored__"
+        _KIND, _SRC, _IDX, "__floored__", _FROM
     )
     if "STUDYID" in universe.columns and "STUDYID" not in rows.columns:
         study = universe.select(subject_keys + ["STUDYID"]).unique()
@@ -548,7 +691,7 @@ def _trace(
     """Every candidate per subject, the selected one marked, with the reason."""
     if not pooled:
         return pl.DataFrame()
-    winners = rows.select(keys + [_KIND, _IDX, "__floored__"]).with_columns(
+    winners = rows.select(keys + [_KIND, _IDX, "__floored__", _FROM]).with_columns(
         pl.lit(True).alias("selected")
     )
     trace = pl.concat(pooled, how="diagonal_relaxed").join(
@@ -576,5 +719,6 @@ def _trace(
             pl.col(_ADT).cast(date_dtype).alias("date"),
             "selected",
             "reason",
+            pl.col(_FROM).alias("cnsr_from"),
         ]
     )
