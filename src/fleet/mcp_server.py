@@ -153,11 +153,9 @@ def fleet_validate(
         dict: ``{"outcome": "pass" | "fail", "status", "dataset", "standard",
             "is_valid", "setup": {input: {value, source}, ...},
             "issues": [{severity, rule_id, message, variable, source, accepted,
-            row, usubjid, seq, values, dataset}, ...], "study_issues": [...]}``,
-            where ``study_issues`` repeats the study-level findings (dataset
-            ``STUDY``), or ``{"outcome": "could not run", "reason"}`` when the run
-            setup is refused, no engine is found, or the engine crashed or
-            timed out.  ``status`` is ``PASS``, ``FINDINGS (n)``,
+            row, usubjid, seq, values, dataset}, ...]}``, or ``{"outcome":
+            "could not run", "reason"}`` when the run setup is refused, no
+            engine is found, or the engine crashed or timed out.  ``status`` is ``PASS``, ``FINDINGS (n)``,
             ``NOT ASSESSED`` or ``FAIL``; only ``FAIL`` gives ``"fail"``.
             A study-level finding (``dataset`` ``"STUDY"``, such as a domain
             the study lacks) is listed as information, as in ``fleet
@@ -217,7 +215,7 @@ def fleet_validate(
     result.apply_setup(setup)
     if result.could_not_run is not None:
         return _could_not_run(result.could_not_run)
-    study_issues = []
+    other_issues = []
     for other, found in results.items():
         if other == name:
             continue
@@ -225,7 +223,7 @@ def fleet_validate(
             if other.upper() == "STUDY":
                 issue.severity = Severity.INFO
                 issue.message += " (study-level rule: not assessable in a single-dataset run)"
-            study_issues.append((other, issue))
+            other_issues.append(("STUDY" if other.upper() == "STUDY" else other, issue))
     inputs = {
         "standard": setup.standard,
         "ig_version": setup.ig_version,
@@ -251,11 +249,8 @@ def fleet_validate(
             {**_issue_dict(issue), "dataset": dataset}
             for dataset, issue in (
                 *((name, i) for i in (*result.errors, *result.warnings, *result.infos)),
-                *study_issues,
+                *other_issues,
             )
-        ],
-        "study_issues": [
-            {**_issue_dict(issue), "dataset": dataset} for dataset, issue in study_issues
         ],
     }
 
