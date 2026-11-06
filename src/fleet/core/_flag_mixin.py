@@ -657,7 +657,7 @@ class FlagCriterionMixin:
         flag_value,
         false_lit,
     ) -> Self:
-        """Handle first/last rank-based flag criteria (pure window exprs).
+        """Handle first/last rank-based flag criteria.
 
         The order is admiral's (``dplyr::arrange``): ascending on each key,
         a missing value last, then input order.  ``"first"`` takes the first
@@ -667,35 +667,39 @@ class FlagCriterionMixin:
         """
         if not order_cols:
             raise DerivationError(f"flag criteria='{criteria_lower}' requires order_by.")
-        # "last" reads admiral's order backwards: descending, so missing values come first.
-        descending = criteria_lower == "last"
+        last = criteria_lower == "last"
         eligible = pl.lit(True) if where_expr is None else where_expr.fill_null(False)
-
-        def ordered(expr: pl.Expr) -> pl.Expr:
-            # is_null() before each key puts a missing value last: Polars 1.x ignores
-            # nulls_last when a window order_by has more than one key.
-            keys = [
-                k
-                for i, c in enumerate(order_cols)
-                for k in (pl.col(c).is_null().alias(f"__null_{i}"), pl.col(c))
-            ]
-            return expr.over(
-                grps,
-                order_by=[*keys, pl.int_range(pl.len()).alias("__tie")],
-                descending=descending,
-            )
+        # is_null() before each key puts a missing value last: Polars 1.x ignores
+        # nulls_last when a window order_by has more than one key.
+        null_keys = [
+            k
+            for i, c in enumerate(order_cols)
+            for k in (pl.col(c).is_null().alias(f"__null_{i}"), pl.col(c))
+        ]
 
         if flag_all:
+            # "last" reads admiral's order backwards: descending, so missing values come first.
+            def ordered(expr: pl.Expr) -> pl.Expr:
+                return expr.over(
+                    grps,
+                    order_by=[*null_keys, pl.int_range(pl.len()).alias("__tie")],
+                    descending=last,
+                )
+
             # Every candidate whose keys equal the winner's, a missing value equal to a missing one.
             row_cond = eligible & pl.all_horizontal(
                 pl.col(c).eq_missing(ordered(pl.col(c).filter(eligible).first()))
                 for c in order_cols
             )
         else:
-            # Records that fail `where` take no part; a tie goes to the last (first) input row.
+            # One global sort instead of an ordered window: a window is slow with many
+            # small groups (issue #207). Candidates go to the end of their group for
+            # "last", to the front for "first"; a tie keeps input order.
             position = pl.int_range(pl.len())
-            winner = pl.when(eligible).then(position).otherwise(None).min()
-            row_cond = ordered((position == winner) & eligible)
+            sort_keys = [*grps, eligible if last else ~eligible, *null_keys, position]
+            group = pl.struct(grps).sort_by(sort_keys)
+            edge = group.is_last_distinct() if last else group.is_first_distinct()
+            row_cond = edge.sort_by(position.sort_by(sort_keys)) & eligible
         expr = pl.when(row_cond).then(pl.lit(flag_value)).otherwise(false_lit).alias(target)
         return self._chain(expr, verb="flag")
 

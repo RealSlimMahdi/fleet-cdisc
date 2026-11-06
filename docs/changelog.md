@@ -507,6 +507,7 @@ The high findings of the alpha audit (`HIGH-REMAINING.md`), fixed with the decis
 
 #### Changed
 
+- **`flag(criteria="first"/"last")` is faster with many small groups** (#207). The verb sorts the frame once in place of an ordered window per group. The flags do not change. On the sparse benchmark input (1M AE rows, about 1 record per USUBJID and AETERM) the verb takes 0.2 s in place of 1.2 s, and the ADAE pipeline 0.9 s in place of 2.1 s. With 40 records per subject it takes about the same time. `flag_all=True` keeps the window.
 - **`.date(highest=)` follows admiral `highest_imputation`** (c1-67, c1-74; ADR-0021). `"n"` imputes nothing, `"D"` the day, `"M"` the month and the day: `highest="M"` now imputes `2021` to 2021-01-01 (flag M), `highest="D"` imputes `2021-03` to 2021-03-01. `"Y"` and the time levels `"h"`, `"m"`, `"s"` raise on a `*DT` target, and any `highest=` raises on a `*DTM` target, in both namespaces.
 - **A `*DTF` or `*TMF` flag is null where its date is null** (c1-74, c1-69; ADR-0021), also with `highest=` and `impute="none"`.
 - **`on_treatment` compares the start with the time when `adt` and `trtsdt` are both date-times** (c1-78; ADR-0022), as admiral `derive_var_ontrtfl`: a pre-dose record on the first dose day is no longer on treatment. The end comparison stays at date level.
