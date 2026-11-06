@@ -327,8 +327,9 @@ class ValidationResult:
                 if issue.variable:
                     _logger.info(f"   Variable: {issue.variable}")
                 if rows:
+                    label = "Row" if len(set(rows)) == 1 else "Rows"
                     _logger.info(
-                        f"   Rows affected: {_format_rows(rows)} ({count} occurrence{'s' if count != 1 else ''})"
+                        f"   {label}: {_format_rows(rows)} ({count} occurrence{'s' if count != 1 else ''})"
                     )
                 elif count > 1:
                     _logger.info(f"   Occurrences: {count}")
