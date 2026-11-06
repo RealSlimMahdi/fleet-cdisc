@@ -13,17 +13,17 @@
         <link rel="canonical" href="https://realslimmahdi.github.io/fleet-cdisc/dev/concepts/tdd/">
       
       
-        <link rel="prev" href="../pipeline/">
+        <link rel="prev" href="../pick/">
       
       
-        <link rel="next" href="../custom-rules/">
+        <link rel="next" href="../validation-core/">
       
       
         
       
       
       <link rel="icon" href="../../img/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.5">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
     
     
       
@@ -31,7 +31,7 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
       
         
         <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
@@ -601,6 +601,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../getting-started/from-sas/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coming from SAS
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../getting-started/cli/" class="md-nav__link">
         
   
@@ -609,6 +637,34 @@
     
   
     CLI Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/ide-tooling/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    IDE & AI Tooling
   
 
     
@@ -774,6 +830,62 @@
                 
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../coming-from-sas/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coming from SAS
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../pick/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Event-Priority Derivation (pick)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
     
   
   
@@ -848,10 +960,49 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#domain-dependency-chain" class="md-nav__link">
+  <a href="#studydesign-define-once-derive-everything" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Domain Dependency Chain
+        StudyDesign — define once, derive everything
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="StudyDesign — define once, derive everything">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#arm-paths-steps-branches-and-epochs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Arm paths: steps, branches and epochs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#interchange-formats" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Interchange formats
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#conformance-audit-a-p21-dry-run-offline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conformance audit — a P21 dry-run, offline
       
     </span>
   </a>
@@ -859,15 +1010,37 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#pipeline-patterns" class="md-nav__link">
+  <a href="#visit-schedules" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Pipeline Patterns
+        Visit schedules
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Pipeline Patterns">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cli-fleet-tdd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CLI: fleet tdd
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#row-level-pipeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Row-level pipeline
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Row-level pipeline">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -892,6 +1065,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#epoch-stamped-from-se" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        EPOCH stamped from SE
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -910,10 +1094,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#example-collection-validation" class="md-nav__link">
+  <a href="#cross-domain-fk-validation" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Example: Collection Validation
+        Cross-domain FK validation
       
     </span>
   </a>
@@ -926,10 +1110,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#cross-domain-fk-validation" class="md-nav__link">
+  <a href="#ts-tsseq-and-dictionary-bound-values" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Cross-Domain FK Validation
+        TS: TSSEQ and dictionary-bound values
       
     </span>
   </a>
@@ -937,10 +1121,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#schema-reconciliation" class="md-nav__link">
+  <a href="#epoch-values" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Schema Reconciliation
+        Epoch values
       
     </span>
   </a>
@@ -948,21 +1132,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#epoch-enum" class="md-nav__link">
+  <a href="#mermaid-parser" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Epoch Enum
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#mermaid-parser-bonus" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Mermaid Parser (Bonus)
+        Mermaid parser
       
     </span>
   </a>
@@ -973,6 +1146,34 @@
   
 </nav>
       
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../validation-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Validation with CORE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
     </li>
   
 
@@ -1013,6 +1214,62 @@
   
   
     <li class="md-nav__item">
+      <a href="../comparison/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Comparing Datasets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../exports/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Exporting Datasets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../advanced/" class="md-nav__link">
         
   
@@ -1021,6 +1278,34 @@
     
   
     Advanced Patterns
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../interactive-explorer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Interactive Explorer
   
 
     
@@ -1158,14 +1443,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../examples/01_code_driven_pipeline/" class="md-nav__link">
+      <a href="../../examples/tdd_pipeline/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Code-Driven Pipeline (Inline)
+    Trial Design (offline)
   
 
     
@@ -1186,14 +1471,70 @@
   
   
     <li class="md-nav__item">
-      <a href="../../examples/02_spec_driven_pipeline/" class="md-nav__link">
+      <a href="../../examples/adtte_pipeline/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Spec-Driven Pipeline with Code Extensions
+    ADTTE (time-to-event)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/tlg_pipeline/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TLG from a Spec
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/01_code_driven_pipeline/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code-Driven Pipeline (Inline)
   
 
     
@@ -1611,6 +1952,62 @@
   
   
     <li class="md-nav__item">
+      <a href="../../api/introspect/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tooling Introspection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/comparison/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Comparison
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../api/core/" class="md-nav__link">
         
   
@@ -1619,6 +2016,34 @@
     
   
     Core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/run/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Study run
   
 
     
@@ -1820,10 +2245,49 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#domain-dependency-chain" class="md-nav__link">
+  <a href="#studydesign-define-once-derive-everything" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Domain Dependency Chain
+        StudyDesign — define once, derive everything
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="StudyDesign — define once, derive everything">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#arm-paths-steps-branches-and-epochs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Arm paths: steps, branches and epochs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#interchange-formats" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Interchange formats
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#conformance-audit-a-p21-dry-run-offline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conformance audit — a P21 dry-run, offline
       
     </span>
   </a>
@@ -1831,15 +2295,37 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#pipeline-patterns" class="md-nav__link">
+  <a href="#visit-schedules" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Pipeline Patterns
+        Visit schedules
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Pipeline Patterns">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cli-fleet-tdd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CLI: fleet tdd
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#row-level-pipeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Row-level pipeline
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Row-level pipeline">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -1864,6 +2350,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#epoch-stamped-from-se" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        EPOCH stamped from SE
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1882,10 +2379,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#example-collection-validation" class="md-nav__link">
+  <a href="#cross-domain-fk-validation" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Example: Collection Validation
+        Cross-domain FK validation
       
     </span>
   </a>
@@ -1898,10 +2395,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#cross-domain-fk-validation" class="md-nav__link">
+  <a href="#ts-tsseq-and-dictionary-bound-values" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Cross-Domain FK Validation
+        TS: TSSEQ and dictionary-bound values
       
     </span>
   </a>
@@ -1909,10 +2406,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#schema-reconciliation" class="md-nav__link">
+  <a href="#epoch-values" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Schema Reconciliation
+        Epoch values
       
     </span>
   </a>
@@ -1920,21 +2417,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#epoch-enum" class="md-nav__link">
+  <a href="#mermaid-parser" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Epoch Enum
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#mermaid-parser-bonus" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Mermaid Parser (Bonus)
+        Mermaid parser
       
     </span>
   </a>
@@ -1962,7 +2448,17 @@
 
 
 <h1 id="trial-design-domains">Trial Design Domains<a class="headerlink" href="#trial-design-domains" title="Permanent link">&para;</a></h1>
-<p>Fleet provides first-class support for all seven CDISC Trial Design Model (TDD) domains through a <strong>fixed-sequence verb pipeline</strong> with <strong>rich Pydantic models</strong> and <strong>collection-level validators</strong>.</p>
+<p>Fleet provides first-class support for the seven CDISC Trial Design Model (TDD)
+domains, plus the subject-level SV and SE, through two complementary paths:</p>
+<ol>
+<li><strong><code>fleet.StudyDesign</code></strong> — a typed aggregate: define the design once,
+   derive every domain, audit it, round-trip it through YAML, import it from
+   USDM, and draw it as a Mermaid review diagram.</li>
+<li><strong>Row-level pipeline</strong> — a fixed-sequence verb chain with rich Pydantic
+   models and collection-level validators, for full row control.</li>
+</ol>
+<p>SDTMIG 3.4 structures for the TDD domains <strong>ship with Fleet</strong>, so everything
+on this page runs offline — no CDISC Library API key required.</p>
 <h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -1995,13 +2491,25 @@
 <tr>
 <td><strong>TS</strong></td>
 <td>Trial Summary</td>
-<td>1 rec/parameter</td>
+<td>1 rec/parameter/seq</td>
 <td>Protocol-reference</td>
 </tr>
 <tr>
 <td><strong>TI</strong></td>
 <td>Trial Inclusion/Exclusion</td>
 <td>1 rec/criterion</td>
+<td>Protocol-reference</td>
+</tr>
+<tr>
+<td><strong>TD</strong></td>
+<td>Trial Disease Assessments</td>
+<td>1 rec/assessment plan</td>
+<td>Protocol-reference</td>
+</tr>
+<tr>
+<td><strong>TM</strong></td>
+<td>Trial Disease Milestones</td>
+<td>1 rec/milestone type</td>
 <td>Protocol-reference</td>
 </tr>
 <tr>
@@ -2018,58 +2526,347 @@
 </tr>
 </tbody>
 </table>
-<h2 id="domain-dependency-chain">Domain Dependency Chain<a class="headerlink" href="#domain-dependency-chain" title="Permanent link">&para;</a></h2>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>TA + TE → TV → SV
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>TE + TA → SE
+<h2 id="studydesign-define-once-derive-everything">StudyDesign — define once, derive everything<a class="headerlink" href="#studydesign-define-once-derive-everything" title="Permanent link">&para;</a></h2>
+<p><code>fleet.StudyDesign</code> is the single source of truth for a study's structure.
+Arms are declared as <strong>element paths</strong>; <code>TAETORD</code>, <code>ELEMENT</code>, <code>EPOCH</code>, and
+<code>TABRANCH</code> (at the randomization branch point) are derived mechanically:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">fleet</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">design</span> <span class="o">=</span> <span class="n">fleet</span><span class="o">.</span><span class="n">StudyDesign</span><span class="p">(</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">study_id</span><span class="o">=</span><span class="s2">&quot;CDISCPILOT01&quot;</span><span class="p">,</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">elements</span><span class="o">=</span><span class="p">[</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>        <span class="p">{</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>            <span class="s2">&quot;etcd&quot;</span><span class="p">:</span> <span class="s2">&quot;SCRN&quot;</span><span class="p">,</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>            <span class="s2">&quot;element&quot;</span><span class="p">:</span> <span class="s2">&quot;Screening&quot;</span><span class="p">,</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>            <span class="s2">&quot;tedur&quot;</span><span class="p">:</span> <span class="s2">&quot;P14D&quot;</span><span class="p">,</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>            <span class="s2">&quot;epoch&quot;</span><span class="p">:</span> <span class="s2">&quot;SCREENING&quot;</span><span class="p">,</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>            <span class="s2">&quot;testrl&quot;</span><span class="p">:</span> <span class="s2">&quot;INFORMED CONSENT&quot;</span><span class="p">,</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>            <span class="s2">&quot;teenrl&quot;</span><span class="p">:</span> <span class="s2">&quot;RANDOMIZATION - 1&quot;</span><span class="p">,</span>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>        <span class="p">},</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>        <span class="p">{</span>
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>            <span class="s2">&quot;etcd&quot;</span><span class="p">:</span> <span class="s2">&quot;PBO&quot;</span><span class="p">,</span>
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>            <span class="s2">&quot;element&quot;</span><span class="p">:</span> <span class="s2">&quot;Placebo Treatment&quot;</span><span class="p">,</span>
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>            <span class="s2">&quot;tedur&quot;</span><span class="p">:</span> <span class="s2">&quot;P84D&quot;</span><span class="p">,</span>
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>            <span class="s2">&quot;epoch&quot;</span><span class="p">:</span> <span class="s2">&quot;TREATMENT&quot;</span><span class="p">,</span>
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>            <span class="s2">&quot;testrl&quot;</span><span class="p">:</span> <span class="s2">&quot;RANDOMIZATION&quot;</span><span class="p">,</span>
+</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>        <span class="p">},</span>
+</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>        <span class="p">{</span>
+</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>            <span class="s2">&quot;etcd&quot;</span><span class="p">:</span> <span class="s2">&quot;XANLO&quot;</span><span class="p">,</span>
+</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>            <span class="s2">&quot;element&quot;</span><span class="p">:</span> <span class="s2">&quot;Xanomeline Low Dose&quot;</span><span class="p">,</span>
+</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a>            <span class="s2">&quot;tedur&quot;</span><span class="p">:</span> <span class="s2">&quot;P84D&quot;</span><span class="p">,</span>
+</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a>            <span class="s2">&quot;epoch&quot;</span><span class="p">:</span> <span class="s2">&quot;TREATMENT&quot;</span><span class="p">,</span>
+</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a>            <span class="s2">&quot;testrl&quot;</span><span class="p">:</span> <span class="s2">&quot;RANDOMIZATION&quot;</span><span class="p">,</span>
+</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a>        <span class="p">},</span>
+</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a>        <span class="p">{</span>
+</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a>            <span class="s2">&quot;etcd&quot;</span><span class="p">:</span> <span class="s2">&quot;FU&quot;</span><span class="p">,</span>
+</span><span id="__span-0-30"><a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a>            <span class="s2">&quot;element&quot;</span><span class="p">:</span> <span class="s2">&quot;Follow-up&quot;</span><span class="p">,</span>
+</span><span id="__span-0-31"><a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a>            <span class="s2">&quot;tedur&quot;</span><span class="p">:</span> <span class="s2">&quot;P28D&quot;</span><span class="p">,</span>
+</span><span id="__span-0-32"><a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a>            <span class="s2">&quot;epoch&quot;</span><span class="p">:</span> <span class="s2">&quot;FOLLOW-UP&quot;</span><span class="p">,</span>
+</span><span id="__span-0-33"><a id="__codelineno-0-33" name="__codelineno-0-33" href="#__codelineno-0-33"></a>            <span class="s2">&quot;testrl&quot;</span><span class="p">:</span> <span class="s2">&quot;END OF TREATMENT + 1&quot;</span><span class="p">,</span>
+</span><span id="__span-0-34"><a id="__codelineno-0-34" name="__codelineno-0-34" href="#__codelineno-0-34"></a>        <span class="p">},</span>
+</span><span id="__span-0-35"><a id="__codelineno-0-35" name="__codelineno-0-35" href="#__codelineno-0-35"></a>    <span class="p">],</span>
+</span><span id="__span-0-36"><a id="__codelineno-0-36" name="__codelineno-0-36" href="#__codelineno-0-36"></a>    <span class="n">arms</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;PBO&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;SCRN&quot;</span><span class="p">,</span> <span class="s2">&quot;PBO&quot;</span><span class="p">,</span> <span class="s2">&quot;FU&quot;</span><span class="p">],</span> <span class="s2">&quot;XAN_LO&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;SCRN&quot;</span><span class="p">,</span> <span class="s2">&quot;XANLO&quot;</span><span class="p">,</span> <span class="s2">&quot;FU&quot;</span><span class="p">]},</span>
+</span><span id="__span-0-37"><a id="__codelineno-0-37" name="__codelineno-0-37" href="#__codelineno-0-37"></a>    <span class="n">arm_names</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;PBO&quot;</span><span class="p">:</span> <span class="s2">&quot;Placebo&quot;</span><span class="p">,</span> <span class="s2">&quot;XAN_LO&quot;</span><span class="p">:</span> <span class="s2">&quot;Xanomeline Low Dose&quot;</span><span class="p">},</span>
+</span><span id="__span-0-38"><a id="__codelineno-0-38" name="__codelineno-0-38" href="#__codelineno-0-38"></a><span class="p">)</span>
+</span><span id="__span-0-39"><a id="__codelineno-0-39" name="__codelineno-0-39" href="#__codelineno-0-39"></a>
+</span><span id="__span-0-40"><a id="__codelineno-0-40" name="__codelineno-0-40" href="#__codelineno-0-40"></a><span class="n">te</span> <span class="o">=</span> <span class="n">design</span><span class="o">.</span><span class="n">to_te</span><span class="p">()</span>  <span class="c1"># one domain at a time</span>
+</span><span id="__span-0-41"><a id="__codelineno-0-41" name="__codelineno-0-41" href="#__codelineno-0-41"></a><span class="n">frames</span> <span class="o">=</span> <span class="n">design</span><span class="o">.</span><span class="n">domains</span><span class="p">()</span>  <span class="c1"># or every populated domain: {&quot;TE&quot;: df, &quot;TA&quot;: df, ...}</span>
 </span></code></pre></div>
-<h2 id="pipeline-patterns">Pipeline Patterns<a class="headerlink" href="#pipeline-patterns" title="Permanent link">&para;</a></h2>
+<p>Referential integrity is validated at construction: arm paths must reference
+defined elements, visit <code>armcd</code> values must reference defined arms, and
+element codes must be unique. Each arm needs its protocol name in
+<code>arm_names</code> (TA.ARM). A key that the model does not read raises, in
+Python and in <code>trial_design.yaml</code>, and so does a repeated YAML key.</p>
+<h3 id="arm-paths-steps-branches-and-epochs">Arm paths: steps, branches and epochs<a class="headerlink" href="#arm-paths-steps-branches-and-epochs" title="Permanent link">&para;</a></h3>
+<p>A path entry is an ETCD, or a step that gives the TA values of one position
+(<a href="../../adr/0036-an-arm-path-entry-is-an-element-or-a-step/">ADR 0036</a>):</p>
+<!-- docs:no-run: a sketch with elided arguments -->
+
+<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">design</span> <span class="o">=</span> <span class="n">fleet</span><span class="o">.</span><span class="n">StudyDesign</span><span class="p">(</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    <span class="n">study_id</span><span class="o">=</span><span class="s2">&quot;S1&quot;</span><span class="p">,</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>    <span class="n">elements</span><span class="o">=</span><span class="p">[</span><span class="o">...</span><span class="p">],</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    <span class="n">arms</span><span class="o">=</span><span class="p">{</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>        <span class="s2">&quot;AB&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;SCRN&quot;</span><span class="p">,</span> <span class="s2">&quot;A&quot;</span><span class="p">,</span> <span class="s2">&quot;WO&quot;</span><span class="p">,</span> <span class="s2">&quot;B&quot;</span><span class="p">],</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>        <span class="s2">&quot;BA&quot;</span><span class="p">:</span> <span class="p">[</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>            <span class="s2">&quot;SCRN&quot;</span><span class="p">,</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>            <span class="p">{</span><span class="s2">&quot;etcd&quot;</span><span class="p">:</span> <span class="s2">&quot;B&quot;</span><span class="p">,</span> <span class="s2">&quot;epoch&quot;</span><span class="p">:</span> <span class="s2">&quot;TREATMENT 1&quot;</span><span class="p">},</span>  <span class="c1"># crossover: epoch by position</span>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>            <span class="s2">&quot;WO&quot;</span><span class="p">,</span>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>            <span class="p">{</span><span class="s2">&quot;etcd&quot;</span><span class="p">:</span> <span class="s2">&quot;A&quot;</span><span class="p">,</span> <span class="s2">&quot;epoch&quot;</span><span class="p">:</span> <span class="s2">&quot;TREATMENT 2&quot;</span><span class="p">},</span>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>        <span class="p">],</span>
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>    <span class="p">},</span>
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>    <span class="n">arm_names</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;AB&quot;</span><span class="p">:</span> <span class="s2">&quot;Drug A then Drug B&quot;</span><span class="p">,</span> <span class="s2">&quot;BA&quot;</span><span class="p">:</span> <span class="s2">&quot;Drug B then Drug A&quot;</span><span class="p">},</span>
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>    <span class="n">randomized_at</span><span class="o">=</span><span class="s2">&quot;SCRN&quot;</span><span class="p">,</span>  <span class="c1"># TABRANCH &quot;Randomized to &lt;arm&gt;&quot; on SCRN</span>
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="p">)</span>
+</span></code></pre></div>
+<p>TABRANCH defaults to <code>Randomized to &lt;arm&gt;</code> on the last element that every
+arm shares, or on the <code>randomized_at</code> element. When the branch is not a
+randomization (a responder extension, a cohort assignment), give the real
+rule on the step: <code>{"etcd": "CORE", "tabranch": "Responder at end of Core"}</code>.
+<code>tatrans</code> gives TATRANS the same way. <code>design.audit()</code> warns when two arms
+have the same path (FLEETTD04) and when an element repeats in an arm with no
+per-position epoch (FLEETTD05).</p>
+<h3 id="interchange-formats">Interchange formats<a class="headerlink" href="#interchange-formats" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Direction</th>
+<th>Use case</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>StudyDesign.from_yaml(path)</code> / <code>design.to_yaml(path)</code></td>
+<td>YAML ⇄</td>
+<td><code>trial_design.yaml</code> spec, versioned next to <code>define.yaml</code></td>
+</tr>
+<tr>
+<td><code>StudyDesign.from_mermaid(text, study_id=...)</code> / <code>design.to_mermaid()</code></td>
+<td>Mermaid ⇄</td>
+<td>Review diagram: arm paths, ETCD, ELEMENT, TEDUR, epochs. Not ARM, rules, TABRANCH or a crossover; YAML is the lossless path</td>
+</tr>
+<tr>
+<td><code>StudyDesign.from_usdm(json_dict)</code></td>
+<td>USDM →</td>
+<td>Import a CDISC USDM / DDF export (e.g. from OpenStudyBuilder): arms, epochs, elements, study cells, encounters, eligibility criteria</td>
+</tr>
+<tr>
+<td><code>TrialParameters.from_ctgov("NCT...")</code></td>
+<td>ctgov →</td>
+<td>Seed TS from the ClinicalTrials.gov v2 API</td>
+</tr>
+</tbody>
+</table>
+<h2 id="conformance-audit-a-p21-dry-run-offline">Conformance audit — a P21 dry-run, offline<a class="headerlink" href="#conformance-audit-a-p21-dry-run-offline" title="Permanent link">&para;</a></h2>
+<p>One CLI command (config-context — the design spec resolves from
+<code>study_config.yaml</code>; exit code 1 on errors, so it drops straight into CI):</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>uv<span class="w"> </span>run<span class="w"> </span>fleet<span class="w"> </span>tdd<span class="w"> </span>audit
+</span></code></pre></div>
+<p>The same audit from Python — <code>design.audit()</code>, or the standalone
+<code>fleet.sdtm.trial_design_audit(te=..., ta=..., tv=..., ts=..., ti=..., dm=..., td=..., tm=...)</code> —
+checks the domains against published P21/FDA rule IDs and returns a findings
+DataFrame (<code>rule_id</code>, <code>severity</code>, <code>domain</code>, <code>message</code>):</p>
+<!-- docs:no-run: needs a study design and DM -->
+
+<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">findings</span> <span class="o">=</span> <span class="n">design</span><span class="o">.</span><span class="n">audit</span><span class="p">(</span><span class="n">dm</span><span class="o">=</span><span class="n">dm</span><span class="p">)</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">errors</span> <span class="o">=</span> <span class="n">findings</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;severity&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;error&quot;</span><span class="p">)</span>
+</span></code></pre></div>
+<p>Encoded checks include:</p>
+<table>
+<thead>
+<tr>
+<th>Area</th>
+<th>Rules</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>All</td>
+<td>A Req variable of the SDTMIG 3.4 structure that is absent, null or blank (FLEETTD08), for TE, TA, TV, TI, TD and TM</td>
+</tr>
+<tr>
+<td>TE</td>
+<td>ETCD length (SD1009), TEENRL/TEDUR presence (SD0089), duplicates (SD1271)</td>
+</tr>
+<tr>
+<td>TA</td>
+<td>TAETORD unique per arm (SD1052), ARM↔ARMCD one-to-one (SD1033/SD1034), reserved ARMCDs (SD1053), ARMCD length (SD1004)</td>
+</tr>
+<tr>
+<td>TA↔TE</td>
+<td>ETCD not in TE, and ELEMENT consistency when both have ELEMENT, UNPLAN-aware (SD0067); unused elements (SD1378)</td>
+</tr>
+<tr>
+<td>TV</td>
+<td>VISITNUM unique per ARMCD, no VISITNUM with both a blank-ARMCD row and an arm row (FLEETTD06), ARMCD FK vs TA</td>
+</tr>
+<tr>
+<td>TI</td>
+<td>IETESTCD format (SD0018), uniqueness within TIVERS (SD1286)</td>
+</tr>
+<tr>
+<td>DM↔TA</td>
+<td>Undefined arms, arms without subjects (SD1354), a DM (ARMCD, ARM) pair that TA does not hold (FLEETTD07, warning)</td>
+</tr>
+<tr>
+<td>TS</td>
+<td>The FDA Technical Conformance Guide required-parameter profile (SD22xx — a missing <code>SSTDTC</code> is flagged as <strong>rejection-level</strong> TRC 1734) and conditional rules (e.g. INTMODEL/INTTYPE/PCLAS when STYPE=INTERVENTIONAL — SD1310/11/12)</td>
+</tr>
+<tr>
+<td>Design</td>
+<td><code>design.audit()</code> only: an empty elements or arms section (error) or visits or criteria section (warning) (FLEETTD09)</td>
+</tr>
+</tbody>
+</table>
+<p>TS coded values are <strong>not</strong> checked: a TSVAL outside its codelist (for
+example SEXPOP <code>ALL</code>, which C66732 does not hold) and a TSPARM that does not
+match its TSPARMCD give no finding. Check them against the CT package by hand.</p>
+<p>The audit is a curated high-signal subset; run <code>fleet validate</code> (CDISC Rules
+Engine) for exhaustive coverage.</p>
+<h2 id="visit-schedules">Visit schedules<a class="headerlink" href="#visit-schedules" title="Permanent link">&para;</a></h2>
+<p>Build TV from day offsets relative to an anchor event. <code>VISITNUM</code>,
+<code>VISITDY</code> (CDISC no-day-zero convention), and deterministic <code>TVSTRL</code> rule
+text are derived:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fleet.sdtm.tdd</span><span class="w"> </span><span class="kn">import</span> <span class="n">TrialVisits</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">tv_rows</span> <span class="o">=</span> <span class="n">TrialVisits</span><span class="o">.</span><span class="n">from_schedule</span><span class="p">(</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>    <span class="p">[(</span><span class="s2">&quot;Screening&quot;</span><span class="p">,</span> <span class="o">-</span><span class="mi">14</span><span class="p">),</span> <span class="p">(</span><span class="s2">&quot;Baseline&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="p">(</span><span class="s2">&quot;Week 4&quot;</span><span class="p">,</span> <span class="mi">28</span><span class="p">),</span> <span class="p">(</span><span class="s2">&quot;Week 8&quot;</span><span class="p">,</span> <span class="mi">56</span><span class="p">)],</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    <span class="n">anchor</span><span class="o">=</span><span class="s2">&quot;RANDOMIZATION&quot;</span><span class="p">,</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>    <span class="n">window</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>  <span class="c1"># or (before, after)</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="p">)</span>
+</span></code></pre></div>
+<h2 id="cli-fleet-tdd">CLI: <code>fleet tdd</code><a class="headerlink" href="#cli-fleet-tdd" title="Permanent link">&para;</a></h2>
+<p>Like every Fleet command, <code>fleet tdd</code> runs in the context of the discovered
+<code>study_config.yaml</code> (git-style parent walk, <code>--config</code> to override): the
+design spec defaults to <code>&lt;metadata_sdtm&gt;/trial_design.yaml</code> and the output
+directory to the config's <code>sdtm_data</code> path — so the command works from any
+subdirectory of any company's folder structure. The YAML mirrors the
+<code>StudyDesign</code> schema; a top-level <code>trial_design:</code> wrapper key is accepted.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>uv<span class="w"> </span>run<span class="w"> </span>fleet<span class="w"> </span>tdd<span class="w"> </span>audit<span class="w">                       </span><span class="c1"># conformance pre-check</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>uv<span class="w"> </span>run<span class="w"> </span>fleet<span class="w"> </span>tdd<span class="w"> </span>build<span class="w"> </span>--format<span class="w"> </span>xpt<span class="w">          </span><span class="c1"># audit + write to &lt;sdtm_data&gt;/</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>uv<span class="w"> </span>run<span class="w"> </span>fleet<span class="w"> </span>tdd<span class="w"> </span>ctgov<span class="w"> </span>NCT04280705<span class="w">           </span><span class="c1"># print TS parameters from ClinicalTrials.gov</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>uv<span class="w"> </span>run<span class="w"> </span>fleet<span class="w"> </span>tdd<span class="w"> </span>ctgov<span class="w"> </span>NCT04280705<span class="w"> </span>--write<span class="w">   </span><span class="c1"># ...or merge them into trial_design.yaml</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>uv<span class="w"> </span>run<span class="w"> </span>fleet<span class="w"> </span>tdd<span class="w"> </span>build<span class="w"> </span>--design<span class="w"> </span>specs/td.yaml<span class="w"> </span>--out<span class="w"> </span>/tmp/out<span class="w">   </span><span class="c1"># explicit overrides</span>
+</span></code></pre></div>
+<p><code>build</code> writes every populated domain (parquet, xpt, or dataset-json) and
+refuses to write when the audit reports errors (<code>--force</code> overrides).</p>
+<h2 id="row-level-pipeline">Row-level pipeline<a class="headerlink" href="#row-level-pipeline" title="Permanent link">&para;</a></h2>
 <h3 id="protocol-reference-domains">Protocol-Reference Domains<a class="headerlink" href="#protocol-reference-domains" title="Permanent link">&para;</a></h3>
-<p>Protocol-reference domains (TE, TA, TV, TS, TI) follow a <strong>fixed sequence</strong>:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>fetch_structure() → study_header() → add_*() → to_frame()
+<p>Protocol-reference domains (TE, TA, TV, TS, TI, TD, TM) follow a <strong>fixed
+sequence</strong>:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>fetch_structure() → study_header() → add_*() → to_frame()
 </span></code></pre></div>
-<p>Each step validates that the previous step was completed. Calling verbs out of order raises a <code>ValueError</code> with a descriptive message.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fleet.sdtm.tdd</span><span class="w"> </span><span class="kn">import</span> <span class="n">TrialElement</span><span class="p">,</span> <span class="n">TrialElements</span><span class="p">,</span> <span class="n">Epoch</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="c1"># 1. Define your trial elements using rich Pydantic models</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">te_rows</span> <span class="o">=</span> <span class="n">TrialElements</span><span class="p">(</span><span class="n">elements</span><span class="o">=</span><span class="p">[</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="n">TrialElement</span><span class="p">(</span><span class="n">etcd</span><span class="o">=</span><span class="s2">&quot;SCRN&quot;</span><span class="p">,</span> <span class="n">element</span><span class="o">=</span><span class="s2">&quot;Screening&quot;</span><span class="p">,</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>                 <span class="n">testrl</span><span class="o">=</span><span class="s2">&quot;INFORMED CONSENT&quot;</span><span class="p">,</span> <span class="n">teenrl</span><span class="o">=</span><span class="s2">&quot;RANDOMIZATION - 1&quot;</span><span class="p">,</span>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>                 <span class="n">tedur</span><span class="o">=</span><span class="s2">&quot;P14D&quot;</span><span class="p">,</span> <span class="n">epoch</span><span class="o">=</span><span class="n">Epoch</span><span class="o">.</span><span class="n">SCREENING</span><span class="p">),</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>    <span class="n">TrialElement</span><span class="p">(</span><span class="n">etcd</span><span class="o">=</span><span class="s2">&quot;TRT&quot;</span><span class="p">,</span> <span class="n">element</span><span class="o">=</span><span class="s2">&quot;Treatment&quot;</span><span class="p">,</span>
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>                 <span class="n">testrl</span><span class="o">=</span><span class="s2">&quot;RANDOMIZATION&quot;</span><span class="p">,</span> <span class="n">teenrl</span><span class="o">=</span><span class="s2">&quot;END OF TREATMENT&quot;</span><span class="p">,</span>
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>                 <span class="n">tedur</span><span class="o">=</span><span class="s2">&quot;P84D&quot;</span><span class="p">,</span> <span class="n">epoch</span><span class="o">=</span><span class="n">Epoch</span><span class="o">.</span><span class="n">TREATMENT</span><span class="p">),</span>
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>    <span class="n">TrialElement</span><span class="p">(</span><span class="n">etcd</span><span class="o">=</span><span class="s2">&quot;FU&quot;</span><span class="p">,</span> <span class="n">element</span><span class="o">=</span><span class="s2">&quot;Follow-up&quot;</span><span class="p">,</span>
-</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>                 <span class="n">testrl</span><span class="o">=</span><span class="s2">&quot;END OF TREATMENT + 1&quot;</span><span class="p">,</span> <span class="n">teenrl</span><span class="o">=</span><span class="s2">&quot;END OF FOLLOW-UP&quot;</span><span class="p">,</span>
-</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>                 <span class="n">tedur</span><span class="o">=</span><span class="s2">&quot;P28D&quot;</span><span class="p">,</span> <span class="n">epoch</span><span class="o">=</span><span class="n">Epoch</span><span class="o">.</span><span class="n">FOLLOW_UP</span><span class="p">),</span>
-</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="p">])</span>
-</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>
-</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="c1"># 2. Build the pipeline</span>
-</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="n">te</span> <span class="o">=</span> <span class="p">(</span>
-</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a>    <span class="n">pl</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">()</span><span class="o">.</span><span class="n">sdtm</span>
-</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a>    <span class="o">.</span><span class="n">fetch_structure</span><span class="p">(</span><span class="s2">&quot;TE&quot;</span><span class="p">,</span> <span class="n">ig_version</span><span class="o">=</span><span class="s2">&quot;3-4&quot;</span><span class="p">,</span>
-</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a>                     <span class="n">save_to</span><span class="o">=</span><span class="s2">&quot;metadata/sdtm/te_structure.yaml&quot;</span><span class="p">)</span>
-</span><span id="__span-2-21"><a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a>    <span class="o">.</span><span class="n">study_header</span><span class="p">(</span><span class="n">study_id</span><span class="o">=</span><span class="s2">&quot;CDISCPILOT01&quot;</span><span class="p">,</span> <span class="n">domain</span><span class="o">=</span><span class="s2">&quot;TE&quot;</span><span class="p">)</span>
-</span><span id="__span-2-22"><a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a>    <span class="o">.</span><span class="n">add_elements</span><span class="p">(</span><span class="n">te_rows</span><span class="p">)</span>
-</span><span id="__span-2-23"><a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a>    <span class="o">.</span><span class="n">to_frame</span><span class="p">()</span>
-</span><span id="__span-2-24"><a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a><span class="p">)</span>
+<p>Each step validates that the previous step was completed. Calling verbs out
+of order raises a <code>ValueError</code> with a descriptive message.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">polars</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pl</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fleet.sdtm.tdd</span><span class="w"> </span><span class="kn">import</span> <span class="n">TrialElement</span><span class="p">,</span> <span class="n">TrialElements</span><span class="p">,</span> <span class="n">Epoch</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="n">te_rows</span> <span class="o">=</span> <span class="n">TrialElements</span><span class="p">(</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>    <span class="n">elements</span><span class="o">=</span><span class="p">[</span>
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>        <span class="n">TrialElement</span><span class="p">(</span>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>            <span class="n">etcd</span><span class="o">=</span><span class="s2">&quot;SCRN&quot;</span><span class="p">,</span>
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>            <span class="n">element</span><span class="o">=</span><span class="s2">&quot;Screening&quot;</span><span class="p">,</span>
+</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>            <span class="n">testrl</span><span class="o">=</span><span class="s2">&quot;INFORMED CONSENT&quot;</span><span class="p">,</span>
+</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>            <span class="n">teenrl</span><span class="o">=</span><span class="s2">&quot;RANDOMIZATION - 1&quot;</span><span class="p">,</span>
+</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a>            <span class="n">tedur</span><span class="o">=</span><span class="s2">&quot;P14D&quot;</span><span class="p">,</span>
+</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a>            <span class="n">epoch</span><span class="o">=</span><span class="n">Epoch</span><span class="o">.</span><span class="n">SCREENING</span><span class="p">,</span>
+</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a>        <span class="p">),</span>
+</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a>        <span class="n">TrialElement</span><span class="p">(</span>
+</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a>            <span class="n">etcd</span><span class="o">=</span><span class="s2">&quot;TRT&quot;</span><span class="p">,</span>
+</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a>            <span class="n">element</span><span class="o">=</span><span class="s2">&quot;Treatment&quot;</span><span class="p">,</span>
+</span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a>            <span class="n">testrl</span><span class="o">=</span><span class="s2">&quot;RANDOMIZATION&quot;</span><span class="p">,</span>
+</span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a>            <span class="n">teenrl</span><span class="o">=</span><span class="s2">&quot;END OF TREATMENT&quot;</span><span class="p">,</span>
+</span><span id="__span-7-19"><a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a>            <span class="n">tedur</span><span class="o">=</span><span class="s2">&quot;P84D&quot;</span><span class="p">,</span>
+</span><span id="__span-7-20"><a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a>            <span class="n">epoch</span><span class="o">=</span><span class="n">Epoch</span><span class="o">.</span><span class="n">TREATMENT</span><span class="p">,</span>
+</span><span id="__span-7-21"><a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a>        <span class="p">),</span>
+</span><span id="__span-7-22"><a id="__codelineno-7-22" name="__codelineno-7-22" href="#__codelineno-7-22"></a>    <span class="p">]</span>
+</span><span id="__span-7-23"><a id="__codelineno-7-23" name="__codelineno-7-23" href="#__codelineno-7-23"></a><span class="p">)</span>
+</span><span id="__span-7-24"><a id="__codelineno-7-24" name="__codelineno-7-24" href="#__codelineno-7-24"></a>
+</span><span id="__span-7-25"><a id="__codelineno-7-25" name="__codelineno-7-25" href="#__codelineno-7-25"></a><span class="n">te</span> <span class="o">=</span> <span class="p">(</span>
+</span><span id="__span-7-26"><a id="__codelineno-7-26" name="__codelineno-7-26" href="#__codelineno-7-26"></a>    <span class="n">pl</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">()</span>
+</span><span id="__span-7-27"><a id="__codelineno-7-27" name="__codelineno-7-27" href="#__codelineno-7-27"></a>    <span class="o">.</span><span class="n">sdtm</span><span class="o">.</span><span class="n">fetch_structure</span><span class="p">(</span><span class="s2">&quot;TE&quot;</span><span class="p">,</span> <span class="n">ig_version</span><span class="o">=</span><span class="s2">&quot;3-4&quot;</span><span class="p">)</span>
+</span><span id="__span-7-28"><a id="__codelineno-7-28" name="__codelineno-7-28" href="#__codelineno-7-28"></a>    <span class="o">.</span><span class="n">study_header</span><span class="p">(</span><span class="n">study_id</span><span class="o">=</span><span class="s2">&quot;CDISCPILOT01&quot;</span><span class="p">,</span> <span class="n">domain</span><span class="o">=</span><span class="s2">&quot;TE&quot;</span><span class="p">)</span>
+</span><span id="__span-7-29"><a id="__codelineno-7-29" name="__codelineno-7-29" href="#__codelineno-7-29"></a>    <span class="o">.</span><span class="n">add_elements</span><span class="p">(</span><span class="n">te_rows</span><span class="p">)</span>
+</span><span id="__span-7-30"><a id="__codelineno-7-30" name="__codelineno-7-30" href="#__codelineno-7-30"></a>    <span class="o">.</span><span class="n">to_frame</span><span class="p">()</span>
+</span><span id="__span-7-31"><a id="__codelineno-7-31" name="__codelineno-7-31" href="#__codelineno-7-31"></a><span class="p">)</span>
 </span></code></pre></div>
+<p><code>fetch_structure()</code> resolves the domain structure in priority order:
+<code>define_path=</code> → <code>save_to=</code> cache → <strong>packaged SDTMIG 3.4 metadata</strong> →
+online CDISC Library. Discrepancies between the IG and Fleet's models are
+reported as <code>UserWarning</code> (schema reconciliation).</p>
 <h3 id="subject-level-domains">Subject-Level Domains<a class="headerlink" href="#subject-level-domains" title="Permanent link">&para;</a></h3>
-<p>Subject-level domains (SV, SE) use derivation verbs that <strong>freely mix</strong> with existing SDTM verbs:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">sv</span> <span class="o">=</span> <span class="p">(</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>    <span class="n">raw_visits</span><span class="o">.</span><span class="n">sdtm</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    <span class="o">.</span><span class="n">hardcode_no_ct</span><span class="p">(</span><span class="s2">&quot;DOMAIN&quot;</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="s2">&quot;SV&quot;</span><span class="p">)</span>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="o">.</span><span class="n">assign_no_ct</span><span class="p">(</span><span class="s2">&quot;USUBJID&quot;</span><span class="p">,</span> <span class="n">source</span><span class="o">=</span><span class="s2">&quot;subject_id&quot;</span><span class="p">)</span>
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="o">.</span><span class="n">assign_dtc</span><span class="p">(</span><span class="s2">&quot;SVSTDTC&quot;</span><span class="p">,</span> <span class="n">source</span><span class="o">=</span><span class="s2">&quot;visit_date&quot;</span><span class="p">)</span>
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="o">.</span><span class="n">visit_map</span><span class="p">(</span><span class="s2">&quot;VISITNUM&quot;</span><span class="p">,</span> <span class="s2">&quot;VISIT&quot;</span><span class="p">,</span> <span class="n">date_col</span><span class="o">=</span><span class="s2">&quot;SVSTDTC&quot;</span><span class="p">,</span>
-</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>               <span class="n">planned_visits</span><span class="o">=</span><span class="n">tv_rows</span><span class="p">,</span> <span class="n">ref_date</span><span class="o">=</span><span class="s2">&quot;RFSTDTC&quot;</span><span class="p">,</span>
-</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>               <span class="n">tolerance</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;before&quot;</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span> <span class="s2">&quot;after&quot;</span><span class="p">:</span> <span class="mi">3</span><span class="p">})</span>
-</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>    <span class="o">.</span><span class="n">study_day</span><span class="p">(</span><span class="s2">&quot;SVSTDY&quot;</span><span class="p">,</span> <span class="n">date_col</span><span class="o">=</span><span class="s2">&quot;SVSTDTC&quot;</span><span class="p">,</span> <span class="n">ref_date_col</span><span class="o">=</span><span class="s2">&quot;RFSTDTC&quot;</span><span class="p">)</span>
-</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>    <span class="o">.</span><span class="n">epoch_assign</span><span class="p">(</span><span class="s2">&quot;EPOCH&quot;</span><span class="p">,</span> <span class="n">date_col</span><span class="o">=</span><span class="s2">&quot;SVSTDTC&quot;</span><span class="p">,</span> <span class="n">epoch_ranges</span><span class="o">=</span><span class="n">epoch_map</span><span class="p">)</span>
-</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>    <span class="o">.</span><span class="n">to_frame</span><span class="p">()</span>
-</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="p">)</span>
+<p>Subject-level domains (SV, SE) use derivation verbs that <strong>freely mix</strong> with
+existing SDTM verbs:</p>
+<!-- docs:no-run: needs raw visit data -->
+
+<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="n">sv</span> <span class="o">=</span> <span class="p">(</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>    <span class="n">raw_visits</span><span class="o">.</span><span class="n">sdtm</span><span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="s2">&quot;DOMAIN&quot;</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="s2">&quot;SV&quot;</span><span class="p">)</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>    <span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="s2">&quot;USUBJID&quot;</span><span class="p">,</span> <span class="n">source</span><span class="o">=</span><span class="s2">&quot;subject_id&quot;</span><span class="p">)</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>    <span class="o">.</span><span class="n">date</span><span class="p">(</span><span class="s2">&quot;SVSTDTC&quot;</span><span class="p">,</span> <span class="n">source</span><span class="o">=</span><span class="s2">&quot;visit_date&quot;</span><span class="p">)</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>    <span class="o">.</span><span class="n">pin</span><span class="p">(</span><span class="s2">&quot;DM&quot;</span><span class="p">,</span> <span class="n">dm</span><span class="p">)</span>  <span class="c1"># RFSTDTC comes from DM</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>    <span class="o">.</span><span class="n">visit_map</span><span class="p">(</span>
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>        <span class="s2">&quot;VISITNUM&quot;</span><span class="p">,</span>
+</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>        <span class="s2">&quot;VISIT&quot;</span><span class="p">,</span>
+</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>        <span class="n">date_col</span><span class="o">=</span><span class="s2">&quot;SVSTDTC&quot;</span><span class="p">,</span>
+</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>        <span class="n">planned_visits</span><span class="o">=</span><span class="n">tv_rows</span><span class="p">,</span>
+</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a>        <span class="n">ref_date</span><span class="o">=</span><span class="s2">&quot;RFSTDTC&quot;</span><span class="p">,</span>
+</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a>        <span class="n">tolerance</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;before&quot;</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span> <span class="s2">&quot;after&quot;</span><span class="p">:</span> <span class="mi">3</span><span class="p">},</span>
+</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a>    <span class="p">)</span>
+</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a>    <span class="o">.</span><span class="n">study_day</span><span class="p">(</span><span class="s2">&quot;SVSTDY&quot;</span><span class="p">,</span> <span class="n">date_col</span><span class="o">=</span><span class="s2">&quot;SVSTDTC&quot;</span><span class="p">)</span>
+</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a>    <span class="o">.</span><span class="n">to_frame</span><span class="p">()</span>
+</span><span id="__span-8-16"><a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a><span class="p">)</span>
+</span></code></pre></div>
+<p><code>visit_map()</code> is a nearest-day window. Use it only when the CRF does not
+collect the visit, and never to replace a collected VISITNUM. Its rules:</p>
+<ul>
+<li>The distance is the difference of study-day numbers, as
+  <code>abs(SVSTDY - VISITDY)</code>: across the missing Day 0, Day -1 is 2 days from
+  VISITDY 1. <code>TrialVisits.from_schedule()</code> writes its TVSTRL window in the
+  same study days.</li>
+<li>When TV has ARMCD values, a subject takes only the visits of its arm and
+  the visits with a blank ARMCD.</li>
+<li>A dated record outside every window is an unscheduled visit: it gets the
+  VISITNUM of the last planned visit before it plus .1, .2, ... and the
+  VISIT <code>UNSCHEDULED 5.1</code>. This numbering is a sponsor convention: check it
+  against the SDRG (<a href="../../adr/0035-visit-map-numbers-an-unscheduled-visit/">ADR 0035</a>).</li>
+<li>A record with no study day keeps a null VISITNUM. One warning gives the
+  counts, and a second warning gives the USUBJID + VISITNUM keys that repeat
+  in SV.</li>
+</ul>
+<p>For SE, derive boundaries with <code>element_boundaries()</code> and the sequence
+number with the standard <code>seq()</code> verb. The input has one row per subject
+and element: <code>STUDYID</code> (for <code>seq</code>), <code>ETCD</code>, <code>EPOCH</code> and the milestone dates:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">polars</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pl</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="kn">import</span><span class="w"> </span><span class="nn">fleet</span>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="n">disposition_df</span> <span class="o">=</span> <span class="n">pl</span><span class="o">.</span><span class="n">from_repr</span><span class="p">(</span><span class="s2">&quot;&quot;&quot;</span>
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="s2">┌─────────┬────────────┬──────┬───────────┬────────────────┬─────────────────┐</span>
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="s2">│ STUDYID ┆ subject_id ┆ ETCD ┆ EPOCH     ┆ screening_date ┆ first_dose_date │</span>
+</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="s2">│ ---     ┆ ---        ┆ ---  ┆ ---       ┆ ---            ┆ ---             │</span>
+</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="s2">│ str     ┆ str        ┆ str  ┆ str       ┆ str            ┆ str             │</span>
+</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="s2">╞═════════╪════════════╪══════╪═══════════╪════════════════╪═════════════════╡</span>
+</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a><span class="s2">│ STUDY01 ┆ 01-001     ┆ SCRN ┆ SCREENING ┆ 2024-01-01     ┆ 2024-01-15      │</span>
+</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a><span class="s2">│ STUDY01 ┆ 01-001     ┆ TRT  ┆ TREATMENT ┆ 2024-01-01     ┆ 2024-01-15      │</span>
+</span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a><span class="s2">└─────────┴────────────┴──────┴───────────┴────────────────┴─────────────────┘</span>
+</span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a><span class="s2">&quot;&quot;&quot;</span><span class="p">)</span>
+</span><span id="__span-9-15"><a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a>
+</span><span id="__span-9-16"><a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a><span class="n">se</span> <span class="o">=</span> <span class="p">(</span>
+</span><span id="__span-9-17"><a id="__codelineno-9-17" name="__codelineno-9-17" href="#__codelineno-9-17"></a>    <span class="n">disposition_df</span><span class="o">.</span><span class="n">sdtm</span><span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="s2">&quot;DOMAIN&quot;</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="s2">&quot;SE&quot;</span><span class="p">)</span>
+</span><span id="__span-9-18"><a id="__codelineno-9-18" name="__codelineno-9-18" href="#__codelineno-9-18"></a>    <span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="s2">&quot;USUBJID&quot;</span><span class="p">,</span> <span class="n">source</span><span class="o">=</span><span class="s2">&quot;subject_id&quot;</span><span class="p">)</span>
+</span><span id="__span-9-19"><a id="__codelineno-9-19" name="__codelineno-9-19" href="#__codelineno-9-19"></a>    <span class="o">.</span><span class="n">element_boundaries</span><span class="p">(</span>
+</span><span id="__span-9-20"><a id="__codelineno-9-20" name="__codelineno-9-20" href="#__codelineno-9-20"></a>        <span class="s2">&quot;SESTDTC&quot;</span><span class="p">,</span> <span class="s2">&quot;SEENDTC&quot;</span><span class="p">,</span> <span class="n">milestones</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;SCRN&quot;</span><span class="p">:</span> <span class="s2">&quot;screening_date&quot;</span><span class="p">,</span> <span class="s2">&quot;TRT&quot;</span><span class="p">:</span> <span class="s2">&quot;first_dose_date&quot;</span><span class="p">}</span>
+</span><span id="__span-9-21"><a id="__codelineno-9-21" name="__codelineno-9-21" href="#__codelineno-9-21"></a>    <span class="p">)</span>
+</span><span id="__span-9-22"><a id="__codelineno-9-22" name="__codelineno-9-22" href="#__codelineno-9-22"></a>    <span class="o">.</span><span class="n">seq</span><span class="p">(</span><span class="s2">&quot;SESEQ&quot;</span><span class="p">,</span> <span class="n">order_by</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;SESTDTC&quot;</span><span class="p">])</span>
+</span><span id="__span-9-23"><a id="__codelineno-9-23" name="__codelineno-9-23" href="#__codelineno-9-23"></a>    <span class="o">.</span><span class="n">to_frame</span><span class="p">()</span>
+</span><span id="__span-9-24"><a id="__codelineno-9-24" name="__codelineno-9-24" href="#__codelineno-9-24"></a><span class="p">)</span>
+</span></code></pre></div>
+<h3 id="epoch-stamped-from-se">EPOCH stamped from SE<a class="headerlink" href="#epoch-stamped-from-se" title="Permanent link">&para;</a></h3>
+<p><code>epoch_assign(se=...)</code> derives EPOCH for <strong>any</strong> domain from the subject's
+own element intervals — the cross-domain consistency that P21 checks
+against SE. (The study-level <code>epoch_ranges=</code> form remains available.)
+The SE frame must hold <code>EPOCH</code>:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="n">ae_raw</span> <span class="o">=</span> <span class="n">pl</span><span class="o">.</span><span class="n">from_repr</span><span class="p">(</span><span class="s2">&quot;&quot;&quot;</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="s2">┌────────────┬───────────────┐</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="s2">│ subject_id ┆ ae_start_date │</span>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="s2">│ ---        ┆ ---           │</span>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="s2">│ str        ┆ str           │</span>
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="s2">╞════════════╪═══════════════╡</span>
+</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="s2">│ 01-001     ┆ 2024-01-05    │</span>
+</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="s2">│ 01-001     ┆ 2024-02-01    │</span>
+</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="s2">└────────────┴───────────────┘</span>
+</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="s2">&quot;&quot;&quot;</span><span class="p">)</span>
+</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a>
+</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="n">ae</span> <span class="o">=</span> <span class="p">(</span>
+</span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a>    <span class="n">ae_raw</span><span class="o">.</span><span class="n">sdtm</span><span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="s2">&quot;USUBJID&quot;</span><span class="p">,</span> <span class="n">source</span><span class="o">=</span><span class="s2">&quot;subject_id&quot;</span><span class="p">)</span>
+</span><span id="__span-10-14"><a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a>    <span class="o">.</span><span class="n">date</span><span class="p">(</span><span class="s2">&quot;AESTDTC&quot;</span><span class="p">,</span> <span class="n">source</span><span class="o">=</span><span class="s2">&quot;ae_start_date&quot;</span><span class="p">)</span>
+</span><span id="__span-10-15"><a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a>    <span class="o">.</span><span class="n">epoch_assign</span><span class="p">(</span><span class="s2">&quot;EPOCH&quot;</span><span class="p">,</span> <span class="n">date_col</span><span class="o">=</span><span class="s2">&quot;AESTDTC&quot;</span><span class="p">,</span> <span class="n">se</span><span class="o">=</span><span class="n">se</span><span class="p">)</span>
+</span><span id="__span-10-16"><a id="__codelineno-10-16" name="__codelineno-10-16" href="#__codelineno-10-16"></a>    <span class="o">.</span><span class="n">to_frame</span><span class="p">()</span>
+</span><span id="__span-10-17"><a id="__codelineno-10-17" name="__codelineno-10-17" href="#__codelineno-10-17"></a><span class="p">)</span>
 </span></code></pre></div>
 <h2 id="collection-models">Collection Models<a class="headerlink" href="#collection-models" title="Permanent link">&para;</a></h2>
-<p>Every <code>add_*()</code> verb requires a <strong>collection model</strong> (not a bare list). Collections enforce integrity at construction time:</p>
+<p>Every <code>add_*()</code> verb requires a <strong>collection model</strong> (not a bare list).
+Collections enforce integrity at construction time:</p>
 <table>
 <thead>
 <tr>
@@ -2080,106 +2877,127 @@
 <tbody>
 <tr>
 <td><code>TrialElements</code></td>
-<td>Unique ETCD, epoch consistency</td>
+<td>Unique ETCD</td>
 </tr>
 <tr>
 <td><code>TrialArms</code></td>
-<td>Sequential TAETORD per arm, FK to TE (opt.)</td>
+<td>Unique TAETORD per arm, FK to TE (opt.)</td>
 </tr>
 <tr>
 <td><code>TrialVisits</code></td>
-<td>Unique VISITNUM, VISITDY ordering</td>
+<td>Unique VISITNUM per arm, FK to TA (opt.)</td>
 </tr>
 <tr>
 <td><code>TrialParameters</code></td>
-<td>Unique TSPARMCD</td>
+<td>Unique (TSPARMCD, TSSEQ)</td>
 </tr>
 <tr>
 <td><code>TrialCriteria</code></td>
-<td>Unique IETESTCD</td>
+<td>Unique IETESTCD per TIVERS</td>
+</tr>
+<tr>
+<td><code>TrialDiseaseAssessments</code></td>
+<td>Unique TDORDER</td>
+</tr>
+<tr>
+<td><code>TrialMilestones</code></td>
+<td>Unique MIDSTYPE</td>
 </tr>
 </tbody>
 </table>
-<h3 id="example-collection-validation">Example: Collection Validation<a class="headerlink" href="#example-collection-validation" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># This raises ValueError — duplicate ETCD</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">TrialElements</span><span class="p">(</span><span class="n">elements</span><span class="o">=</span><span class="p">[</span>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>    <span class="n">TrialElement</span><span class="p">(</span><span class="n">etcd</span><span class="o">=</span><span class="s2">&quot;SCRN&quot;</span><span class="p">,</span> <span class="n">element</span><span class="o">=</span><span class="s2">&quot;Screening&quot;</span><span class="p">,</span> <span class="n">epoch</span><span class="o">=</span><span class="n">Epoch</span><span class="o">.</span><span class="n">SCREENING</span><span class="p">),</span>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>    <span class="n">TrialElement</span><span class="p">(</span><span class="n">etcd</span><span class="o">=</span><span class="s2">&quot;SCRN&quot;</span><span class="p">,</span> <span class="n">element</span><span class="o">=</span><span class="s2">&quot;Screening 2&quot;</span><span class="p">,</span> <span class="n">epoch</span><span class="o">=</span><span class="n">Epoch</span><span class="o">.</span><span class="n">SCREENING</span><span class="p">),</span>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="p">])</span>
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="c1"># ValueError: Duplicate ETCD: {&#39;SCRN&#39;}</span>
+<h3 id="cross-domain-fk-validation">Cross-domain FK validation<a class="headerlink" href="#cross-domain-fk-validation" title="Permanent link">&para;</a></h3>
+<!-- docs:no-run: needs the TA rows of a study -->
+
+<div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="n">ta</span> <span class="o">=</span> <span class="p">(</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>    <span class="n">pl</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">()</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>    <span class="o">.</span><span class="n">sdtm</span><span class="o">.</span><span class="n">fetch_structure</span><span class="p">(</span><span class="s2">&quot;TA&quot;</span><span class="p">)</span>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>    <span class="o">.</span><span class="n">study_header</span><span class="p">(</span><span class="s2">&quot;CDISCPILOT01&quot;</span><span class="p">,</span> <span class="s2">&quot;TA&quot;</span><span class="p">)</span>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>    <span class="o">.</span><span class="n">add_arms</span><span class="p">(</span><span class="n">ta_rows</span><span class="p">,</span> <span class="n">te</span><span class="o">=</span><span class="n">te_rows</span><span class="p">)</span>  <span class="c1"># TA.ETCD ∈ TE.ETCD</span>
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>    <span class="o">.</span><span class="n">to_frame</span><span class="p">()</span>
+</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="p">)</span>
+</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a>
+</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="n">tv</span> <span class="o">=</span> <span class="p">(</span>
+</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a>    <span class="n">pl</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">()</span>
+</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a>    <span class="o">.</span><span class="n">sdtm</span><span class="o">.</span><span class="n">fetch_structure</span><span class="p">(</span><span class="s2">&quot;TV&quot;</span><span class="p">)</span>
+</span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a>    <span class="o">.</span><span class="n">study_header</span><span class="p">(</span><span class="s2">&quot;CDISCPILOT01&quot;</span><span class="p">,</span> <span class="s2">&quot;TV&quot;</span><span class="p">)</span>
+</span><span id="__span-11-13"><a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a>    <span class="o">.</span><span class="n">add_visits</span><span class="p">(</span><span class="n">tv_rows</span><span class="p">,</span> <span class="n">ta</span><span class="o">=</span><span class="n">ta_rows</span><span class="p">)</span>  <span class="c1"># TV.ARMCD ∈ TA.ARMCD</span>
+</span><span id="__span-11-14"><a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a>    <span class="o">.</span><span class="n">to_frame</span><span class="p">()</span>
+</span><span id="__span-11-15"><a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a><span class="p">)</span>
 </span></code></pre></div>
-<h2 id="cross-domain-fk-validation">Cross-Domain FK Validation<a class="headerlink" href="#cross-domain-fk-validation" title="Permanent link">&para;</a></h2>
-<p>Pass upstream collections to <code>add_*()</code> verbs for foreign-key validation.
-First, define the arm rows using the <code>TrialArms</code> / <code>TrialArm</code> models
-(each ETCD must match an element defined in <code>te_rows</code> above):</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fleet.sdtm.tdd</span><span class="w"> </span><span class="kn">import</span> <span class="n">TrialArm</span><span class="p">,</span> <span class="n">TrialArms</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">ta_rows</span> <span class="o">=</span> <span class="n">TrialArms</span><span class="p">(</span><span class="n">arms</span><span class="o">=</span><span class="p">[</span>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>    <span class="n">TrialArm</span><span class="p">(</span><span class="n">armcd</span><span class="o">=</span><span class="s2">&quot;PBO&quot;</span><span class="p">,</span> <span class="n">arm</span><span class="o">=</span><span class="s2">&quot;Placebo&quot;</span><span class="p">,</span> <span class="n">taetord</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>             <span class="n">etcd</span><span class="o">=</span><span class="s2">&quot;SCRN&quot;</span><span class="p">,</span> <span class="n">element</span><span class="o">=</span><span class="s2">&quot;Screening&quot;</span><span class="p">,</span> <span class="n">epoch</span><span class="o">=</span><span class="n">Epoch</span><span class="o">.</span><span class="n">SCREENING</span><span class="p">),</span>
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>    <span class="n">TrialArm</span><span class="p">(</span><span class="n">armcd</span><span class="o">=</span><span class="s2">&quot;PBO&quot;</span><span class="p">,</span> <span class="n">arm</span><span class="o">=</span><span class="s2">&quot;Placebo&quot;</span><span class="p">,</span> <span class="n">taetord</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>             <span class="n">etcd</span><span class="o">=</span><span class="s2">&quot;TRT&quot;</span><span class="p">,</span> <span class="n">element</span><span class="o">=</span><span class="s2">&quot;Treatment&quot;</span><span class="p">,</span> <span class="n">epoch</span><span class="o">=</span><span class="n">Epoch</span><span class="o">.</span><span class="n">TREATMENT</span><span class="p">),</span>
-</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>    <span class="n">TrialArm</span><span class="p">(</span><span class="n">armcd</span><span class="o">=</span><span class="s2">&quot;PBO&quot;</span><span class="p">,</span> <span class="n">arm</span><span class="o">=</span><span class="s2">&quot;Placebo&quot;</span><span class="p">,</span> <span class="n">taetord</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
-</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>             <span class="n">etcd</span><span class="o">=</span><span class="s2">&quot;FU&quot;</span><span class="p">,</span> <span class="n">element</span><span class="o">=</span><span class="s2">&quot;Follow-up&quot;</span><span class="p">,</span> <span class="n">epoch</span><span class="o">=</span><span class="n">Epoch</span><span class="o">.</span><span class="n">FOLLOW_UP</span><span class="p">),</span>
-</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="p">])</span>
+<p>Omit <code>te=</code> / <code>ta=</code> to skip the FK check during iterative development.</p>
+<h2 id="ts-tsseq-and-dictionary-bound-values">TS: TSSEQ and dictionary-bound values<a class="headerlink" href="#ts-tsseq-and-dictionary-bound-values" title="Permanent link">&para;</a></h2>
+<p><code>TrialParameter</code> covers the full SDTMIG 3.4 variable set: <code>TSSEQ</code> for
+repeating parameters (one row per country for <code>FCNTRY</code>, per primary outcome
+for <code>OUTMSPRI</code>, ...) plus <code>TSGRPID</code>, <code>TSVCDREF</code>, <code>TSVCDVER</code> for
+dictionary-bound values (SNOMED, UNII, MED-RT):</p>
+<!-- docs:no-run: a fragment of a parameter list -->
+
+<div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="n">TrialParameter</span><span class="p">(</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>    <span class="n">tsparmcd</span><span class="o">=</span><span class="s2">&quot;INDIC&quot;</span><span class="p">,</span>
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>    <span class="n">tsparm</span><span class="o">=</span><span class="s2">&quot;Trial Disease/Condition Indication&quot;</span><span class="p">,</span>
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>    <span class="n">tsval</span><span class="o">=</span><span class="s2">&quot;Alzheimer&#39;s disease&quot;</span><span class="p">,</span>
+</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>    <span class="n">tsvalcd</span><span class="o">=</span><span class="s2">&quot;26929004&quot;</span><span class="p">,</span>
+</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>    <span class="n">tsvcdref</span><span class="o">=</span><span class="s2">&quot;SNOMED CT&quot;</span><span class="p">,</span>
+</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a>    <span class="n">tsvcdver</span><span class="o">=</span><span class="s2">&quot;2014-03-01&quot;</span><span class="p">,</span>
+</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="p">)</span>
 </span></code></pre></div>
-<p>Then build TA with or without FK validation:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Validates TA.ETCD ∈ TE.ETCD</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">ta</span> <span class="o">=</span> <span class="p">(</span>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>    <span class="n">pl</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">()</span><span class="o">.</span><span class="n">sdtm</span>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>    <span class="o">.</span><span class="n">fetch_structure</span><span class="p">(</span><span class="s2">&quot;TA&quot;</span><span class="p">)</span>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>    <span class="o">.</span><span class="n">study_header</span><span class="p">(</span><span class="s2">&quot;CDISCPILOT01&quot;</span><span class="p">,</span> <span class="s2">&quot;TA&quot;</span><span class="p">)</span>
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>    <span class="o">.</span><span class="n">add_arms</span><span class="p">(</span><span class="n">ta_rows</span><span class="p">,</span> <span class="n">te</span><span class="o">=</span><span class="n">te_rows</span><span class="p">)</span>  <span class="c1"># FK check</span>
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>    <span class="o">.</span><span class="n">to_frame</span><span class="p">()</span>
-</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="p">)</span>
-</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>
-</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="c1"># Omit te= to skip FK check (iterative development)</span>
-</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="n">ta_draft</span> <span class="o">=</span> <span class="p">(</span>
-</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>    <span class="n">pl</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">()</span><span class="o">.</span><span class="n">sdtm</span>
-</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a>    <span class="o">.</span><span class="n">fetch_structure</span><span class="p">(</span><span class="s2">&quot;TA&quot;</span><span class="p">)</span>
-</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a>    <span class="o">.</span><span class="n">study_header</span><span class="p">(</span><span class="s2">&quot;CDISCPILOT01&quot;</span><span class="p">,</span> <span class="s2">&quot;TA&quot;</span><span class="p">)</span>
-</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a>    <span class="o">.</span><span class="n">add_arms</span><span class="p">(</span><span class="n">ta_rows</span><span class="p">)</span>              <span class="c1"># no FK check</span>
-</span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a>    <span class="o">.</span><span class="n">to_frame</span><span class="p">()</span>
-</span><span id="__span-6-17"><a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="p">)</span>
+<p>A TSVAL over 200 characters is split at a word boundary into TSVAL,
+TSVAL1, ..., TSVALn (SDTMIG 3.4 TS assumption 8). TSPARM holds 40
+characters at most.</p>
+<p><code>TrialParameters.from_ctgov("NCT00048217")</code> seeds the registry-derivable
+parameters (REGID, TITLE, TPHASE, STYPE, INTMODEL, RANDOM, TBLIND, NARMS,
+PLANSUB (estimated enrollment) or ACTSUB (actual enrollment), AGEMIN/AGEMAX,
+SEXPOP, HLTSUBJI, SSTDTC/SENDTC, SPONSOR, OUTMSPRI,
+FCNTRY) from the ClinicalTrials.gov v2 API. It is a starting point —
+dictionary-bound parameters are deliberately not guessed.</p>
+<p>The same flow from the CLI — print the <code>parameters:</code> YAML block, or merge
+it directly into the study's <code>trial_design.yaml</code> (new TSPARMCD/TSSEQ rows
+only, existing entries untouched), then rebuild:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>uv<span class="w"> </span>run<span class="w"> </span>fleet<span class="w"> </span>tdd<span class="w"> </span>ctgov<span class="w"> </span>NCT04280705<span class="w">           </span><span class="c1"># print the parameters: YAML</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>uv<span class="w"> </span>run<span class="w"> </span>fleet<span class="w"> </span>tdd<span class="w"> </span>ctgov<span class="w"> </span>NCT04280705<span class="w"> </span>--write<span class="w">   </span><span class="c1"># merge into trial_design.yaml</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>uv<span class="w"> </span>run<span class="w"> </span>fleet<span class="w"> </span>tdd<span class="w"> </span>build<span class="w">                       </span><span class="c1"># → ts.parquet in &lt;sdtm_data&gt;/</span>
 </span></code></pre></div>
-<h2 id="schema-reconciliation">Schema Reconciliation<a class="headerlink" href="#schema-reconciliation" title="Permanent link">&para;</a></h2>
-<p><code>fetch_structure()</code> queries the CDISC Library for the domain's IG metadata
-and compares it against Fleet's static Pydantic models. Discrepancies are
-reported as <code>UserWarning</code>:</p>
-<ul>
-<li><strong>Missing required variables</strong>: IG requires a field not in the model</li>
-<li><strong>Type mismatches</strong>: IG declares <code>Num</code> but model uses <code>str</code></li>
-<li><strong>Codelist drift</strong>: IG links to a different codelist than the <code>Epoch</code> enum</li>
-</ul>
-<h2 id="epoch-enum">Epoch Enum<a class="headerlink" href="#epoch-enum" title="Permanent link">&para;</a></h2>
-<p>The <code>Epoch</code> enum is bound to NCI C99079 with all 14 standard values:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fleet.sdtm.tdd</span><span class="w"> </span><span class="kn">import</span> <span class="n">Epoch</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="n">Epoch</span><span class="o">.</span><span class="n">SCREENING</span>        <span class="c1"># &quot;SCREENING&quot;</span>
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="n">Epoch</span><span class="o">.</span><span class="n">TREATMENT</span>        <span class="c1"># &quot;TREATMENT&quot;</span>
-</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="n">Epoch</span><span class="o">.</span><span class="n">FOLLOW_UP</span>        <span class="c1"># &quot;FOLLOW-UP&quot;</span>
-</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="n">Epoch</span><span class="o">.</span><span class="n">BASELINE</span>         <span class="c1"># &quot;BASELINE&quot;</span>
-</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="c1"># ... plus 10 more</span>
+<h2 id="epoch-values">Epoch values<a class="headerlink" href="#epoch-values" title="Permanent link">&para;</a></h2>
+<p>The <code>Epoch</code> enum is bound to NCI C99079 with the 13 terms of the default CT package.
+C99079 is <strong>extensible</strong>: sponsor-defined terms are accepted as plain
+upper-case strings anywhere an epoch is expected:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fleet.sdtm.tdd</span><span class="w"> </span><span class="kn">import</span> <span class="n">Epoch</span><span class="p">,</span> <span class="n">TrialElement</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="n">TrialElement</span><span class="p">(</span><span class="n">etcd</span><span class="o">=</span><span class="s2">&quot;TRT&quot;</span><span class="p">,</span> <span class="n">element</span><span class="o">=</span><span class="s2">&quot;Treatment&quot;</span><span class="p">,</span> <span class="n">epoch</span><span class="o">=</span><span class="n">Epoch</span><span class="o">.</span><span class="n">TREATMENT</span><span class="p">)</span>
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="n">TrialElement</span><span class="p">(</span><span class="n">etcd</span><span class="o">=</span><span class="s2">&quot;ESC&quot;</span><span class="p">,</span> <span class="n">element</span><span class="o">=</span><span class="s2">&quot;Escalation&quot;</span><span class="p">,</span> <span class="n">epoch</span><span class="o">=</span><span class="s2">&quot;DOSE ESCALATION&quot;</span><span class="p">)</span>  <span class="c1"># sponsor term</span>
 </span></code></pre></div>
-<h2 id="mermaid-parser-bonus">Mermaid Parser (Bonus)<a class="headerlink" href="#mermaid-parser-bonus" title="Permanent link">&para;</a></h2>
-<p>Parse a Mermaid flowchart directly into TE and TA collections:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fleet.sdtm.tdd</span><span class="w"> </span><span class="kn">import</span> <span class="n">parse_trial_design</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="n">te</span><span class="p">,</span> <span class="n">ta</span> <span class="o">=</span> <span class="n">parse_trial_design</span><span class="p">(</span><span class="s2">&quot;&quot;&quot;</span>
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="s2">    flowchart TD</span>
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="s2">    subgraph SCR[SCREENING]</span>
-</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="s2">        SCRN[&quot;Screening&lt;br/&gt;P14D&quot;]</span>
-</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="s2">    end</span>
-</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="s2">    subgraph TRT[TREATMENT]</span>
-</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="s2">        TREAT[&quot;Treatment&lt;br/&gt;P84D&quot;]</span>
-</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="s2">    end</span>
-</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="s2">    subgraph FU[FOLLOW-UP]</span>
-</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="s2">        FOLL[&quot;Follow-up&lt;br/&gt;P28D&quot;]</span>
-</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a><span class="s2">    end</span>
-</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a><span class="s2">    SCRN --&gt; TREAT</span>
-</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a><span class="s2">    TREAT --&gt; FOLL</span>
-</span><span id="__span-8-16"><a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a><span class="s2">&quot;&quot;&quot;</span><span class="p">)</span>
+<p>Note: <code>TrialElement.epoch</code> is a <strong>design-time attribute</strong> — it drives the
+element→epoch mapping when deriving TA, but is not written to the TE
+dataset (SDTMIG 3.4 has no EPOCH variable in TE). SE is not derived from it:
+<code>epoch_assign(se=)</code> needs an EPOCH column in SE.</p>
+<h2 id="mermaid-parser">Mermaid parser<a class="headerlink" href="#mermaid-parser" title="Permanent link">&para;</a></h2>
+<p>Parse a Mermaid flowchart directly into a design (or use the lower-level
+<code>parse_trial_design()</code> for raw TE/TA collections):</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="n">design</span> <span class="o">=</span> <span class="n">fleet</span><span class="o">.</span><span class="n">StudyDesign</span><span class="o">.</span><span class="n">from_mermaid</span><span class="p">(</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="sd">    flowchart TD</span>
+</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="sd">    subgraph SCR[SCREENING]</span>
+</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="sd">        SCRN[&quot;Screening&lt;br/&gt;P14D&quot;]</span>
+</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="sd">    end</span>
+</span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="sd">    subgraph TRT[TREATMENT]</span>
+</span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a><span class="sd">        DRUG[&quot;Drug Treatment&lt;br/&gt;P84D&quot;]</span>
+</span><span id="__span-15-9"><a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a><span class="sd">        PBO[&quot;Placebo&lt;br/&gt;P84D&quot;]</span>
+</span><span id="__span-15-10"><a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a><span class="sd">    end</span>
+</span><span id="__span-15-11"><a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a><span class="sd">    SCRN --&gt;|DRUG_ARM| DRUG</span>
+</span><span id="__span-15-12"><a id="__codelineno-15-12" name="__codelineno-15-12" href="#__codelineno-15-12"></a><span class="sd">    SCRN --&gt;|PBO_ARM| PBO</span>
+</span><span id="__span-15-13"><a id="__codelineno-15-13" name="__codelineno-15-13" href="#__codelineno-15-13"></a><span class="sd">&quot;&quot;&quot;</span><span class="p">,</span>
+</span><span id="__span-15-14"><a id="__codelineno-15-14" name="__codelineno-15-14" href="#__codelineno-15-14"></a>    <span class="n">study_id</span><span class="o">=</span><span class="s2">&quot;CDISCPILOT01&quot;</span><span class="p">,</span>
+</span><span id="__span-15-15"><a id="__codelineno-15-15" name="__codelineno-15-15" href="#__codelineno-15-15"></a><span class="p">)</span>
+</span><span id="__span-15-16"><a id="__codelineno-15-16" name="__codelineno-15-16" href="#__codelineno-15-16"></a>
+</span><span id="__span-15-17"><a id="__codelineno-15-17" name="__codelineno-15-17" href="#__codelineno-15-17"></a><span class="nb">print</span><span class="p">(</span><span class="n">design</span><span class="o">.</span><span class="n">to_mermaid</span><span class="p">())</span>  <span class="c1"># a review view; YAML is the lossless round trip</span>
 </span></code></pre></div>
+<p>The parser reads the drawn structure or raises. Every line must be a
+header, a <code>subgraph</code>, an <code>end</code>, a node, an edge or a <code>%%</code> comment. A fork
+must label each edge with its ARMCD. A cycle (a crossover or an element
+that repeats in an arm), a node with no edge, a node outside a subgraph,
+more than one start node and an empty diagram raise a <code>ValueError</code>. A
+subgraph title that is not a C99079 term is kept as a sponsor epoch, with a
+warning.</p>
 
 
 
@@ -2202,7 +3020,7 @@ reported as <code>UserWarning</code>:</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 9, 2026 10:36:00 UTC">May 9, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="November 5, 2026 13:51:13 UTC">November 5, 2026</span>
   </span>
 
     
@@ -2288,7 +3106,7 @@ reported as <code>UserWarning</code>:</p>
       <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.tabs.sticky", "navigation.sections", "navigation.expand", "navigation.top", "search.highlight", "search.suggest", "content.code.copy", "content.code.annotate", "content.tabs.link"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "dev", "provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
       
     
   </body>

@@ -13,17 +13,17 @@
         <link rel="canonical" href="https://realslimmahdi.github.io/fleet-cdisc/dev/getting-started/cli/">
       
       
-        <link rel="prev" href="../quickstart/">
+        <link rel="prev" href="../from-sas/">
       
       
-        <link rel="next" href="../troubleshooting/">
+        <link rel="next" href="../ide-tooling/">
       
       
         
       
       
       <link rel="icon" href="../../img/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.5">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
     
     
       
@@ -31,7 +31,7 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
       
         
         <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
@@ -601,6 +601,34 @@
                 
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../from-sas/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coming from SAS
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
     
   
   
@@ -664,15 +692,37 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#bootstrapping-pipeline" class="md-nav__link">
+  <a href="#conventions" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Bootstrapping Pipeline
+        Conventions
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Bootstrapping Pipeline">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#command-inventory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Command inventory
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fleet-init" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fleet init
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="fleet init">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -708,50 +758,11 @@
   
 </li>
         
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#standalone-commands" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Standalone Commands
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#fleet-init-ct_1" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        fleet init-ct
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="fleet init-ct">
-      <ul class="md-nav__list">
-        
           <li class="md-nav__item">
-  <a href="#options" class="md-nav__link">
+  <a href="#fleet-init-rules" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Options
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#examples" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Examples
+        fleet init rules
       
     </span>
   </a>
@@ -764,22 +775,88 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#fleet-add-ct" class="md-nav__link">
+  <a href="#fleet-run" class="md-nav__link">
     <span class="md-ellipsis">
       
-        fleet add-ct
+        fleet run
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="fleet add-ct">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fleet-validate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fleet validate
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fleet-check" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fleet check
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fleet-compare" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fleet compare
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fleet-new" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fleet new
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fleet-migrate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fleet migrate
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fleet-tdd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fleet tdd
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="fleet tdd">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#options_1" class="md-nav__link">
+  <a href="#fleet-tdd-build" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Options
+        fleet tdd build
       
     </span>
   </a>
@@ -787,10 +864,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#examples_1" class="md-nav__link">
+  <a href="#fleet-tdd-ctgov" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Examples
+        fleet tdd ctgov
       
     </span>
   </a>
@@ -798,10 +875,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#typical-output" class="md-nav__link">
+  <a href="#fleet-tdd-audit" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Typical output
+        fleet tdd audit
       
     </span>
   </a>
@@ -814,22 +891,66 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#workflow" class="md-nav__link">
+  <a href="#fleet-tlg" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Workflow
+        fleet tlg
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Workflow">
+    <nav class="md-nav" aria-label="fleet tlg">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#source-of-truth" class="md-nav__link">
+  <a href="#fleet-tlg-list" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Source of truth
+        fleet tlg list
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fleet-tlg-schema" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fleet tlg schema
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fleet-tlg-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fleet tlg run
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fleet-tlg-explore" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fleet tlg explore
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fleet-tlg-export" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fleet tlg export
       
     </span>
   </a>
@@ -850,25 +971,102 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="fleet define-xml">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#options_2" class="md-nav__link">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fleet-add-acrf" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Options
+        fleet add-acrf
       
     </span>
   </a>
   
 </li>
-        
-          <li class="md-nav__item">
-  <a href="#examples_2" class="md-nav__link">
+      
+        <li class="md-nav__item">
+  <a href="#fleet-add-ct" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Examples
+        fleet add-ct
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fleet-add-rule" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fleet add-rule
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fleet-check-rule" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fleet check-rule
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fleet-install-engine" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fleet install-engine
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fleet-uninstall-engine" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fleet uninstall-engine
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fleet-doctor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fleet doctor
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fleet-derivation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fleet derivation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="fleet derivation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#fleet-derivation-add" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fleet derivation add
       
     </span>
   </a>
@@ -880,10 +1078,60 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#fleet-mcp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fleet mcp
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fleet-lsp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fleet lsp
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
       
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ide-tooling/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    IDE & AI Tooling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
     </li>
   
 
@@ -1041,6 +1289,62 @@
   
   
     <li class="md-nav__item">
+      <a href="../../concepts/coming-from-sas/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coming from SAS
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/pick/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Event-Priority Derivation (pick)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../concepts/tdd/" class="md-nav__link">
         
   
@@ -1049,6 +1353,34 @@
     
   
     Trial Design Domains
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/validation-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Validation with CORE
   
 
     
@@ -1097,6 +1429,62 @@
   
   
     <li class="md-nav__item">
+      <a href="../../concepts/comparison/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Comparing Datasets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/exports/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Exporting Datasets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../concepts/advanced/" class="md-nav__link">
         
   
@@ -1105,6 +1493,34 @@
     
   
     Advanced Patterns
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/interactive-explorer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Interactive Explorer
   
 
     
@@ -1242,14 +1658,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../examples/01_code_driven_pipeline/" class="md-nav__link">
+      <a href="../../examples/tdd_pipeline/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Code-Driven Pipeline (Inline)
+    Trial Design (offline)
   
 
     
@@ -1270,14 +1686,70 @@
   
   
     <li class="md-nav__item">
-      <a href="../../examples/02_spec_driven_pipeline/" class="md-nav__link">
+      <a href="../../examples/adtte_pipeline/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Spec-Driven Pipeline with Code Extensions
+    ADTTE (time-to-event)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/tlg_pipeline/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TLG from a Spec
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/01_code_driven_pipeline/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code-Driven Pipeline (Inline)
   
 
     
@@ -1695,6 +2167,62 @@
   
   
     <li class="md-nav__item">
+      <a href="../../api/introspect/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tooling Introspection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/comparison/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Comparison
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../api/core/" class="md-nav__link">
         
   
@@ -1703,6 +2231,34 @@
     
   
     Core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/run/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Study run
   
 
     
@@ -1893,15 +2449,37 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#bootstrapping-pipeline" class="md-nav__link">
+  <a href="#conventions" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Bootstrapping Pipeline
+        Conventions
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Bootstrapping Pipeline">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#command-inventory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Command inventory
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fleet-init" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fleet init
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="fleet init">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -1937,50 +2515,11 @@
   
 </li>
         
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#standalone-commands" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Standalone Commands
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#fleet-init-ct_1" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        fleet init-ct
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="fleet init-ct">
-      <ul class="md-nav__list">
-        
           <li class="md-nav__item">
-  <a href="#options" class="md-nav__link">
+  <a href="#fleet-init-rules" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Options
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#examples" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Examples
+        fleet init rules
       
     </span>
   </a>
@@ -1993,22 +2532,88 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#fleet-add-ct" class="md-nav__link">
+  <a href="#fleet-run" class="md-nav__link">
     <span class="md-ellipsis">
       
-        fleet add-ct
+        fleet run
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="fleet add-ct">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fleet-validate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fleet validate
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fleet-check" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fleet check
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fleet-compare" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fleet compare
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fleet-new" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fleet new
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fleet-migrate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fleet migrate
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fleet-tdd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fleet tdd
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="fleet tdd">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#options_1" class="md-nav__link">
+  <a href="#fleet-tdd-build" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Options
+        fleet tdd build
       
     </span>
   </a>
@@ -2016,10 +2621,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#examples_1" class="md-nav__link">
+  <a href="#fleet-tdd-ctgov" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Examples
+        fleet tdd ctgov
       
     </span>
   </a>
@@ -2027,10 +2632,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#typical-output" class="md-nav__link">
+  <a href="#fleet-tdd-audit" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Typical output
+        fleet tdd audit
       
     </span>
   </a>
@@ -2043,22 +2648,66 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#workflow" class="md-nav__link">
+  <a href="#fleet-tlg" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Workflow
+        fleet tlg
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Workflow">
+    <nav class="md-nav" aria-label="fleet tlg">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#source-of-truth" class="md-nav__link">
+  <a href="#fleet-tlg-list" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Source of truth
+        fleet tlg list
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fleet-tlg-schema" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fleet tlg schema
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fleet-tlg-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fleet tlg run
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fleet-tlg-explore" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fleet tlg explore
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fleet-tlg-export" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fleet tlg export
       
     </span>
   </a>
@@ -2079,25 +2728,102 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="fleet define-xml">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#options_2" class="md-nav__link">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fleet-add-acrf" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Options
+        fleet add-acrf
       
     </span>
   </a>
   
 </li>
-        
-          <li class="md-nav__item">
-  <a href="#examples_2" class="md-nav__link">
+      
+        <li class="md-nav__item">
+  <a href="#fleet-add-ct" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Examples
+        fleet add-ct
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fleet-add-rule" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fleet add-rule
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fleet-check-rule" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fleet check-rule
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fleet-install-engine" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fleet install-engine
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fleet-uninstall-engine" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fleet uninstall-engine
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fleet-doctor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fleet doctor
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fleet-derivation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fleet derivation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="fleet derivation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#fleet-derivation-add" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fleet derivation add
       
     </span>
   </a>
@@ -2106,6 +2832,28 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fleet-mcp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fleet mcp
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fleet-lsp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fleet lsp
+      
+    </span>
+  </a>
   
 </li>
       
@@ -2130,34 +2878,136 @@
 
 
 <h1 id="cli-reference">CLI Reference<a class="headerlink" href="#cli-reference" title="Permanent link">&para;</a></h1>
-<p>Fleet provides the <code>fleet</code> command-line tool for bootstrapping studies, generating define specs, managing CDISC Controlled Terminology, and producing Define-XML. Commands that query the CDISC Library require a valid <code>CDISC_API_KEY</code> — set it in a <code>.env</code> file at your project root or as an environment variable.</p>
+<!-- AUTO-GENERATED by scripts/gen_cli_docs.py — do not edit by hand.
+     Regenerate with: uv run python scripts/gen_cli_docs.py -->
+
+<p>Fleet ships the <code>fleet</code> command-line tool for
+bootstrapping studies, executing derivation pipelines, validating datasets,
+generating Define-XML, managing CDISC Controlled Terminology, and rendering
+TLGs. Commands that query the CDISC Library require a valid <code>CDISC_API_KEY</code> —
+set it in a <code>.env</code> file at your project root or as an environment variable.
+Fleet reads only this key from <code>.env</code>; set <code>CDISC_BASE_URL</code>, proxies and
+<code>FLEET_*</code> variables in the shell.</p>
 <div class="language-bash highlight"><span class="filename">.env</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nv">CDISC_API_KEY</span><span class="o">=</span>your-api-key-here
 </span></code></pre></div>
+<h2 id="conventions">Conventions<a class="headerlink" href="#conventions" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Config discovery</strong> — every command that needs <code>study_config.yaml</code> finds
+  it git-style: the current directory first, then each parent. Pass
+  <code>--config &lt;path&gt;</code> to override.</li>
+<li><strong>Exit codes</strong> — <code>0</code> success, <code>1</code> on a Fleet error (a single clean message
+  on stderr), <code>2</code> on a usage error (missing/unknown command or flag).
+  <code>fleet compare</code> turns its verdict into the exit code: <code>0</code> equal, <code>1</code>
+  different, <code>2</code> the comparison could not run. <code>fleet doctor</code> exits <code>1</code>
+  when the study config or the rules engine has a cross.</li>
+<li><strong>Errors</strong> go to <strong>stderr</strong>; results go to stdout. A bad YAML file, a
+  corrupt input file or a folder that cannot be written gives one line. Set
+  <code>FLEET_DEBUG=1</code> to see the Python traceback.</li>
+<li><strong>Comments</strong> — <code>fleet add-acrf</code> and <code>fleet tdd ctgov --write</code> edit the
+  YAML file as text, so its comments stay. When no parameter is new,
+  <code>fleet tdd ctgov --write</code> does not write the file. A layout that the text
+  edit does not handle (a flow-style block) is written again through YAML,
+  with a warning that counts the comment lines that are lost.</li>
+<li><strong>Run log</strong> — keep the output of a run in a file:
+  <code>fleet run &gt; run.log 2&gt;&amp;1</code>.</li>
+<li><code>fleet --version</code> prints the installed version.</li>
+</ul>
+<p>Run <code>fleet &lt;command&gt; --help</code> for the authoritative, always-current usage.</p>
+<h2 id="command-inventory">Command inventory<a class="headerlink" href="#command-inventory" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="#fleet-init"><code>fleet init</code></a></td>
+<td>Bootstrapping pipeline: cfg → define → ct → rules.</td>
+</tr>
+<tr>
+<td><a href="#fleet-run"><code>fleet run</code></a></td>
+<td>Execute define.yaml derivation pipelines and write datasets.</td>
+</tr>
+<tr>
+<td><a href="#fleet-validate"><code>fleet validate</code></a></td>
+<td>Validate datasets with the CDISC Rules Engine, one engine run per standard. Every finding blocks unless validation.accepted lists it (exit 0 nothing blocks, 1 a finding blocks, 2 a dataset could not run).</td>
+</tr>
+<tr>
+<td><a href="#fleet-check"><code>fleet check</code></a></td>
+<td>CI gate: config parse + define.yaml schema + codelists.py + run setup + custom-rule YAMLs.</td>
+</tr>
+<tr>
+<td><a href="#fleet-compare"><code>fleet compare</code></a></td>
+<td>Compare a candidate dataset against a base on keys (exit 0 equal, 1 different, 2 could not run).</td>
+</tr>
+<tr>
+<td><a href="#fleet-new"><code>fleet new</code></a></td>
+<td>Bootstrap a study: init cfg → define → ct → rules, one confirmation.</td>
+</tr>
+<tr>
+<td><a href="#fleet-migrate"><code>fleet migrate</code></a></td>
+<td>Rewrite removed pre-alpha spellings: Python verbs and kwargs (libcst), or, with --spec, define.yaml algorithms and keys (ADR-0008).</td>
+</tr>
+<tr>
+<td><a href="#fleet-tdd"><code>fleet tdd</code></a></td>
+<td>Trial design workflow: build/audit TDD datasets from trial_design.yaml.</td>
+</tr>
+<tr>
+<td><a href="#fleet-tlg"><code>fleet tlg</code></a></td>
+<td>TLG workflow: list templates, run/explore YAML specs, export summaries.</td>
+</tr>
+<tr>
+<td><a href="#fleet-define-xml"><code>fleet define-xml</code></a></td>
+<td>Generate Define-XML 2.1 from a define.yaml specification.</td>
+</tr>
+<tr>
+<td><a href="#fleet-add-acrf"><code>fleet add-acrf</code></a></td>
+<td>Declare the annotated CRF document (study.documents block) in define.yaml.</td>
+</tr>
+<tr>
+<td><a href="#fleet-add-ct"><code>fleet add-ct</code></a></td>
+<td>Add domains to an existing codelists.py (preserves existing).</td>
+</tr>
+<tr>
+<td><a href="#fleet-add-rule"><code>fleet add-rule</code></a></td>
+<td>Scaffold a new custom validation rule YAML.</td>
+</tr>
+<tr>
+<td><a href="#fleet-check-rule"><code>fleet check-rule</code></a></td>
+<td>Validate a custom rule YAML (syntax, structure, schema).</td>
+</tr>
+<tr>
+<td><a href="#fleet-install-engine"><code>fleet install-engine</code></a></td>
+<td>Download the CDISC Rules Engine binary for validation.</td>
+</tr>
+<tr>
+<td><a href="#fleet-uninstall-engine"><code>fleet uninstall-engine</code></a></td>
+<td>Remove the managed CDISC Rules Engine binary.</td>
+</tr>
+<tr>
+<td><a href="#fleet-doctor"><code>fleet doctor</code></a></td>
+<td>Check Fleet setup: engine, API key, codelists.py, optional extras.</td>
+</tr>
+<tr>
+<td><a href="#fleet-derivation"><code>fleet derivation</code></a></td>
+<td>Scaffold and manage study-specific derivations.</td>
+</tr>
+<tr>
+<td><a href="#fleet-mcp"><code>fleet mcp</code></a></td>
+<td>Serve Fleet tools to MCP-capable assistants (requires the 'mcp' extra).</td>
+</tr>
+<tr>
+<td><a href="#fleet-lsp"><code>fleet lsp</code></a></td>
+<td>Language server for define.yaml files (requires the 'lsp' extra).</td>
+</tr>
+</tbody>
+</table>
 <hr />
-<h2 id="bootstrapping-pipeline">Bootstrapping Pipeline<a class="headerlink" href="#bootstrapping-pipeline" title="Permanent link">&para;</a></h2>
-<p>The recommended way to start a new study. Run these three commands in order:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>fleet<span class="w"> </span>init<span class="w"> </span>cfg<span class="w">    </span>--study-id<span class="w"> </span>STUDY01<span class="w"> </span>--domains<span class="w"> </span>DM,AE,VS,EX<span class="w"> </span>--adam-datasets<span class="w"> </span>ADSL,ADVS
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>fleet<span class="w"> </span>init<span class="w"> </span>define<span class="w">                      </span><span class="c1"># reads study_config.yaml, queries CDISC IG</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>fleet<span class="w"> </span>init<span class="w"> </span>ct<span class="w">                          </span><span class="c1"># reads define.yaml, downloads codelists</span>
-</span></code></pre></div>
-<div class="admonition note">
-<p class="admonition-title">Using <code>--root</code>?</p>
-</div>
-<p>If you pass <code>--root</code> to <code>init cfg</code> (e.g. <code>--root ./my_study</code>), the config is written
-to <code>./my_study/study_config.yaml</code> instead of the current directory. You must then pass
-<code>--config ./my_study/study_config.yaml</code> to every subsequent <code>init</code> command — or <code>cd</code>
-into that directory before running them:</p>
-<div class="language-text highlight"><pre><span></span><code>```bash
-fleet init cfg --study-id STUDY01 --domains DM,AE,VS,EX --root ./my_study
-fleet init define --config ./my_study/study_config.yaml
-fleet init ct     --config ./my_study/study_config.yaml
-```
-</code></pre></div>
+<h2 id="fleet-init"><code>fleet init</code><a class="headerlink" href="#fleet-init" title="Permanent link">&para;</a></h2>
+<p>Run one step of the study bootstrap: cfg, then define, then ct, then rules. Use it to continue a study that fleet new started, to run a step again with --force, or to build a study one step at a time. For a new study in one command, use fleet new.</p>
 <h3 id="fleet-init-cfg"><code>fleet init cfg</code><a class="headerlink" href="#fleet-init-cfg" title="Permanent link">&para;</a></h3>
-<p>Create <code>study_config.yaml</code> and the study directory structure.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>fleet<span class="w"> </span>init<span class="w"> </span>cfg<span class="w"> </span>--study-id<span class="w"> </span>CDISCPILOT01<span class="w"> </span>--company<span class="w"> </span><span class="s2">&quot;CDISC&quot;</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span>--domains<span class="w"> </span>DM,AE,VS,EX<span class="w"> </span>--adam-datasets<span class="w"> </span>ADSL,ADVS,ADAE<span class="w"> </span>--root<span class="w"> </span>./my_study
-</span></code></pre></div>
 <table>
 <thead>
 <tr>
@@ -2170,59 +3020,56 @@ fleet init ct     --config ./my_study/study_config.yaml
 <tr>
 <td><code>--study-id</code></td>
 <td><em>(required)</em></td>
-<td>Study identifier</td>
+<td>Study identifier (e.g. CDISCPILOT01).</td>
 </tr>
 <tr>
 <td><code>--company</code></td>
 <td><em>(none)</em></td>
-<td>Originator / company name</td>
+<td>Originator / company name (study.originator in define.yaml).</td>
+</tr>
+<tr>
+<td><code>--description</code></td>
+<td><em>(none)</em></td>
+<td>Study description (study.description in define.yaml).</td>
 </tr>
 <tr>
 <td><code>--domains</code></td>
 <td><em>(none)</em></td>
-<td>Comma-separated SDTM domains</td>
+<td>Comma-separated SDTM domains (e.g. DM,AE,VS,EX).</td>
 </tr>
 <tr>
 <td><code>--adam-datasets</code></td>
 <td><em>(none)</em></td>
-<td>Comma-separated ADaM datasets</td>
+<td>Comma-separated ADaM datasets (e.g. ADSL,ADVS,ADAE).</td>
 </tr>
 <tr>
 <td><code>--ig</code></td>
 <td><code>3-4</code></td>
-<td>SDTM IG version</td>
+<td>SDTM IG version (default: 3-4).</td>
 </tr>
 <tr>
 <td><code>--adam-ig</code></td>
-<td><code>1-1</code></td>
-<td>ADaM IG version</td>
+<td><code>1-3</code></td>
+<td>ADaM IG version (default: 1-3).</td>
 </tr>
 <tr>
 <td><code>--package</code></td>
 <td><code>sdtmct-2023-12-15</code></td>
-<td>CT package version</td>
+<td>SDTM CT package version (default: sdtmct-2023-12-15).</td>
+</tr>
+<tr>
+<td><code>--adam-package</code></td>
+<td><em>(none)</em></td>
+<td>ADaM CT package, for the codelists only ADaM CT holds (DTYPE). Default with ADaM datasets: adamct-2023-06-30, the latest on or before the default SDTM package; required with another --package.</td>
 </tr>
 <tr>
 <td><code>--root</code> / <code>-r</code></td>
 <td><code>.</code></td>
-<td>Study root directory</td>
+<td>Study root directory (default: current directory).</td>
 </tr>
 </tbody>
 </table>
-<div class="admonition warning">
-<p class="admonition-title">Non-default <code>--root</code> requires <code>--config</code> in subsequent commands</p>
-</div>
-<p>When <code>--root</code> is set to anything other than <code>.</code>, the generated <code>study_config.yaml</code>
-lives inside that folder. The next commands (<code>fleet init define</code>, <code>fleet init ct</code>)
-default to looking for <code>study_config.yaml</code> in the <strong>current working directory</strong>.
-Pass <code>--config &lt;root&gt;/study_config.yaml</code> explicitly, or <code>cd</code> into the root first.</p>
 <h3 id="fleet-init-define"><code>fleet init define</code><a class="headerlink" href="#fleet-init-define" title="Permanent link">&para;</a></h3>
-<p>Generate <code>define.yaml</code> files pre-populated with standard variables from the CDISC Library IG. Reads domains/datasets from <code>study_config.yaml</code>.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>fleet<span class="w"> </span>init<span class="w"> </span>define<span class="w">                              </span><span class="c1"># both SDTM + ADaM (default)</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>fleet<span class="w"> </span>init<span class="w"> </span>define<span class="w"> </span>--sdtm-only<span class="w">                  </span><span class="c1"># SDTM only</span>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>fleet<span class="w"> </span>init<span class="w"> </span>define<span class="w"> </span>--adam-only<span class="w">                  </span><span class="c1"># ADaM only</span>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>fleet<span class="w"> </span>init<span class="w"> </span>define<span class="w"> </span>--config<span class="w"> </span>path/to/config.yaml<span class="w"> </span><span class="c1"># custom config location</span>
-</span></code></pre></div>
 <table>
 <thead>
 <tr>
@@ -2234,34 +3081,27 @@ Pass <code>--config &lt;root&gt;/study_config.yaml</code> explicitly, or <code>c
 <tbody>
 <tr>
 <td><code>--config</code> / <code>-c</code></td>
-<td><code>study_config.yaml</code></td>
-<td>Path to config file</td>
+<td><em>(none)</em></td>
+<td>Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style).</td>
 </tr>
 <tr>
 <td><code>--sdtm-only</code></td>
-<td><em>(off)</em></td>
-<td>Generate SDTM define only</td>
+<td><em>(none)</em></td>
+<td>Generate SDTM define.yaml only (skip ADaM).</td>
 </tr>
 <tr>
 <td><code>--adam-only</code></td>
-<td><em>(off)</em></td>
-<td>Generate ADaM define only</td>
+<td><em>(none)</em></td>
+<td>Generate ADaM define.yaml only (skip SDTM).</td>
 </tr>
 <tr>
 <td><code>--force</code></td>
-<td><em>(off)</em></td>
-<td>Overwrite existing define.yaml files</td>
+<td><em>(none)</em></td>
+<td>Overwrite existing define.yaml files.</td>
 </tr>
 </tbody>
 </table>
-<p>The generated YAML includes variable names, labels, types, mandatory flags, <strong>CDISC core designations</strong> (<code>Req</code>, <code>Exp</code>, <code>Perm</code>, <code>Conditionally Required</code>), codelist references, and origin hints — all sourced from the CDISC Library. The <code>core</code> field enables graduated check severity (see <a href="#datasetChecker">DatasetChecker</a> below). Variables are created <strong>without</strong> derivation blocks (carry-through columns); add derivation blocks to drive the pipeline.</p>
 <h3 id="fleet-init-ct"><code>fleet init ct</code><a class="headerlink" href="#fleet-init-ct" title="Permanent link">&para;</a></h3>
-<p>Generate <code>codelists.py</code> from the codelist references in the <code>define.yaml</code> files. Reads all define specs and downloads the referenced codelists from the CDISC Library.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>fleet<span class="w"> </span>init<span class="w"> </span>ct<span class="w">                                </span><span class="c1"># reads config + both defines</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>fleet<span class="w"> </span>init<span class="w"> </span>ct<span class="w"> </span>--config<span class="w"> </span>path/to/config.yaml<span class="w">   </span><span class="c1"># custom config location</span>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>fleet<span class="w"> </span>init<span class="w"> </span>ct<span class="w"> </span>--no-docs<span class="w">                      </span><span class="c1"># lightweight file</span>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>fleet<span class="w"> </span>init<span class="w"> </span>ct<span class="w"> </span>--force<span class="w">                        </span><span class="c1"># overwrite existing codelists.py</span>
-</span></code></pre></div>
 <table>
 <thead>
 <tr>
@@ -2273,30 +3113,311 @@ Pass <code>--config &lt;root&gt;/study_config.yaml</code> explicitly, or <code>c
 <tbody>
 <tr>
 <td><code>--config</code> / <code>-c</code></td>
-<td><code>study_config.yaml</code></td>
-<td>Path to config file</td>
+<td><em>(none)</em></td>
+<td>Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style).</td>
 </tr>
 <tr>
 <td><code>--no-docs</code></td>
-<td><em>(off)</em></td>
-<td>Omit definitions and preferred terms</td>
+<td><em>(none)</em></td>
+<td>Omit definitions and preferred terms from generated code.</td>
 </tr>
 <tr>
 <td><code>--force</code></td>
-<td><em>(off)</em></td>
-<td>Overwrite existing codelists.py</td>
+<td><em>(none)</em></td>
+<td>Overwrite existing codelists.py.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="fleet-init-rules"><code>fleet init rules</code><a class="headerlink" href="#fleet-init-rules" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--config</code> / <code>-c</code></td>
+<td><em>(none)</em></td>
+<td>Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style).</td>
+</tr>
+<tr>
+<td><code>--sdtm-only</code></td>
+<td><em>(none)</em></td>
+<td>Fetch SDTM rules only (skip ADaM).</td>
+</tr>
+<tr>
+<td><code>--adam-only</code></td>
+<td><em>(none)</em></td>
+<td>Fetch ADaM rules only (skip SDTM).</td>
+</tr>
+<tr>
+<td><code>--force</code></td>
+<td><em>(none)</em></td>
+<td>Overwrite existing rule files.</td>
 </tr>
 </tbody>
 </table>
 <hr />
-<h2 id="standalone-commands">Standalone Commands<a class="headerlink" href="#standalone-commands" title="Permanent link">&para;</a></h2>
-<p>These commands work independently of the bootstrapping pipeline.</p>
-<h2 id="fleet-init-ct_1"><code>fleet init-ct</code><a class="headerlink" href="#fleet-init-ct_1" title="Permanent link">&para;</a></h2>
-<p>Bootstrap a <code>codelists.py</code> from the CDISC Library SDTM Implementation Guide.</p>
-<p>This is a <strong>one-time</strong> operation when setting up a new study. It queries the SDTM IG to discover every codelist referenced by variables in the requested domains, then downloads the term definitions and generates a typed Python module.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>fleet<span class="w"> </span>init-ct<span class="w"> </span>--domains<span class="w"> </span>DM,AE,VS,EX<span class="w"> </span>--output<span class="w"> </span>specs/my_study/sdtm/codelists.py
-</span></code></pre></div>
-<h3 id="options">Options<a class="headerlink" href="#options" title="Permanent link">&para;</a></h3>
+<h2 id="fleet-run"><code>fleet run</code><a class="headerlink" href="#fleet-run" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--dataset</code></td>
+<td><em>(none)</em></td>
+<td>Dataset to build (repeatable). Default: every dataset in the define files.</td>
+</tr>
+<tr>
+<td><code>--config</code> / <code>-c</code></td>
+<td><em>(none)</em></td>
+<td>Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style).</td>
+</tr>
+<tr>
+<td><code>--out</code> / <code>--output</code> / <code>-o</code></td>
+<td><em>(none)</em></td>
+<td>Output directory for every dataset. Default: the configured data/sdtm and data/adam directories. Fleet only writes here: inputs are read from the run, a declared path:, the raw directory (type: raw) or the data directory of the input's standard (type: dataset).</td>
+</tr>
+<tr>
+<td><code>--format</code></td>
+<td><em>(none)</em></td>
+<td>Output format of every dataset. Default: the output_format of the dataset, else of define.yaml, else parquet (the rule of the Define-XML leaf). Choices: <code>parquet</code>, <code>xpt</code>, <code>dataset-json</code>.</td>
+</tr>
+<tr>
+<td><code>--strict</code> / <code>--no-strict</code></td>
+<td><em>(on)</em></td>
+<td>Raise on unknown spec algorithms (default). --no-strict warns and skips.</td>
+</tr>
+<tr>
+<td><code>--overwrite</code></td>
+<td><em>(none)</em></td>
+<td>Let a spec derivation replace a column that the input already has. Default off, so a QC run keeps the guard.</td>
+</tr>
+<tr>
+<td><code>--check</code></td>
+<td><em>(none)</em></td>
+<td>Stop before the write when a variable's values do not match its define type (for CI). Without it the mismatch is a warning on stderr.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="fleet-validate"><code>fleet validate</code><a class="headerlink" href="#fleet-validate" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Argument</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>paths</code></td>
+<td>Dataset files or directories (parquet / csv / xpt / sas7bdat). Default: the configured sdtm_data and adam_data directories.</td>
+</tr>
+</tbody>
+</table>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--config</code> / <code>-c</code></td>
+<td><em>(none)</em></td>
+<td>Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style).</td>
+</tr>
+<tr>
+<td><code>--standard</code></td>
+<td><em>(none)</em></td>
+<td>Force the standard. Default: the configured data directory that holds the dataset, else AD* datasets → adam, others → sdtm. Choices: <code>sdtm</code>, <code>adam</code>.</td>
+</tr>
+<tr>
+<td><code>--version</code></td>
+<td><em>(none)</em></td>
+<td>IG version. It applies to every dataset of the run, SDTM and ADaM. Default: the sdtm/adam ig_version declared in the discovered study_config.yaml (3.4 / 1.3 outside a study).</td>
+</tr>
+<tr>
+<td><code>--define</code></td>
+<td><em>(none)</em></td>
+<td>Define-XML file that CORE checks with the datasets (CORE -dxp). Opt-in: Fleet never passes a define by default.</td>
+</tr>
+<tr>
+<td><code>--custom-rules</code></td>
+<td><em>(none)</em></td>
+<td>Directory of custom validation rule YAML files, relative to the working directory. Default: validation.custom_rules from the discovered study_config.yaml.</td>
+</tr>
+<tr>
+<td><code>--timeout</code></td>
+<td><em>(none)</em></td>
+<td>Seconds before an engine run is stopped. Default: validation.timeout from the discovered study_config.yaml, else 300.</td>
+</tr>
+<tr>
+<td><code>--report</code></td>
+<td><em>(none)</em></td>
+<td>Write an HTML findings report to PATH.</td>
+</tr>
+<tr>
+<td><code>--encoding</code></td>
+<td><em>(none)</em></td>
+<td>Text encoding of the CSV and SAS files, e.g. iso-8859-1 for files from a WLATIN1 SAS session (default: UTF-8).</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="fleet-check"><code>fleet check</code><a class="headerlink" href="#fleet-check" title="Permanent link">&para;</a></h2>
+<p>CI gate: parse the study config, check each define.yaml against its schema, check codelists.py against ct.package, ct.adam_package and the define.yaml files, build the validation run setup for SDTM and ADaM with no datasets, and check each custom rule YAML. An unsupported sdtm.ig_version or adam.ig_version and a configured validation.custom_rules directory that does not exist fail the gate. A missing rules engine and an unset CDISC_API_KEY are warnings only, because CI installs no engine. Exit 1 on any failure, else 0.</p>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--config</code> / <code>-c</code></td>
+<td><em>(none)</em></td>
+<td>Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style).</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="fleet-compare"><code>fleet compare</code><a class="headerlink" href="#fleet-compare" title="Permanent link">&para;</a></h2>
+<p>PROC COMPARE analogue: pair the two datasets on --keys, match variables by name and print the comparison report. --pairs compares variables named differently on each side and --variables restricts the comparison to the ones that matter. Equality is exact unless --abs-tol, --rel-tol or --ignore-trailing-whitespace widens it. --by sections the report per group and --allow-duplicates pairs duplicate keys by position. Exit 0 when the datasets are equal, 1 when they differ, 2 when the comparison could not run (unreadable file, missing keys, duplicate keys without --allow-duplicates, a negative tolerance, a --variables list of keys only, --out or --report not writable or naming an input file, an internal error; FLEET_DEBUG=1 prints its traceback).</p>
+<table>
+<thead>
+<tr>
+<th>Argument</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>base</code></td>
+<td>The reference dataset (parquet / csv / xpt / sas7bdat; SAS formats need the io extra).</td>
+</tr>
+<tr>
+<td><code>candidate</code></td>
+<td>The dataset measured against the base (same formats).</td>
+</tr>
+</tbody>
+</table>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--keys</code></td>
+<td><em>(required)</em></td>
+<td>Comma-separated variables that identify one observation on each side, e.g. USUBJID,AESEQ. Required; keys are never looked up.</td>
+</tr>
+<tr>
+<td><code>--by</code></td>
+<td><em>(none)</em></td>
+<td>Comma-separated variables to section the report by, e.g. TRT01P. They are prepended to --keys automatically, so they need not be repeated there. The observation and values summaries are also reported per group, and a group present on one side only is flagged and listed; the verdict stays global.</td>
+</tr>
+<tr>
+<td><code>--pairs</code></td>
+<td><em>(none)</em></td>
+<td>Comma-separated variable pairs whose sides carry different names, e.g. WEIGHT=WT. Applied on top of the automatic name matching, so a renamed column is compared rather than reported missing; the report names it after the base. A pair whose candidate variable is absent reports the base one as missing from the candidate.</td>
+</tr>
+<tr>
+<td><code>--variables</code></td>
+<td><em>(none)</em></td>
+<td>Comma-separated variables to restrict the comparison to, in base names, so a work-in-progress candidate is checked on the columns that are finished. A variable outside the list is ignored on both sides: neither compared nor reported as missing.</td>
+</tr>
+<tr>
+<td><code>--abs-tol</code></td>
+<td><code>0.0</code></td>
+<td>Absolute tolerance on the numeric variables (default: 0, exact). A numeric pair differs when the absolute difference exceeds max(--abs-tol, --rel-tol x |base|).</td>
+</tr>
+<tr>
+<td><code>--rel-tol</code></td>
+<td><code>0.0</code></td>
+<td>Relative tolerance on the numeric variables, as a fraction of the base value (default: 0, exact). It anchors on the base because the base is the reference, as in SAS: 0.01 is one percent of the base.</td>
+</tr>
+<tr>
+<td><code>--ignore-trailing-whitespace</code></td>
+<td><em>(none)</em></td>
+<td>Strip trailing whitespace from both sides of a string before comparing, so a legacy SAS dataset's padded character values equal Fleet's stripped ones. Leading whitespace still differs.</td>
+</tr>
+<tr>
+<td><code>--blank-is-missing</code></td>
+<td><em>(none)</em></td>
+<td>Read an empty string as missing on both sides, keys included, as SAS does. Use it when one side comes from a tool that kept blanks as empty strings (an R data frame without convert_blanks_to_na). A SAS file always reads a blank as missing.</td>
+</tr>
+<tr>
+<td><code>--text</code></td>
+<td><em>(none)</em></td>
+<td>Comma-separated CSV columns to read as text, the equivalent of a SAS $ informat, e.g. LBORRES. A CSV file holds no types: a column is text when a value on either side has a leading zero or is not a number, a number otherwise, and the other side's type when that side is not a CSV file.</td>
+</tr>
+<tr>
+<td><code>--encoding</code></td>
+<td><em>(none)</em></td>
+<td>Text encoding of a CSV or SAS file, e.g. iso-8859-1 for a file from a WLATIN1 SAS session (default: UTF-8).</td>
+</tr>
+<tr>
+<td><code>--allow-duplicates</code></td>
+<td><em>(none)</em></td>
+<td>Pair duplicate keys by their position within each key group instead of refusing to run. The report then counts the duplicates per side, raises the duplicate_keys flag and warns at the top: order within a key group decides which observations pair.</td>
+</tr>
+<tr>
+<td><code>--all</code></td>
+<td><em>(none)</em></td>
+<td>Print every unequal value (default: 50 per variable, 500 overall).</td>
+</tr>
+<tr>
+<td><code>--format</code></td>
+<td><code>text</code></td>
+<td>Output format: the text report, or one JSON document (verdict, flags, summaries, listing within the print limits, settings, Fleet version) and nothing else on stdout (default: text). Choices: <code>text</code>, <code>json</code>.</td>
+</tr>
+<tr>
+<td><code>--out</code></td>
+<td><em>(none)</em></td>
+<td>Also write the complete value listing (never truncated) to PATH as parquet, e.g. differences.parquet.</td>
+</tr>
+<tr>
+<td><code>--report</code></td>
+<td><em>(none)</em></td>
+<td>Also write a self-contained HTML report to PATH for a reviewer without Python: structural findings as chips, then every mismatched observation with the base and candidate values side by side, one collapsible block per variable.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="fleet-new"><code>fleet new</code><a class="headerlink" href="#fleet-new" title="Permanent link">&para;</a></h2>
+<p>Create a new study in the folder ./STUDY_ID: the study_config.yaml and the folders, then the define.yaml files, codelists.py and the cached rules from the CDISC Library. Use it once, at the start of a study. To run one step again, or to continue after a missing CDISC_API_KEY, use fleet init.</p>
+<table>
+<thead>
+<tr>
+<th>Argument</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>study_id</code></td>
+<td>Study identifier (e.g. STUDY01).</td>
+</tr>
+</tbody>
+</table>
 <table>
 <thead>
 <tr>
@@ -2308,86 +3429,470 @@ Pass <code>--config &lt;root&gt;/study_config.yaml</code> explicitly, or <code>c
 <tbody>
 <tr>
 <td><code>--domains</code></td>
-<td><em>(required)</em></td>
-<td>Comma-separated SDTM domain abbreviations (e.g. <code>DM,AE,VS,EX,LB</code>)</td>
+<td><em>(none)</em></td>
+<td>Comma-separated SDTM domains (e.g. DM,AE,VS,EX).</td>
 </tr>
 <tr>
-<td><code>--output</code> / <code>-o</code></td>
-<td><code>codelists.py</code></td>
-<td>Output file path</td>
+<td><code>--adam-datasets</code></td>
+<td><em>(none)</em></td>
+<td>Comma-separated ADaM datasets (e.g. ADSL,ADVS,ADAE).</td>
+</tr>
+<tr>
+<td><code>--company</code></td>
+<td><em>(none)</em></td>
+<td>Originator / company name (study.originator in define.yaml).</td>
+</tr>
+<tr>
+<td><code>--description</code></td>
+<td><em>(none)</em></td>
+<td>Study description (study.description in define.yaml).</td>
 </tr>
 <tr>
 <td><code>--ig</code></td>
 <td><code>3-4</code></td>
-<td>SDTM IG version</td>
+<td>SDTM IG version (default: 3-4).</td>
+</tr>
+<tr>
+<td><code>--adam-ig</code></td>
+<td><code>1-3</code></td>
+<td>ADaM IG version (default: 1-3).</td>
 </tr>
 <tr>
 <td><code>--package</code></td>
 <td><code>sdtmct-2023-12-15</code></td>
-<td>CT package version to download terms from</td>
+<td>SDTM CT package version (default: sdtmct-2023-12-15).</td>
 </tr>
 <tr>
-<td><code>--no-docs</code></td>
-<td><em>(off)</em></td>
-<td>Omit definitions and preferred terms (smaller file)</td>
+<td><code>--adam-package</code></td>
+<td><em>(none)</em></td>
+<td>ADaM CT package, for the codelists only ADaM CT holds (DTYPE). Default with ADaM datasets: adamct-2023-06-30, the latest on or before the default SDTM package; required with another --package.</td>
+</tr>
+<tr>
+<td><code>--root</code> / <code>-r</code></td>
+<td><em>(none)</em></td>
+<td>Study root directory (default: ./STUDY_ID). Pass --root . to use the current one.</td>
+</tr>
+<tr>
+<td><code>--yes</code> / <code>-y</code></td>
+<td><em>(none)</em></td>
+<td>Skip the confirmation prompt.</td>
 </tr>
 </tbody>
 </table>
-<h3 id="examples">Examples<a class="headerlink" href="#examples" title="Permanent link">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Standard bootstrap for a typical study</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>fleet<span class="w"> </span>init-ct<span class="w"> </span>--domains<span class="w"> </span>DM,AE,VS,EX<span class="w"> </span>--output<span class="w"> </span>specs/cdiscpilot01/sdtm/codelists.py
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="c1"># Pin to a specific CT version</span>
-</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>fleet<span class="w"> </span>init-ct<span class="w"> </span>--domains<span class="w"> </span>DM,AE<span class="w"> </span>--ig<span class="w"> </span><span class="m">3</span>-4<span class="w"> </span>--package<span class="w"> </span>sdtmct-2025-09-26<span class="w"> </span>--output<span class="w"> </span>codelists.py
-</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>
-</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="c1"># Generate a lightweight file without definitions</span>
-</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>fleet<span class="w"> </span>init-ct<span class="w"> </span>--domains<span class="w"> </span>DM<span class="w"> </span>--no-docs<span class="w"> </span>--output<span class="w"> </span>codelists.py
-</span></code></pre></div>
 <hr />
-<h2 id="fleet-add-ct"><code>fleet add-ct</code><a class="headerlink" href="#fleet-add-ct" title="Permanent link">&para;</a></h2>
-<p>Add domains to an <strong>existing</strong> <code>codelists.py</code> without losing previously generated codelists.</p>
-<p>This command reads the existing file, detects which concept IDs are already present, discovers the new codelists required by the requested domains, and regenerates the file with the merged set.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>fleet<span class="w"> </span>add-ct<span class="w"> </span>--domains<span class="w"> </span>LB,CM<span class="w"> </span>--output<span class="w"> </span>specs/my_study/sdtm/codelists.py
-</span></code></pre></div>
-<h3 id="options_1">Options<a class="headerlink" href="#options_1" title="Permanent link">&para;</a></h3>
-<p>Same as <code>init-ct</code>. The <code>--output</code> path must point to an existing <code>codelists.py</code> (or a new file — in which case it behaves like <code>init-ct</code>).</p>
-<h3 id="examples_1">Examples<a class="headerlink" href="#examples_1" title="Permanent link">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Add lab and conmed domains to an existing file</span>
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>fleet<span class="w"> </span>add-ct<span class="w"> </span>--domains<span class="w"> </span>LB,CM<span class="w"> </span>--output<span class="w"> </span>specs/cdiscpilot01/sdtm/codelists.py
-</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
-</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="c1"># If all codelists are already present, the command reports &quot;Nothing to add&quot;</span>
-</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>fleet<span class="w"> </span>add-ct<span class="w"> </span>--domains<span class="w"> </span>DM<span class="w"> </span>--output<span class="w"> </span>specs/cdiscpilot01/sdtm/codelists.py
-</span></code></pre></div>
-<h3 id="typical-output">Typical output<a class="headerlink" href="#typical-output" title="Permanent link">&para;</a></h3>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>Adding domains: LB, CM
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>Existing file:  specs/cdiscpilot01/sdtm/codelists.py (24 codelists)
-</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>
-</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>New codelists to add: 8
-</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>Total after merge:    32
-</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>
-</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a>Updated /path/to/codelists.py — 32 codelists
-</span></code></pre></div>
+<h2 id="fleet-migrate"><code>fleet migrate</code><a class="headerlink" href="#fleet-migrate" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Argument</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>files</code></td>
+<td>Python files or directories to migrate (define.yaml files with --spec).</td>
+</tr>
+</tbody>
+</table>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--spec</code></td>
+<td><em>(none)</em></td>
+<td>Migrate define.yaml files to the verb vocabulary (fleet_spec_version 2).</td>
+</tr>
+<tr>
+<td><code>--write</code></td>
+<td><em>(none)</em></td>
+<td>Rewrite files in place (default: print a unified diff). No backup file is kept: commit the files to git first.</td>
+</tr>
+</tbody>
+</table>
 <hr />
-<h2 id="workflow">Workflow<a class="headerlink" href="#workflow" title="Permanent link">&para;</a></h2>
-<p>The recommended bootstrapping workflow for a new study:</p>
-<pre class="mermaid"><code>graph TD
-    A[New study] --&gt; B["fleet init cfg --study-id ... --domains DM,AE,VS,EX"]
-    B --&gt; C["fleet init define"]
-    C --&gt; D["fleet init ct"]
-    D --&gt; E["Edit define.yaml — add derivation blocks"]
-    E --&gt; F["Write pipelines with from codelists import SEX, RACE"]
-    F --&gt; G{Need more domains?}
-    G --&gt;|Yes| H["fleet add-ct --domains LB,CM"]
-    H --&gt; F
-    G --&gt;|No| I["fleet define-xml --spec define.yaml --output define.xml"]</code></pre>
-<h3 id="source-of-truth">Source of truth<a class="headerlink" href="#source-of-truth" title="Permanent link">&para;</a></h3>
-<p>The source of truth for which variables and codelists to generate is the <strong>CDISC Library IG model</strong>. The <code>init define</code> command queries the IG endpoints and extracts variable metadata (name, label, type, core, codelist) from each domain. The <code>init ct</code> command then reads the generated <code>define.yaml</code> to download the exact codelists referenced.</p>
+<h2 id="fleet-tdd"><code>fleet tdd</code><a class="headerlink" href="#fleet-tdd" title="Permanent link">&para;</a></h2>
+<h3 id="fleet-tdd-build"><code>fleet tdd build</code><a class="headerlink" href="#fleet-tdd-build" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--design</code></td>
+<td><em>(none)</em></td>
+<td>Path to the trial design YAML spec. Default: <metadata_sdtm>/trial_design.yaml from the discovered study_config.yaml.</td>
+</tr>
+<tr>
+<td><code>--out</code> / <code>-o</code></td>
+<td><em>(none)</em></td>
+<td>Output directory. Default: the sdtm_data directory from the discovered study_config.yaml.</td>
+</tr>
+<tr>
+<td><code>--format</code></td>
+<td><code>parquet</code></td>
+<td>Output format (default: parquet). Choices: <code>parquet</code>, <code>xpt</code>, <code>dataset-json</code>.</td>
+</tr>
+<tr>
+<td><code>--force</code></td>
+<td><em>(none)</em></td>
+<td>Write datasets even when the conformance audit reports errors.</td>
+</tr>
+<tr>
+<td><code>--config</code> / <code>-c</code></td>
+<td><em>(none)</em></td>
+<td>Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style).</td>
+</tr>
+</tbody>
+</table>
+<h3 id="fleet-tdd-ctgov"><code>fleet tdd ctgov</code><a class="headerlink" href="#fleet-tdd-ctgov" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Argument</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>nct_id</code></td>
+<td>ClinicalTrials.gov identifier (e.g. NCT04280705).</td>
+</tr>
+</tbody>
+</table>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--write</code></td>
+<td><em>(none)</em></td>
+<td>Merge the parameters into the trial design spec (new TSPARMCD/TSSEQ rows only) instead of printing YAML to stdout.</td>
+</tr>
+<tr>
+<td><code>--design</code></td>
+<td><em>(none)</em></td>
+<td>Trial design spec to merge into with --write. Default: <metadata_sdtm>/trial_design.yaml from the discovered study_config.yaml.</td>
+</tr>
+<tr>
+<td><code>--config</code> / <code>-c</code></td>
+<td><em>(none)</em></td>
+<td>Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style).</td>
+</tr>
+</tbody>
+</table>
+<h3 id="fleet-tdd-audit"><code>fleet tdd audit</code><a class="headerlink" href="#fleet-tdd-audit" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--design</code></td>
+<td><em>(none)</em></td>
+<td>Path to the trial design YAML spec. Default: <metadata_sdtm>/trial_design.yaml from the discovered study_config.yaml.</td>
+</tr>
+<tr>
+<td><code>--config</code> / <code>-c</code></td>
+<td><em>(none)</em></td>
+<td>Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style).</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="fleet-tlg"><code>fleet tlg</code><a class="headerlink" href="#fleet-tlg" title="Permanent link">&para;</a></h2>
+<h3 id="fleet-tlg-list"><code>fleet tlg list</code><a class="headerlink" href="#fleet-tlg-list" title="Permanent link">&para;</a></h3>
+<h3 id="fleet-tlg-schema"><code>fleet tlg schema</code><a class="headerlink" href="#fleet-tlg-schema" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Argument</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>template_id</code></td>
+<td>Registry template id (e.g. aet01). See <code>fleet tlg list</code>.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="fleet-tlg-run"><code>fleet tlg run</code><a class="headerlink" href="#fleet-tlg-run" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Argument</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>spec</code></td>
+<td>A spec .yaml file or a directory of spec files.</td>
+</tr>
+</tbody>
+</table>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--config</code> / <code>-c</code></td>
+<td><em>(none)</em></td>
+<td>Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style).</td>
+</tr>
+<tr>
+<td><code>--data</code></td>
+<td><em>(none)</em></td>
+<td>Analysis dataset path, repeatable. Plain PATH applies to every spec; NAME=PATH (e.g. ADAE=adae.parquet) targets the template's analysis domain.</td>
+</tr>
+<tr>
+<td><code>--adsl</code></td>
+<td><em>(none)</em></td>
+<td>ADSL dataset path (population denominators for tables).</td>
+</tr>
+<tr>
+<td><code>--output</code> / <code>-o</code></td>
+<td><em>(none)</em></td>
+<td>Output directory. Default: the configured outputs directory (current directory outside a study workspace).</td>
+</tr>
+<tr>
+<td><code>--format</code></td>
+<td><code>html</code></td>
+<td>Output format (default: html). Choices: <code>html</code>, <code>rtf</code>, <code>pdf</code>, <code>pptx</code>.</td>
+</tr>
+<tr>
+<td><code>--groupby</code></td>
+<td><em>(none)</em></td>
+<td>Treatment-arm column. Default: the spec's columns: field when it declares one, else auto-detect (TRTA → TRT01A → TRT01P).</td>
+</tr>
+<tr>
+<td><code>--adsl-groupby</code></td>
+<td><em>(none)</em></td>
+<td>ADSL arm column for the big N when ADSL lacks the analysis arm (e.g. TRT01A for an ADAE grouped by TRTA). Sets adsl_group_col.</td>
+</tr>
+<tr>
+<td><code>--title</code></td>
+<td><code>""</code></td>
+<td>Output title (default: template title).</td>
+</tr>
+<tr>
+<td><code>--subtitle</code></td>
+<td><code>""</code></td>
+<td>Output subtitle.</td>
+</tr>
+<tr>
+<td><code>--footnote</code></td>
+<td><em>(none)</em></td>
+<td>Footnote (repeatable).</td>
+</tr>
+<tr>
+<td><code>--rows-per-page</code></td>
+<td><em>(none)</em></td>
+<td>Maximum body rows per page (model-layer pagination).</td>
+</tr>
+<tr>
+<td><code>--page-by</code></td>
+<td><em>(none)</em></td>
+<td>ARD row variable to page-break on (e.g. PARAMCD). Tables only.</td>
+</tr>
+<tr>
+<td><code>--watch</code></td>
+<td><em>(none)</em></td>
+<td>Re-run whenever a spec file changes (requires the 'watch' extra).</td>
+</tr>
+</tbody>
+</table>
+<h3 id="fleet-tlg-explore"><code>fleet tlg explore</code><a class="headerlink" href="#fleet-tlg-explore" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Argument</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>spec</code></td>
+<td>A spec .yaml file or a directory of spec files.</td>
+</tr>
+</tbody>
+</table>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--config</code> / <code>-c</code></td>
+<td><em>(none)</em></td>
+<td>Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style).</td>
+</tr>
+<tr>
+<td><code>--data</code></td>
+<td><em>(none)</em></td>
+<td>Analysis dataset path, repeatable. Plain PATH applies to every spec; NAME=PATH (e.g. ADAE=adae.parquet) targets the template's analysis domain.</td>
+</tr>
+<tr>
+<td><code>--adsl</code></td>
+<td><em>(none)</em></td>
+<td>ADSL dataset path (population denominators for tables).</td>
+</tr>
+<tr>
+<td><code>--output</code> / <code>-o</code></td>
+<td><em>(none)</em></td>
+<td>Output HTML file. Default: explorer.html in the configured outputs directory (current directory outside a study workspace).</td>
+</tr>
+<tr>
+<td><code>--groupby</code></td>
+<td><em>(none)</em></td>
+<td>Treatment-arm column for specs without a groupby axis. Default: the spec's columns: field when it declares one, else auto-detect (TRTA → TRT01A → TRT01P).</td>
+</tr>
+<tr>
+<td><code>--adsl-groupby</code></td>
+<td><em>(none)</em></td>
+<td>ADSL arm column for the big N when ADSL lacks the analysis arm (e.g. TRT01A for an ADAE grouped by TRTA). Sets adsl_group_col.</td>
+</tr>
+<tr>
+<td><code>--title</code></td>
+<td><code>""</code></td>
+<td>Output title (default: template title).</td>
+</tr>
+<tr>
+<td><code>--subtitle</code></td>
+<td><code>""</code></td>
+<td>Output subtitle.</td>
+</tr>
+<tr>
+<td><code>--footnote</code></td>
+<td><em>(none)</em></td>
+<td>Footnote (repeatable).</td>
+</tr>
+<tr>
+<td><code>--watch</code></td>
+<td><em>(none)</em></td>
+<td>Rebuild whenever a spec file changes (requires the 'watch' extra).</td>
+</tr>
+</tbody>
+</table>
+<h3 id="fleet-tlg-export"><code>fleet tlg export</code><a class="headerlink" href="#fleet-tlg-export" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--config</code> / <code>-c</code></td>
+<td><em>(none)</em></td>
+<td>Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style).</td>
+</tr>
+<tr>
+<td><code>--domain</code></td>
+<td><em>(required)</em></td>
+<td>TLG sub-namespace to summarise. Choices: <code>ae</code>, <code>cm</code>, <code>dm</code>, <code>ds</code>, <code>eg</code>, <code>ex</code>, <code>lb</code>, <code>mh</code>, <code>vs</code>.</td>
+</tr>
+<tr>
+<td><code>--format</code></td>
+<td><code>html</code></td>
+<td>Output format (default: html). Choices: <code>html</code>, <code>rtf</code>, <code>pdf</code>, <code>pptx</code>.</td>
+</tr>
+<tr>
+<td><code>--data</code></td>
+<td><em>(none)</em></td>
+<td>Path to the primary analysis dataset. Default: the analysis dataset the domain's t_summary template declares (e.g. ADAE for ae, ADSL for dm/ds), found in the configured data directories.</td>
+</tr>
+<tr>
+<td><code>--adsl</code></td>
+<td><em>(none)</em></td>
+<td>Path to the ADSL dataset. Default: ADSL found in the configured adam_data directory.</td>
+</tr>
+<tr>
+<td><code>--output</code> / <code>-o</code></td>
+<td><em>(none)</em></td>
+<td>Output file path. Default: <domain>_summary.<format> in the configured outputs directory (current directory outside a study).</td>
+</tr>
+<tr>
+<td><code>--groupby</code></td>
+<td><em>(none)</em></td>
+<td>Treatment-arm column. Default: auto-detect (TRTA → TRT01A → TRT01P); TRT01A → TRT01P for the ADSL domains dm and ds.</td>
+</tr>
+<tr>
+<td><code>--adsl-groupby</code></td>
+<td><em>(none)</em></td>
+<td>ADSL arm column for the big N when ADSL lacks the analysis arm (e.g. TRT01A for an ADAE grouped by TRTA). Sets adsl_group_col.</td>
+</tr>
+<tr>
+<td><code>--population</code></td>
+<td><em>(none)</em></td>
+<td>ADSL population filter, passed to the spec's adsl_filter and shown in a footnote, e.g. 'pl.col("SAFFL") == "Y"'. Default: none (all ADSL subjects).</td>
+</tr>
+<tr>
+<td><code>--title</code></td>
+<td><code>""</code></td>
+<td>Table title.</td>
+</tr>
+<tr>
+<td><code>--subtitle</code></td>
+<td><code>""</code></td>
+<td>Table subtitle.</td>
+</tr>
+<tr>
+<td><code>--footnote</code></td>
+<td><em>(none)</em></td>
+<td>Footnote (repeatable).</td>
+</tr>
+<tr>
+<td><code>--rows-per-page</code></td>
+<td><em>(none)</em></td>
+<td>Maximum body rows per page (model-layer pagination).</td>
+</tr>
+<tr>
+<td><code>--page-by</code></td>
+<td><em>(none)</em></td>
+<td>ARD variable to page-break on (e.g. PARAMCD).</td>
+</tr>
+<tr>
+<td><code>--wrap</code></td>
+<td><em>(none)</em></td>
+<td>Path to an HTML wrapper template with a {table} placeholder (html and pdf only; refused for rtf and pptx). A PDF loads no external resource: a logo or style sheet the wrapper links is left out, with a warning.</td>
+</tr>
+</tbody>
+</table>
 <hr />
 <h2 id="fleet-define-xml"><code>fleet define-xml</code><a class="headerlink" href="#fleet-define-xml" title="Permanent link">&para;</a></h2>
-<p>Generate a CDISC Define-XML 2.1 document from a <code>define.yaml</code> specification.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>fleet<span class="w"> </span>define-xml<span class="w"> </span>--spec<span class="w"> </span>specs/cdiscpilot01/sdtm/define.yaml<span class="w"> </span>--output<span class="w"> </span>outputs/define_sdtm.xml
-</span></code></pre></div>
-<h3 id="options_2">Options<a class="headerlink" href="#options_2" title="Permanent link">&para;</a></h3>
+<p>Generate Define-XML 2.1 from a define.yaml specification. This imports the spec's derivations_module (study Python code) to describe callable: derivations: run it only on a study you trust.</p>
 <table>
 <thead>
 <tr>
@@ -2399,29 +3904,315 @@ Pass <code>--config &lt;root&gt;/study_config.yaml</code> explicitly, or <code>c
 <tbody>
 <tr>
 <td><code>--spec</code> / <code>-s</code></td>
-<td><em>(required)</em></td>
-<td>Path to the <code>define.yaml</code> specification file</td>
+<td><em>(none)</em></td>
+<td>Path to the define.yaml specification file. Default: <metadata_sdtm\|metadata_adam>/define.yaml from the discovered study_config.yaml (per --standard).</td>
 </tr>
 <tr>
 <td><code>--output</code> / <code>-o</code></td>
-<td><em>(required)</em></td>
-<td>Output path for the Define-XML file</td>
+<td><em>(none)</em></td>
+<td>Output path for the Define-XML file. Default: <define_xml dir>/define_<standard>.xml from the discovered study_config.yaml.</td>
+</tr>
+<tr>
+<td><code>--standard</code></td>
+<td><code>sdtm</code></td>
+<td>Which define.yaml to use for the config-based defaults (default: sdtm). Choices: <code>sdtm</code>, <code>adam</code>.</td>
+</tr>
+<tr>
+<td><code>--config</code> / <code>-c</code></td>
+<td><em>(none)</em></td>
+<td>Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style).</td>
 </tr>
 <tr>
 <td><code>--no-preview</code></td>
-<td><em>(off)</em></td>
-<td>Skip generating the HTML preview alongside the XML</td>
+<td><em>(none)</em></td>
+<td>Skip generating the HTML preview alongside the XML.</td>
+</tr>
+<tr>
+<td><code>--enrich-methods</code></td>
+<td><em>(none)</em></td>
+<td>Kept for old scripts: MethodDefs are on by default. Every Derived variable with a comment: or a derivation: gets a MethodDef. This imports the spec's derivations_module (study Python code).</td>
+</tr>
+<tr>
+<td><code>--strict</code></td>
+<td><em>(none)</em></td>
+<td>Refuse to write the file when the define has gaps: a Derived variable with no method text, a text, integer or float variable with no length, a float with no significant_digits. Without it the gaps are warnings.</td>
+</tr>
+<tr>
+<td><code>--watch</code></td>
+<td><em>(none)</em></td>
+<td>Re-generate whenever the spec file changes (requires the 'watch' extra).</td>
 </tr>
 </tbody>
 </table>
-<p>By default, an HTML preview is generated alongside the XML (e.g. <code>define_sdtm.xml</code> → <code>define_sdtm_preview.html</code>) using the CDISC <code>define2-1.xsl</code> stylesheet. Place <code>define2-1.xsl</code> in the same directory as the output XML, or the preview step will be skipped with a warning.</p>
-<h3 id="examples_2">Examples<a class="headerlink" href="#examples_2" title="Permanent link">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Generate SDTM Define-XML with HTML preview</span>
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>fleet<span class="w"> </span>define-xml<span class="w"> </span>--spec<span class="w"> </span>specs/cdiscpilot01/sdtm/define.yaml<span class="w"> </span>--output<span class="w"> </span>outputs/define_sdtm.xml
-</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>
-</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="c1"># Generate ADaM Define-XML without preview</span>
-</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>fleet<span class="w"> </span>define-xml<span class="w"> </span>--spec<span class="w"> </span>specs/cdiscpilot01/adam/define.yaml<span class="w"> </span>--output<span class="w"> </span>outputs/define_adam.xml<span class="w"> </span>--no-preview
-</span></code></pre></div>
+<hr />
+<h2 id="fleet-add-acrf"><code>fleet add-acrf</code><a class="headerlink" href="#fleet-add-acrf" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--href</code></td>
+<td><code>blankcrf.pdf</code></td>
+<td>aCRF file path in the submission package (default: blankcrf.pdf).</td>
+</tr>
+<tr>
+<td><code>--title</code></td>
+<td><em>(none)</em></td>
+<td>Display title (default: "Annotated Case Report Form").</td>
+</tr>
+<tr>
+<td><code>--page-map</code></td>
+<td><em>(none)</em></td>
+<td>External DOMAIN.VARIABLE → pages YAML file, relative to define.yaml.</td>
+</tr>
+<tr>
+<td><code>--standard</code></td>
+<td><code>sdtm</code></td>
+<td>Which define.yaml to update (default: sdtm). Choices: <code>sdtm</code>, <code>adam</code>, <code>both</code>.</td>
+</tr>
+<tr>
+<td><code>--config</code> / <code>-c</code></td>
+<td><em>(none)</em></td>
+<td>Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style).</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="fleet-add-ct"><code>fleet add-ct</code><a class="headerlink" href="#fleet-add-ct" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--config</code> / <code>-c</code></td>
+<td><em>(none)</em></td>
+<td>Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style).</td>
+</tr>
+<tr>
+<td><code>--domains</code></td>
+<td><em>(required)</em></td>
+<td>Comma-separated SDTM domain abbreviations to add.</td>
+</tr>
+<tr>
+<td><code>--ig</code></td>
+<td><em>(none)</em></td>
+<td>SDTM IG version. Default: sdtm.ig_version from the discovered study_config.yaml (3-4 outside a study).</td>
+</tr>
+<tr>
+<td><code>--package</code></td>
+<td><em>(none)</em></td>
+<td>CT package version. Default: ct.package from the discovered study_config.yaml, else the package of the existing codelists.py, else sdtmct-2023-12-15. Refused when it differs from the package an existing codelists.py was generated from.</td>
+</tr>
+<tr>
+<td><code>--output</code> / <code>-o</code></td>
+<td><em>(none)</em></td>
+<td>Path to the existing codelists.py. Default: <metadata_sdtm>/codelists.py from the discovered study_config.yaml (./codelists.py outside a study).</td>
+</tr>
+<tr>
+<td><code>--no-docs</code></td>
+<td><em>(none)</em></td>
+<td>Omit definitions and preferred terms from generated code.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="fleet-add-rule"><code>fleet add-rule</code><a class="headerlink" href="#fleet-add-rule" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--domain</code></td>
+<td><em>(required)</em></td>
+<td>SDTM/ADaM domain code (e.g. AE, DM, VS).</td>
+</tr>
+<tr>
+<td><code>--description</code></td>
+<td><em>(required)</em></td>
+<td>Human-readable description of the rule.</td>
+</tr>
+<tr>
+<td><code>--prefix</code></td>
+<td><code>FLEET</code></td>
+<td>Rule ID prefix (default: FLEET).</td>
+</tr>
+<tr>
+<td><code>--id</code></td>
+<td><em>(none)</em></td>
+<td>Explicit rule ID (e.g. ACME-AE-042). Skips auto-increment.</td>
+</tr>
+<tr>
+<td><code>--output</code> / <code>-o</code></td>
+<td><em>(none)</em></td>
+<td>Output directory for the rule YAML. Defaults to validation.custom_rules from study_config.yaml.</td>
+</tr>
+<tr>
+<td><code>--config</code> / <code>-c</code></td>
+<td><em>(none)</em></td>
+<td>Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style).</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="fleet-check-rule"><code>fleet check-rule</code><a class="headerlink" href="#fleet-check-rule" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Argument</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>rule_file</code></td>
+<td>Path to the custom rule YAML file to validate.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="fleet-install-engine"><code>fleet install-engine</code><a class="headerlink" href="#fleet-install-engine" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--version</code></td>
+<td><code>v0.15</code></td>
+<td>Release tag to download (default: v0.15, the CORE release that Fleet is tested with). 'latest' gets the newest release and warns.</td>
+</tr>
+<tr>
+<td><code>--force</code></td>
+<td><em>(none)</em></td>
+<td>Re-download even if already installed.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="fleet-uninstall-engine"><code>fleet uninstall-engine</code><a class="headerlink" href="#fleet-uninstall-engine" title="Permanent link">&para;</a></h2>
+<hr />
+<h2 id="fleet-doctor"><code>fleet doctor</code><a class="headerlink" href="#fleet-doctor" title="Permanent link">&para;</a></h2>
+<p>Check the Fleet setup: the study config, codelists.py, the rules engine, CDISC_API_KEY and the optional extras. Exit 1 when the study config or the rules engine has a cross; the API key and the extras are information only.</p>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--config</code> / <code>-c</code></td>
+<td><em>(none)</em></td>
+<td>Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style).</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="fleet-derivation"><code>fleet derivation</code><a class="headerlink" href="#fleet-derivation" title="Permanent link">&para;</a></h2>
+<h3 id="fleet-derivation-add"><code>fleet derivation add</code><a class="headerlink" href="#fleet-derivation-add" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Argument</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>name</code></td>
+<td>Variable name to create (e.g. AGEGR1).</td>
+</tr>
+</tbody>
+</table>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--dataset</code></td>
+<td><code>ADSL</code></td>
+<td>Target dataset name (default: ADSL).</td>
+</tr>
+<tr>
+<td><code>--kind</code></td>
+<td><code>column</code></td>
+<td>Derivation kind: column / frame (default: column). For a new parameter row, use .adam.derive_param(). Choices: <code>column</code>, <code>frame</code>.</td>
+</tr>
+<tr>
+<td><code>--config</code> / <code>-c</code></td>
+<td><em>(none)</em></td>
+<td>Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style).</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="fleet-mcp"><code>fleet mcp</code><a class="headerlink" href="#fleet-mcp" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--stdio</code></td>
+<td><em>(none)</em></td>
+<td>Serve over stdio (the only supported transport; accepted for explicitness).</td>
+</tr>
+<tr>
+<td><code>--trust-study-engine</code></td>
+<td><em>(none)</em></td>
+<td>Let fleet_validate start the engine that validation.engine_path of a study config names. Without it, such a run could not run.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="fleet-lsp"><code>fleet lsp</code><a class="headerlink" href="#fleet-lsp" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--stdio</code></td>
+<td><em>(none)</em></td>
+<td>Serve over stdio (the only supported transport; accepted for explicitness).</td>
+</tr>
+</tbody>
+</table>
+<hr />
 
 
 
@@ -2444,7 +4235,7 @@ Pass <code>--config &lt;root&gt;/study_config.yaml</code> explicitly, or <code>c
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 9, 2026 10:36:00 UTC">May 9, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="November 5, 2026 16:13:03 UTC">November 5, 2026</span>
   </span>
 
     
@@ -2530,7 +4321,7 @@ Pass <code>--config &lt;root&gt;/study_config.yaml</code> explicitly, or <code>c
       <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.tabs.sticky", "navigation.sections", "navigation.expand", "navigation.top", "search.highlight", "search.suggest", "content.code.copy", "content.code.annotate", "content.tabs.link"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "dev", "provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
       
     
   </body>
