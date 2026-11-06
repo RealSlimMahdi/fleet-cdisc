@@ -1,58 +1,57 @@
 # yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
 # SDTMCHK-CM-002: CM dates missing month (incomplete date)
-# Source: sdtmchecks::check_cm_missing_month
+# Based on: sdtmchecks::check_cm_missing_month. Conditions follow the R function; a difference is stated in Description.
 
 Core:
   Id: SDTMCHK-CM-002
   Status: Draft
-  Version: "1"
-
+  Version: '1'
 Rule Type: Record Data
-
 Scope:
   Classes:
-    Include: [INTERVENTIONS]
+    Include:
+    - INTERVENTIONS
   Domains:
-    Include: [CM]
-
+    Include:
+    - CM
 Check:
   any:
-    - all:
-        - name: CMSTDTC
-          operator: non_empty
-        - name: CMSTDTC
-          operator: is_incomplete_date
-    - all:
-        - name: CMENDTC
-          operator: non_empty
-        - name: CMENDTC
-          operator: is_incomplete_date
-
+  - all:
+    - name: CMSTDTC
+      operator: exists
+    - name: CMSTDTC
+      operator: matches_regex
+      value: ^\d{4}---
+  - all:
+    - name: CMENDTC
+      operator: exists
+    - name: CMENDTC
+      operator: matches_regex
+      value: ^\d{4}---
 Outcome:
-  Message: >-
-    CM date (CMSTDTC or CMENDTC) is an incomplete (partial) date. Concomitant
-    medication dates should have at least month-level precision.
-  Output Variables: [USUBJID, CMTRT, CMDECOD, CMSTDTC, CMENDTC]
-
-Description: >-
-  CM start/end dates should include at minimum month precision (YYYY-MM).
-  Year-only dates indicate possible data quality issues.
-
+  Message: A CM date (CMSTDTC or CMENDTC) has a year and a day but no month (yyyy---dd).
+  Output Variables:
+  - USUBJID
+  - CMTRT
+  - CMDECOD
+  - CMSTDTC
+  - CMENDTC
+Description: 'Flags: A CM date (CMSTDTC or CMENDTC) has a year and a day but no month (yyyy---dd). Based
+  on sdtmchecks::check_cm_missing_month. Same conditions as the R function.'
 Sensitivity: Record
 Executability: Fully Executable
-
 Authorities:
-  - Organization: sdtmchecks
-    Standards:
-      - Name: SDTMIG
-        Version: "3.4"
-        References:
-          - Origin: sdtmchecks R package
-            Rule Identifier:
-              Id: SDTMCHK-CM-002
-              Version: "1"
-            Version: "1"
-            Citations:
-              - Cited Guidance: check_cm_missing_month
-                Document: pharmaverse sdtmchecks
-                Section: CM Domain
+- Organization: sdtmchecks
+  Standards:
+  - Name: SDTMIG
+    Version: '3.4'
+    References:
+    - Origin: sdtmchecks R package
+      Rule Identifier:
+        Id: SDTMCHK-CM-002
+        Version: '1'
+      Version: '1'
+      Citations:
+      - Cited Guidance: check_cm_missing_month
+        Document: pharmaverse sdtmchecks
+        Section: CM Domain

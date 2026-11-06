@@ -32,6 +32,8 @@ from typing import TYPE_CHECKING, Any
 
 import yaml
 
+from fleet.core.define_spec import default_repeating
+
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
@@ -65,6 +67,12 @@ _CORE_MAP: dict[str, bool] = {
     "Expected": False,
     "Permissible": False,
     "Conditionally Required": False,
+}
+
+#: Define-XML 2.1 def:Class of the ADaM IG structures Fleet scaffolds as they are.
+_ADAM_CLASSES: dict[str, str] = {
+    "ADSL": "SUBJECT LEVEL ANALYSIS DATASET",
+    "BDS": "BASIC DATA STRUCTURE",
 }
 
 
@@ -109,7 +117,11 @@ def parse_ig_variable(var: dict[str, Any]) -> dict[str, Any]:
     """Parse an IG variable response into define.yaml variable format.
 
     This is the module-level equivalent of
-    ``DefineScaffolder._parse_ig_variable``.
+    ``DefineScaffolder._parse_ig_variable``.  The Library ``role`` of an
+    SDTMIG variable becomes ``sdtm_role:``, the Define-XML ItemRef Role.
+
+    References:
+        ADR 0042; Define-XML 2.1 (ItemRef Role); CORE rule CG0010.
     """
     name = var.get("name", "")
     label = var.get("label", "")
@@ -129,6 +141,9 @@ def parse_ig_variable(var: dict[str, Any]) -> dict[str, Any]:
 
     result["mandatory"] = mandatory
     result["core"] = core
+    if var.get("role"):
+        # Define-XML ItemRef Role; CORE CG0010 reports a define without it (ADR 0042).
+        result["sdtm_role"] = var["role"]
 
     if name in ("STUDYID", "DOMAIN"):
         result["origin"] = "Assigned"
@@ -155,10 +170,20 @@ def parse_ig_dataset(detail: dict[str, Any]) -> dict[str, Any]:
     name = detail.get("name", "")
     label = detail.get("label", "")
     description = detail.get("description", "")
-    ds_class = detail.get("datasetClass", detail.get("class", ""))
+    # Define-XML 2.1 def:Class: the Library sends the SDTM class as _links.parentClass.title
+    # ("Special-Purpose", "Events"); the Define-XML value is upper case with a space.
+    parent_class = detail.get("_links", {}).get("parentClass", {}).get("title", "")
+    ds_class = detail.get("datasetClass", detail.get("class", "")) or parent_class
+    if ds_class:
+        ds_class = ds_class.upper().replace("-", " ")
 
-    structure = detail.get("structure", description or f"One record per {name}")
-    repeating = name not in ("DM", "ADSL")
+    structure = (
+        detail.get("datasetStructure")
+        or detail.get("structure")
+        or description
+        or f"One record per {name}"
+    )
+    repeating = default_repeating(name)
 
     variables = []
     keys: list[str] = []
@@ -349,6 +374,14 @@ class DefineScaffolder:
                     "structure": "One record per subject per parameter per analysis visit",
                     "repeating": True,
                 }
+                # The clone may be OCCDS or TTE: a BDS class would be false.
+                clone.pop("class", None)
+                logger.warning(
+                    "%s is scaffolded from the BDS template and has no class: in define.yaml. "
+                    "Set class: by hand (for example BASIC DATA STRUCTURE or OCCURRENCE "
+                    "DATA STRUCTURE).",
+                    ds_name,
+                )
                 # Deep-copy variables so edits don't leak
                 clone["variables"] = [dict(v) for v in bds["variables"]]
                 result.append(clone)
@@ -389,6 +422,9 @@ class DefineScaffolder:
             "keys": keys,
             "variables": variables,
         }
+        ds_class = ds.get("className") or ds.get("class") or _ADAM_CLASSES.get(name)
+        if ds_class:
+            result["class"] = str(ds_class).upper()
         return result
 
     def _parse_ig_dataset(self, detail: dict[str, Any]) -> dict[str, Any]:

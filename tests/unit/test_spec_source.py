@@ -146,7 +146,7 @@ def test_program_from_spec_renders_one_call_per_derivation():
     code = program_from_spec(ADAM_SPEC, "adsl")
     assert code.startswith("# ADSL")
     assert "dm.adam" in code
-    assert ".assign('STUDYID', value='CDISCPILOT01')" in code
+    assert ".assign('STUDYID', source='STUDYID')" in code
     assert code.rstrip().endswith(".to_frame()\n)")
 
 

@@ -479,3 +479,44 @@ class TestValidateResultAccess:
         assert derived.producing_verb == "assign"
         assert derived.verb_method.endswith(".assign")
         assert underived.producing_verb is None  # AGE is not derived by this chain
+
+
+class TestDateDifferenceInAStringExpression:
+    """c1-62: TRTEDT - TRTSDT is a Polars Duration, so > 10 compared with 10 microseconds."""
+
+    @pytest.fixture
+    def adsl(self) -> pl.DataFrame:
+        return pl.from_repr("""\
+┌─────────┬────────────┬────────────┐
+│ USUBJID ┆ TRTSDT     ┆ TRTEDT     │
+│ ---     ┆ ---        ┆ ---        │
+│ str     ┆ date       ┆ date       │
+╞═════════╪════════════╪════════════╡
+│ S1      ┆ 2024-01-01 ┆ 2024-01-06 │
+│ S2      ┆ 2024-01-01 ┆ 2024-01-31 │
+└─────────┴────────────┴────────────┘
+""")
+
+    def test_flag_refuses_a_bare_date_difference(self, adsl):
+        from fleet.core.exceptions import DerivationError
+
+        with pytest.raises(DerivationError, match=r"\(TRTEDT - TRTSDT\)\.dt\.total_days\(\)"):
+            adsl.adam.flag("F", criteria="TRTEDT - TRTSDT > 10")
+
+    def test_case_when_refuses_a_bare_date_difference(self, adsl):
+        from fleet.core.exceptions import DerivationError
+
+        with pytest.raises(DerivationError, match="duration, not a number of days"):
+            adsl.adam.case_when(
+                "D", when=[{"condition": "TRTEDT - TRTSDT > 10", "value": "LONG"}], else_="SHORT"
+            )
+
+    def test_derivation_refuses_a_bare_date_difference(self, adsl):
+        from fleet.core.exceptions import DerivationError
+
+        with pytest.raises(DerivationError, match="duration"):
+            adsl.adam.derivation("D", expression="TRTEDT - TRTSDT + 1")
+
+    def test_the_dt_total_days_form_gives_days(self, adsl):
+        out = adsl.adam.flag("F", criteria="(TRTEDT - TRTSDT).dt.total_days() > 10").to_frame()
+        assert out["F"].to_list() == [None, "Y"]

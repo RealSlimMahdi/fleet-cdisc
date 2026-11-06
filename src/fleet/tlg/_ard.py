@@ -25,6 +25,7 @@ import logging
 import math
 import warnings
 from collections.abc import Sequence
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 import polars as pl
@@ -32,11 +33,13 @@ import polars as pl
 from ._specs import (
     NO_CODING_LABEL,
     GroupPool,
+    MissingLevel,
     OverallStat,
     Row,
     SchemaError,
     Statistic,
     SummarySpecBase,
+    blank_filter_columns,
     resolve_filter,
 )
 
@@ -147,8 +150,27 @@ def default_fmt_fn(stat_name: str) -> str:
     return _DEFAULT_FMT.get(stat_name, "xx.x")
 
 
+def _round_half_away(value: float, decimals: int) -> str:
+    """Print *value* with *decimals* places, a tie rounded away from zero.
+
+    The value is first read at 15 significant digits, so a binary
+    artefact (31.249999999999996 for 31.25) does not break the tie.
+    A result that rounds to zero prints without a minus sign.
+    """
+    if not math.isfinite(value) or abs(value) >= 1e15:
+        return f"{value:.{decimals}f}"
+    rounded = Decimal(f"{value:.15g}").quantize(
+        Decimal(1).scaleb(-decimals), rounding=ROUND_HALF_UP
+    )
+    return format(abs(rounded) if rounded.is_zero() else rounded, "f")
+
+
 def apply_fmt_fn(value: float | None, fmt: str) -> str:
     """Apply a format specifier to a numeric value.
+
+    A tie rounds half away from zero, as SAS ``ROUND`` and the {cards}
+    default: 31.25 at ``"xx.x"`` prints ``31.3``, -2.25 prints ``-2.3``.
+    A value that rounds to zero prints ``0.0``, never ``-0.0``.
 
     Supported format patterns:
       - ``"xx"``       → integer (e.g. ``"86"``)
@@ -163,6 +185,13 @@ def apply_fmt_fn(value: float | None, fmt: str) -> str:
 
     Returns:
         str: The formatted string.
+
+    References:
+        SAS ROUND function (half away from zero); {cards}
+        ``round_type`` default; ADR-0037.
+
+    Examples:
+        ``apply_fmt_fn(31.25, "xx.x") == "31.3"``
     """
     if value is None or (isinstance(value, float) and math.isnan(value)):
         return ""
@@ -176,7 +205,7 @@ def apply_fmt_fn(value: float | None, fmt: str) -> str:
     else:
         decimals = 0
 
-    formatted = f"{value:.{decimals}f}"
+    formatted = _round_half_away(float(value), decimals)
     if pct_suffix:
         formatted += "%"
     return formatted
@@ -187,6 +216,8 @@ def format_ard(ard: pl.DataFrame) -> pl.DataFrame:
 
     This mirrors ``{cards}::apply_fmt_fn()`` — takes the ARD and produces
     human-readable formatted strings from the numeric ``stat`` column.
+    A tie rounds half away from zero (SAS ``ROUND``), see
+    :func:`apply_fmt_fn`.
 
     Args:
         ard: An ARD DataFrame with ``stat`` and ``fmt_fn`` columns.
@@ -216,7 +247,7 @@ def format_ard(ard: pl.DataFrame) -> pl.DataFrame:
 
 
 def validate_ard(df: pl.DataFrame, *, strict: bool = True) -> list[str]:
-    """Validate that *df* conforms to the {cards}-compatible ARD schema.
+    """Validate that *df* conforms to the Fleet ARD schema.
 
     Checks required column presence, data types, and structural integrity.
     Group columns (``group1``, ``group2``, etc.) are optional — matching
@@ -382,7 +413,10 @@ def expand_pools(
 
     for pool in pools:
         if pool.arms == "*":
-            pool_df = df.with_columns(pl.lit(pool.label).alias(group_col))
+            # "*" pools every arm present; a null is not an arm.
+            pool_df = df.filter(pl.col(group_col).is_not_null()).with_columns(
+                pl.lit(pool.label).alias(group_col)
+            )
         else:
             missing = [a for a in pool.arms if a not in actual_arms]
             if missing and strict:
@@ -406,6 +440,11 @@ def compute_big_n(
 ) -> dict[str, int]:
     """Compute big-N denominators per treatment arm (including pools).
 
+    A subject in the population with a null arm is in no column, as
+    PROC FREQ leaves out a missing class level.  The subjects are left
+    out of every N, a ``"*"`` pool included, with one ``UserWarning``
+    that names the column and the count (ADR-0038).
+
     Args:
         adsl: The ADSL DataFrame.
         group_col: Treatment arm column.
@@ -414,10 +453,27 @@ def compute_big_n(
 
     Returns:
         dict[str, int]: Mapping from arm label to subject count.
+
+    References:
+        SAS PROC FREQ, missing class levels; ADR-0038.
+
+    Examples:
+        ``compute_big_n(adsl, "TRT01A", [], filter_expr=pl.col("SAFFL") == "Y")``
     """
     df = adsl
     if filter_expr is not None:
         df = df.filter(filter_expr)
+    no_arm = df.filter(pl.col(group_col).is_null())
+    if no_arm.height:
+        ids = no_arm["USUBJID"].unique(maintain_order=True)
+        warnings.warn(
+            f"{group_col} is null for {ids.len()} subject(s) in the population; "
+            f"they are in no column: {ids.head(5).to_list()}. Set a population "
+            "filter (adsl_filter) or correct the arm.",
+            UserWarning,
+            stacklevel=3,
+        )
+        df = df.filter(pl.col(group_col).is_not_null())
     # Non-strict: pool membership is validated by callers against the
     # unfiltered arm universe; a filter may legitimately empty an arm.
     df = expand_pools(df, pools, group_col, strict=False)
@@ -543,6 +599,47 @@ def fill_uncoded(
     return df.with_columns(pl.col(c).fill_null(label) for c in present)
 
 
+def check_rank_values(
+    df: pl.DataFrame,
+    order_col: str,
+    order: Sequence[str],
+    order_field: str,
+    unranked: Sequence[str] = (),
+) -> None:
+    """Raise when a non-blank *order_col* value is not in *order*.
+
+    Ranking an unknown value below every listed value would let a
+    sponsor term ("POSSIBLY RELATED") lose against "N" without a sign.
+
+    Args:
+        df: The analysis DataFrame.
+        order_col: Column holding the ranked value.
+        order: Values from least to most severe.
+        order_field: Spec field name shown in the message.
+        unranked: Values that are allowed and rank as a null does.
+
+    Raises:
+        SchemaError: If a non-blank value is not in *order* or *unranked*.
+
+    Examples:
+        ``check_rank_values(adae, "AESEV", ["MILD", "MODERATE", "SEVERE"], "severity_order")``
+    """
+    unknown = (
+        df.select(pl.col(order_col).cast(pl.Utf8).alias("__v"))
+        .filter(pl.col("__v").str.strip_chars() != "")
+        .filter(~pl.col("__v").is_in([*order, *unranked]))
+        .unique()
+        .sort("__v")["__v"]
+        .to_list()
+    )
+    if unknown:
+        raise SchemaError(
+            f"{order_col} has values {unknown} that are not in {order_field} "
+            f"{list(order)}. Set {order_field} in the spec to the study's "
+            "terms, from least to most severe."
+        )
+
+
 def worst_case(
     df: pl.DataFrame,
     *,
@@ -550,6 +647,7 @@ def worst_case(
     order_col: str,
     order: Sequence[str],
     order_field: str = "order",
+    unranked: Sequence[str] = (),
 ) -> pl.DataFrame:
     """Reduce to one record per *by* group, keeping the worst *order_col*.
 
@@ -567,6 +665,8 @@ def worst_case(
             never alphabetical).
         order_field: Name of the spec field that holds *order*, shown in
             the error message (e.g. ``"relationship_order"``).
+        unranked: Values that rank as a null does (the missing-level
+            label, e.g. ``"Missing"``).
 
     Returns:
         pl.DataFrame: One row per group at the worst level.
@@ -578,20 +678,7 @@ def worst_case(
     """
     rank_map = {value: idx for idx, value in enumerate(order)}
     as_text = pl.col(order_col).cast(pl.Utf8)
-    unknown = (
-        df.select(as_text.alias("__v"))
-        .filter(pl.col("__v").str.strip_chars() != "")
-        .filter(~pl.col("__v").is_in(list(order)))
-        .unique()
-        .sort("__v")["__v"]
-        .to_list()
-    )
-    if unknown:
-        raise SchemaError(
-            f"{order_col} has values {unknown} that are not in {order_field} "
-            f"{list(order)}. Set {order_field} in the spec to the study's "
-            "terms, from least to most severe."
-        )
+    check_rank_values(df, order_col, order, order_field, unranked)
     ranked = df.with_columns(
         as_text.replace_strict(rank_map, default=-1, return_dtype=pl.Int32).alias("__worst_rank")
     )
@@ -676,7 +763,7 @@ def ard_row(
     warning: str | None = None,
     error: str | None = None,
 ) -> dict[str, Any]:
-    """Build a single ARD row dict ({cards}-compatible).
+    """Build a single ARD row dict (the {cards} long layout).
 
     Args:
         group1: Primary grouping variable name.
@@ -717,7 +804,7 @@ def ard_row(
 
 
 def rows_to_ard(rows: list[dict[str, Any]]) -> pl.DataFrame:
-    """Convert a list of ARD row dicts to a {cards}-compatible Polars DataFrame.
+    """Convert a list of ARD row dicts to a Polars DataFrame in the {cards} long layout.
 
     The ARD ``stat`` column is Float64.  A value that cannot be coerced
     to a float raises instead of being silently nulled — a nulled
@@ -851,6 +938,7 @@ def _level_rows(
     field_labels: dict[str, str] | None = None,
     fmt_overrides: dict[str, str] | None = None,
     count_values: bool = False,
+    missing_label: str | None = None,
 ) -> list[dict[str, Any]]:
     """Stats per arm × level combination of *fields*, with explicit zero cells.
 
@@ -863,13 +951,21 @@ def _level_rows(
     With *count_values* (a continuous summary) ``n`` follows PROC MEANS:
     at a level with continuous statistics it is the count of non-missing
     *value_col* values; at a parent level it is the count of subjects
-    with a non-missing value.
+    with a non-missing value.  A level equal to *missing_label* sorts
+    last within its parent.
     """
     # Deduplicate for select/group_by: a row field may repeat or equal
     # group_col (e.g. a per-arm breakdown) — the lookup tuples below are
     # built from named rows, so duplicates stay consistent either way.
     select_fields = list(dict.fromkeys(fields))
-    combos = frame.select(select_fields).drop_nulls().unique().sort(select_fields)
+    sort_keys: list[Any] = list(select_fields)
+    if missing_label is not None:
+        sort_keys = [
+            key
+            for f in select_fields
+            for key in (pl.col(f).cast(pl.Utf8).eq_missing(missing_label), pl.col(f))
+        ]
+    combos = frame.select(select_fields).drop_nulls().unique().sort(sort_keys)
     if combos.height == 0:
         return []
 
@@ -921,6 +1017,66 @@ def _level_rows(
     return out
 
 
+def _apply_missing(
+    df: pl.DataFrame, missing: MissingLevel | None
+) -> tuple[pl.DataFrame, dict[str, str]]:
+    """Give a null or blank category value the missing level.
+
+    Returns the frame and, for ``label=None``, one warning text per
+    column that holds a null (the count of subjects); each text is also
+    raised once as a ``UserWarning``.
+    """
+    notes: dict[str, str] = {}
+    if missing is None:
+        return df, notes
+    for column in missing.columns:
+        if column not in df.columns:
+            continue
+        as_text = pl.col(column).cast(pl.Utf8)
+        is_missing = as_text.is_null() | (as_text.str.strip_chars() == "")
+        hit = df.filter(is_missing)
+        if hit.height == 0:
+            continue
+        if missing.label is not None:
+            df = df.with_columns(
+                pl.when(is_missing).then(pl.lit(missing.label)).otherwise(as_text).alias(column)
+            )
+            continue
+        note = (
+            f"{column} is null or blank for {hit['USUBJID'].n_unique()} subject(s); "
+            f"they are in no {column} row."
+        )
+        warnings.warn(note, UserWarning, stacklevel=3)
+        notes[column] = note
+    return df, notes
+
+
+def _adsl_arm_error(adsl_col: str, adsl: pl.DataFrame, explicit: bool) -> str:
+    """Message for an arm column that ADSL does not hold."""
+    candidates = [
+        c
+        for c in adsl.columns
+        if c in ("TRTA", "TRTP", "ARM", "ACTARM")
+        or (len(c) == 6 and c.startswith("TRT") and c[3:5].isdigit() and c[5] in "AP")
+    ]
+    source = "adsl_group_col" if explicit else "The group column"
+    hint = (
+        ""
+        if explicit
+        else (
+            " ADaM puts the actual arm on ADSL as TRTxxA: name the ADSL arm with "
+            "adsl_group_col (YAML adsl_group_col:, builder population(adsl, "
+            "group_col=...), CLI --adsl-groupby"
+            + (f" {candidates[0]}" if candidates else " <column>")
+            + ")."
+        )
+    )
+    return (
+        f"{source} '{adsl_col}' not found in adsl.{hint} "
+        f"ADSL arm columns found: {candidates}. Available: {sorted(adsl.columns)}"
+    )
+
+
 def summarize_ard(
     df: pl.DataFrame,
     *,
@@ -939,8 +1095,16 @@ def summarize_ard(
     value_col: str = "AVAL",
     label_col: str | None = None,
     decimals: dict[str, str] | None = None,
+    missing: MissingLevel | None = None,
+    leaf_rank: tuple[Sequence[str], str] | None = None,
+    adsl_group_col: str | None = None,
 ) -> pl.DataFrame:
-    """Build a {cards}-compatible ARD — the single shared TLG engine.
+    """Build an ARD in the {cards} long layout: the single shared TLG engine.
+
+    The layout follows {cards}, but the names differ: ``fmt_fn`` (not
+    ``fmt_fun``), ``pct`` on 0 to 100 (not ``p`` on 0 to 1), and big-N
+    rows with ``variable=""``.  Convert the ARD before you give it to R
+    tools such as gtsummary.
 
     Every summary table (categorical counts and continuous statistics)
     goes through this function: big-N rows, header rows (``OverallStat``),
@@ -990,15 +1154,38 @@ def summarize_ard(
         decimals: Per-statistic format overrides — ARD ``stat_name``
             (e.g. ``"mean"``) to format string (e.g. ``"xx.xx"``).
             ``Row.decimals`` overrides again for that row's leaf level.
+        missing: The missing-level rule.  A null or blank value of its
+            columns is counted under ``missing.label``, last in the
+            block; with ``label=None`` the count goes to the ARD
+            ``warning`` column (ADR-0038).
+        leaf_rank: ``(order, order_field)`` of a worst-case table.  At
+            the last depth of a nested hierarchy each subject is counted
+            once, at the worst value of the last row field, within its
+            arm (pools included) and its parent levels.  Parent levels
+            and header rows count every record; no ``n_events`` is
+            emitted at the reduced level.
+        adsl_group_col: Arm column of *adsl* when it differs from
+            *group_col* (an ADAE with ``TRTA``, an ADSL with
+            ``TRT01A``).  The arm values must match.
 
     Returns:
-        pl.DataFrame: Validated {cards}-compatible ARD.
+        pl.DataFrame: Validated ARD in the {cards} long layout.
 
     Raises:
         SchemaError: On missing group column, missing percentage
-            denominator, missing *value_col* with continuous statistics
-            requested, missing *label_col*, unknown arms/pools, or ARD
-            schema violations.
+            denominator, missing or non-numeric *value_col* with
+            continuous statistics requested, missing *label_col*, a row
+            field absent from *df*, unknown arms/pools, or ARD schema
+            violations.
+
+    References:
+        ADaMIG v1.3 (TRTxxA on ADSL, TRTA on OCCDS/BDS); FDA CDER
+        Standard Safety Tables and Figures IG v2.0, 2.1.2 (missing row);
+        ADR-0038.
+
+    Examples:
+        ``summarize_ard(adae, rows=["AEBODSYS", "AEDECOD"], stats=[Statistic.N_PCT],
+        context="t_ae", adsl=adsl, adsl_group_col="TRT01A")``
     """
     pools = pools or []
     header_rows = header_rows or []
@@ -1009,12 +1196,26 @@ def summarize_ard(
             f"Group column '{group_col}' not found in the analysis dataset. "
             f"Available: {sorted(df.columns)}"
         )
+    absent_rows = [r.field for r in row_defs if r.field not in df.columns]
+    if absent_rows:
+        raise SchemaError(
+            f"Row field(s) {absent_rows} are not in the analysis dataset. "
+            f"Available: {sorted(df.columns)}"
+        )
 
     dataset_filter_expr = resolve_filter(dataset_filter)
     if dataset_filter_expr is not None:
         df = df.filter(dataset_filter_expr)
     if prefilter is not None:
         df = df.filter(prefilter)
+    if leaf_rank is not None and row_defs:
+        check_rank_values(
+            df,
+            row_defs[-1].field,
+            leaf_rank[0],
+            leaf_rank[1],
+            [missing.label] if missing is not None and missing.label else (),
+        )
     if adsl is not None:
         if "USUBJID" not in adsl.columns:
             raise SchemaError(f"adsl has no USUBJID column. Available: {sorted(adsl.columns)}")
@@ -1051,6 +1252,12 @@ def summarize_ard(
             "at the analysis value (e.g. CHG), or drop the continuous "
             "statistics."
         )
+    if cont_requested and not df[value_col].dtype.is_numeric():
+        raise SchemaError(
+            f"Continuous statistics {cont_requested} need a numeric {value_col}; "
+            f"{value_col} is {df[value_col].dtype}. Cast it: "
+            f"pl.col('{value_col}').cast(pl.Float64)"
+        )
     if label_col is not None and label_col not in df.columns:
         raise SchemaError(
             f"label_col '{label_col}' not found in the analysis dataset. "
@@ -1059,13 +1266,12 @@ def summarize_ard(
 
     data_arms = set(df[group_col].drop_nulls().unique().to_list())
     if adsl is not None:
-        if group_col not in adsl.columns:
-            raise SchemaError(
-                f"Group column '{group_col}' not found in adsl. Available: {sorted(adsl.columns)}"
-            )
-        adsl_arms = set(adsl[group_col].drop_nulls().unique().to_list())
-        _validate_pool_arms(pools, adsl_arms, group_col, source="adsl")
-        big_n = compute_big_n(adsl, group_col, pools, filter_expr=resolve_filter(adsl_filter))
+        adsl_col = adsl_group_col or group_col
+        if adsl_col not in adsl.columns:
+            raise SchemaError(_adsl_arm_error(adsl_col, adsl, adsl_group_col is not None))
+        adsl_arms = set(adsl[adsl_col].drop_nulls().unique().to_list())
+        _validate_pool_arms(pools, adsl_arms, adsl_col, source="adsl")
+        big_n = compute_big_n(adsl, adsl_col, pools, filter_expr=resolve_filter(adsl_filter))
         unknown = sorted(a for a in data_arms if a not in big_n)
         if unknown:
             raise SchemaError(
@@ -1083,6 +1289,8 @@ def summarize_ard(
         _validate_pool_arms(pools, data_arms, group_col, source="the analysis dataset")
         arms = sorted(data_arms | {p.label for p in pools})
 
+    df, missing_notes = _apply_missing(df, missing)
+    missing_label = missing.label if missing is not None else None
     df = expand_pools(df, pools, group_col, strict=False)
 
     if column_order:
@@ -1112,7 +1320,15 @@ def summarize_ard(
     for hdr in header_rows:
         hdr_df = df
         hdr_filter = resolve_filter(hdr.filter)
+        hdr_warning = None
         if hdr_filter is not None:
+            blank = blank_filter_columns(hdr_filter, hdr_df)
+            if blank:
+                hdr_warning = (
+                    f"filter column {', '.join(blank)} is null or blank on every "
+                    f"record (row '{hdr.label}')"
+                )
+                warnings.warn(hdr_warning, UserWarning, stacklevel=2)
             hdr_df = hdr_df.filter(hdr_filter)
         effective_stats = hdr.statistics or stats
         hdr_values = value_col in hdr_df.columns and any(
@@ -1136,10 +1352,11 @@ def summarize_ard(
                         sv,
                         context,
                         fmt_fn=table_fmt.get(sn),
+                        warning=hdr_warning,
                     )
                 )
 
-    present = [r for r in row_defs if r.field in df.columns]
+    present = row_defs
     field_labels = {r.field: (r.label or "") for r in row_defs}
     if nested:
         fields = [r.field for r in present]
@@ -1151,17 +1368,31 @@ def summarize_ard(
                 f"Got {fields}. Reduce the hierarchy or pass nested=False."
             )
         for depth in range(len(fields)):
-            depth_stats = (
-                stats if depth == len(fields) - 1 else [s for s in stats if s in COUNT_STATS]
-            )
+            is_leaf = depth == len(fields) - 1
+            depth_stats = stats if is_leaf else [s for s in stats if s in COUNT_STATS]
+            if is_leaf and leaf_rank is not None:
+                # One reduced record per subject: an event count means nothing here.
+                depth_stats = [s for s in depth_stats if s != Statistic.N_EVENTS]
             if not depth_stats:
                 continue
             # A row's filter_value scopes that row's own depth and its
             # descendants — never its ancestors' counts.
             frame = df
-            for row_def in present[: depth + 1]:
+            for row_def in present[:depth]:
                 if row_def.filter_value is not None:
                     frame = frame.filter(pl.col(row_def.field) == row_def.filter_value)
+            if is_leaf and leaf_rank is not None:
+                order, order_field = leaf_rank
+                frame = worst_case(
+                    frame,
+                    by=["USUBJID", group_col, *fields[:-1]],
+                    order_col=fields[-1],
+                    order=order,
+                    order_field=order_field,
+                    unranked=[missing_label] if missing_label else (),
+                )
+            if present[depth].filter_value is not None:
+                frame = frame.filter(pl.col(fields[depth]) == present[depth].filter_value)
             ard_rows += _level_rows(
                 frame,
                 fields[: depth + 1],
@@ -1174,6 +1405,7 @@ def summarize_ard(
                 field_labels=field_labels,
                 fmt_overrides={**table_fmt, **(present[depth].decimals or {})},
                 count_values=bool(cont_requested),
+                missing_label=missing_label,
             )
     else:
         for row_def in present:
@@ -1192,9 +1424,17 @@ def summarize_ard(
                 field_labels=field_labels,
                 fmt_overrides={**table_fmt, **(row_def.decimals or {})},
                 count_values=bool(cont_requested),
+                missing_label=missing_label,
             )
 
     ard = rows_to_ard(ard_rows)
+    for column, note in missing_notes.items():
+        ard = ard.with_columns(
+            pl.when(pl.col("variable") == column)
+            .then(pl.lit(note))
+            .otherwise(pl.col("warning"))
+            .alias("warning")
+        )
     if label_col is not None and present:
         ard = _apply_label_col(ard, df, present[0].field, label_col)
     issues = validate_ard(ard)
@@ -1250,7 +1490,8 @@ def summarize_spec(
     The spec is the whole engine contract: every :func:`summarize_ard`
     argument is read from its fields, and the cards ``context`` tag and
     the ``nested`` flag from its class.  The group column is *groupby*,
-    else the spec's first column, else ``"TRTA"``; the frame is
+    else :meth:`SummarySpecBase.default_group_col` (the spec's first
+    column, or the first ``arm_fallback`` column in the data); the frame is
     validated against the spec, then prepared by :func:`prepare_frame`.
 
     Args:
@@ -1260,16 +1501,16 @@ def summarize_spec(
         adsl: ADSL for big-N denominators and the arm universe.
 
     Returns:
-        pl.DataFrame: Validated {cards}-compatible ARD.
+        pl.DataFrame: Validated ARD in the {cards} long layout.
 
     Raises:
         SchemaError: If the frame fails the spec's validation, or on any
             engine refusal (see :func:`summarize_ard`).
 
     Examples:
-        ``ard = summarize_spec(admh, MHSummarySpec(), groupby="TRTA", adsl=adsl)``
+        ``ard = summarize_spec(admh, MHSummarySpec(adsl_group_col="TRT01A"), adsl=adsl)``
     """
-    group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
+    group_col = groupby or spec.default_group_col(df.columns)
     spec.validate_dataframe(df, group_col=group_col)
     return summarize_ard(
         prepare_frame(df, spec),
@@ -1286,6 +1527,9 @@ def summarize_spec(
         value_col=spec.value_col,
         label_col=spec.label_col,
         decimals=spec.decimals,
+        missing=spec.missing,
+        leaf_rank=spec.leaf_rank(),
+        adsl_group_col=spec.adsl_group_col,
     )
 
 

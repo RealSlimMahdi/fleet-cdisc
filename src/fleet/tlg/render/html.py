@@ -172,7 +172,13 @@ table.fleet-listing tbody tr:last-child td {
 }
 @media print {
   .fleet-listing-container { max-width: none; overflow: visible; }
-  table.fleet-listing { page-break-inside: auto; }
+  table.fleet-listing { page-break-inside: auto; table-layout: fixed; }
+  table.fleet-listing thead th, table.fleet-listing tbody td {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    padding-left: 3px;
+    padding-right: 3px;
+  }
   table.fleet-listing tr { page-break-inside: avoid; }
   .fleet-page { page-break-after: always; }
   .fleet-page:last-child { page-break-after: auto; }
@@ -299,7 +305,8 @@ def render_html(
     Examples:
         Render an AE summary to HTML::
 
-            ard = adae.tlg.ae.t_summary(groupby="TRTA", adsl=adsl)
+            spec = AESummarySpec(adsl_group_col="TRT01A")
+            ard = adae.tlg.ae.t_summary(spec=spec, adsl=adsl)
             model = ard_to_table_model(ard, RenderMetadata(title="Table 14.3.1.1"))
             html = render_html(model)
     """

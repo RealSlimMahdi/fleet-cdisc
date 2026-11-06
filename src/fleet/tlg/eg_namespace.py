@@ -109,7 +109,7 @@ class EGQtcatSpec(SummarySpecBase):
     nested: ClassVar[bool] = True
 
     _unconsumed_spec_fields: ClassVar[frozenset[str]] = frozenset(
-        {"rows", "header_rows", "value_col", "label_col"}
+        {"rows", "header_rows", "value_col", "label_col", "missing"}
     )
 
     percent_base: Literal["visit", "adsl"] = Field(
@@ -170,12 +170,13 @@ class EGTLGNamespace(BuilderVerbsMixin):
                 default spec is used.
 
         Returns:
-            pl.DataFrame: Long-format {cards}-compatible ARD.
+            pl.DataFrame: ARD in the {cards} long layout.
 
         Examples:
-            Zero-config EG summary::
+            EG summary, ADSL arm in TRT01A::
 
-                ard = adeg.tlg.eg.t_summary(groupby="TRTA", adsl=adsl)
+                spec = EGSummarySpec(adsl_group_col="TRT01A")
+                ard = adeg.tlg.eg.t_summary(spec=spec, adsl=adsl)
 
             Custom spec with pooled arms::
 
@@ -183,6 +184,7 @@ class EGTLGNamespace(BuilderVerbsMixin):
 
                 spec = EGSummarySpec(
                     pools=[GroupPool(label="Total", arms="*")],
+                    adsl_group_col="TRT01A",
                 )
                 ard = adeg.tlg.eg.t_summary(spec=spec, adsl=adsl)
         """
@@ -212,10 +214,13 @@ class EGTLGNamespace(BuilderVerbsMixin):
             spec: Optional ``EGChgSpec`` override.
 
         Returns:
-            pl.DataFrame: {cards}-compatible ARD.
+            pl.DataFrame: ARD in the {cards} long layout.
 
         Examples:
-            ``ard = adeg.tlg.eg.t_chg(groupby="TRTA", adsl=adsl)``
+            ADSL arm in TRT01A::
+
+                spec = EGChgSpec(adsl_group_col="TRT01A")
+                ard = adeg.tlg.eg.t_chg(spec=spec, adsl=adsl)
         """
         return summarize_spec(self._df, spec or EGChgSpec(), groupby=groupby, adsl=adsl)
 
@@ -247,7 +252,7 @@ class EGTLGNamespace(BuilderVerbsMixin):
             spec: Optional ``EGQtcatSpec`` override.
 
         Returns:
-            pl.DataFrame: {cards}-compatible ARD.
+            pl.DataFrame: ARD in the {cards} long layout.
 
         Raises:
             SchemaError: If one subject has two records in one parameter
@@ -257,7 +262,10 @@ class EGTLGNamespace(BuilderVerbsMixin):
                 statistics other than n and n (%).
 
         Examples:
-            ``ard = adeg.tlg.eg.t_qtcat(groupby="TRTA", adsl=adsl)``
+            ADSL arm in TRT01A::
+
+                spec = EGQtcatSpec(adsl_group_col="TRT01A")
+                ard = adeg.tlg.eg.t_qtcat(spec=spec, adsl=adsl)
         """
         spec = spec or EGQtcatSpec()
         if spec.rows or spec.header_rows:
@@ -326,6 +334,7 @@ class EGTLGNamespace(BuilderVerbsMixin):
             adsl_filter=spec.adsl_filter,
             nested=True,
             decimals=spec.decimals,
+            adsl_group_col=spec.adsl_group_col,
         )
         big_n = ard.filter(pl.col("variable") == "")
         block_n = ard.filter(pl.col("variable") == _QTC_BLOCK).with_columns(

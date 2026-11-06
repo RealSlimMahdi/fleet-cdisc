@@ -9,6 +9,7 @@ import polars as pl
 import pytest
 
 import fleet  # noqa: F401 — triggers namespace registration
+from fleet.core.exceptions import DerivationError
 
 # ──────────────────────────────────────────────────────────────────────
 # Fixtures
@@ -362,8 +363,10 @@ class TestExportSuppDomain:
         assert supp["RDOMAIN"][0] == "DM"
 
     def test_rdomain_explicit_override(self, dm_raw_with_flags):
-        ns = dm_raw_with_flags.sdtm.nsv("SAFETY", source="safety_flag", label="Safety Flag")
-        supp = ns.export_supp(domain="XX")
+        ns = dm_raw_with_flags.sdtm.assign("XXSEQ", value=1).nsv(
+            "SAFETY", source="safety_flag", label="Safety Flag"
+        )
+        supp = ns.export_supp(domain="XX", idvar="XXSEQ")
         assert all(v == "XX" for v in supp["RDOMAIN"].to_list())
 
 
@@ -445,10 +448,15 @@ class TestExportSuppSpecAware:
 
 
 class TestExportSuppEmpty:
-    """Empty NSV list returns empty frame with correct schema."""
+    """No metadata source raises; an empty qualifier set gives an empty SUPP."""
 
-    def test_no_nsv_meta_returns_empty(self, dm_raw_with_flags):
-        supp = dm_raw_with_flags.sdtm.export_supp()
+    def test_no_nsv_meta_raises(self, dm_raw_with_flags):
+        """c1-103: after to_frame() the nsv() metadata is gone, so say so."""
+        with pytest.raises(DerivationError, match="no NSV metadata"):
+            dm_raw_with_flags.sdtm.export_supp()
+
+    def test_empty_qualifiers_returns_empty(self, dm_raw_with_flags):
+        supp = dm_raw_with_flags.sdtm.export_supp(qualifiers={})
         assert supp.height == 0
         assert supp.columns == [
             "STUDYID",
@@ -462,6 +470,110 @@ class TestExportSuppEmpty:
             "QORIG",
             "QEVAL",
         ]
+
+
+AE_TOX = """
+┌─────────┬────────┬─────────┬───────┬────────┐
+│ STUDYID ┆ DOMAIN ┆ USUBJID ┆ AESEQ ┆ AETOXG │
+│ ---     ┆ ---    ┆ ---     ┆ ---   ┆ ---    │
+│ str     ┆ str    ┆ str     ┆ i64   ┆ str    │
+╞═════════╪════════╪═════════╪═══════╪════════╡
+│ S1      ┆ AE     ┆ 01-001  ┆ 1     ┆ a      │
+│ S1      ┆ AE     ┆ 01-001  ┆ 2     ┆ b      │
+└─────────┴────────┴─────────┴───────┴────────┘
+"""
+
+
+class TestExportSuppRefusals:
+    """c1-102, c1-103: a SUPP that cannot link or is incomplete raises."""
+
+    def test_idvar_typo_raises(self):
+        ae = pl.from_repr(AE_TOX)
+        with pytest.raises(DerivationError, match="idvar 'AESEQQ' is not a column"):
+            ae.sdtm.export_supp(qualifiers={"AETOXG": {"label": "Tox"}}, idvar="AESEQQ")
+
+    def test_no_idvar_on_ae_raises_and_names_aeseq(self):
+        ae = pl.from_repr(AE_TOX)
+        with pytest.raises(DerivationError, match="AESEQ"):
+            ae.sdtm.export_supp(qualifiers={"AETOXG": {"label": "Tox"}})
+
+    def test_absent_qualifier_is_named(self, dm_raw_with_flags):
+        with pytest.raises(DerivationError, match="ITTX"):
+            dm_raw_with_flags.sdtm.export_supp(
+                qualifiers={"safety_flag": {"label": "S"}, "ITTX": {"label": "I"}}
+            )
+
+    def test_spec_dataset_typo_raises(self, dm_raw_with_flags, nsv_spec_yaml):
+        with pytest.raises(DerivationError):
+            dm_raw_with_flags.sdtm.export_supp(spec=str(nsv_spec_yaml), dataset="DMM")
+
+    def test_zero_rows_and_no_domain_raises_derivation_error(self):
+        dm = pl.from_repr(AE_TOX).clear().drop("DOMAIN")
+        with pytest.raises(DerivationError, match="domain="):
+            dm.sdtm.export_supp(qualifiers={"AETOXG": {"label": "Tox"}}, idvar="AESEQ")
+
+
+class TestExportSuppText:
+    """c1-101, c1-104: QVAL and IDVARVAL are text with no float noise, no blank."""
+
+    def test_float_seq_mixed_qualifiers_and_blank(self):
+        ae = pl.from_repr("""
+┌─────────┬────────┬─────────┬───────┬──────┬────────┬───────┬────────────┐
+│ STUDYID ┆ DOMAIN ┆ USUBJID ┆ AESEQ ┆ AEWT ┆ AEFRAC ┆ AETXT ┆ AEDT       │
+│ ---     ┆ ---    ┆ ---     ┆ ---   ┆ ---  ┆ ---    ┆ ---   ┆ ---        │
+│ str     ┆ str    ┆ str     ┆ f64   ┆ i64  ┆ f64    ┆ str   ┆ date       │
+╞═════════╪════════╪═════════╪═══════╪══════╪════════╪═══════╪════════════╡
+│ S       ┆ AE     ┆ S-1     ┆ 1.0   ┆ 80   ┆ 0.3    ┆       ┆ 2014-01-02 │
+└─────────┴────────┴─────────┴───────┴──────┴────────┴───────┴────────────┘
+""").with_columns(pl.lit(0.1 + 0.2).alias("AEFRAC"))
+        supp = ae.sdtm.export_supp(
+            qualifiers={q: {"label": q} for q in ("AEWT", "AEFRAC", "AETXT", "AEDT")},
+            idvar="AESEQ",
+        )
+        assert dict(supp.select("QNAM", "QVAL").iter_rows()) == {
+            "AEWT": "80",
+            "AEFRAC": "0.3",
+            "AEDT": "2014-01-02",
+        }
+        assert supp["IDVARVAL"].unique().to_list() == ["1"]
+
+    def test_blank_and_spaces_give_no_record(self):
+        ae = pl.from_repr("""
+┌─────────┬────────┬─────────┬───────┬────────┐
+│ STUDYID ┆ DOMAIN ┆ USUBJID ┆ AESEQ ┆ AETOXG │
+│ ---     ┆ ---    ┆ ---     ┆ ---   ┆ ---    │
+│ str     ┆ str    ┆ str     ┆ i64   ┆ str    │
+╞═════════╪════════╪═════════╪═══════╪════════╡
+│ S1      ┆ AE     ┆ 01-001  ┆ 1     ┆ 1      │
+│ S1      ┆ AE     ┆ 01-001  ┆ 2     ┆        │
+│ S1      ┆ AE     ┆ 01-001  ┆ 3     ┆ 3      │
+└─────────┴────────┴─────────┴───────┴────────┘
+""").with_columns(pl.col("AETOXG").replace("", "  "))
+        supp = ae.sdtm.export_supp(qualifiers={"AETOXG": {"label": "Tox"}}, idvar="AESEQ")
+        assert supp["IDVARVAL"].to_list() == ["1", "3"]
+
+
+class TestExportSuppSpecEmpty:
+    """A spec dataset with no qualifier stays a legal empty SUPP."""
+
+    def test_spec_dataset_with_no_qualifier_is_empty(self, dm_raw_with_flags, tmp_path):
+        spec = tmp_path / "define.yaml"
+        spec.write_text(
+            dedent("""\
+                study:
+                  id: TEST01
+                datasets:
+                  - name: DM
+                    label: Demographics
+                    variables:
+                      - name: USUBJID
+                        label: Unique Subject Identifier
+                        type: text
+                        origin: Collected
+            """)
+        )
+        supp = dm_raw_with_flags.sdtm.export_supp(spec=str(spec), dataset="DM")
+        assert supp.height == 0
 
 
 # ──────────────────────────────────────────────────────────────────────

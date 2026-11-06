@@ -138,8 +138,11 @@ name or a fully qualified Python dotted path. The runtime dispatch depends
 on the callable's `kind`:
 
 - **`kind="column"`** (zero-arg, returns `pl.Expr`) — stays fully lazy,
-  no DataFrame materialisation.
-- **`kind="frame"` or `kind="param"`** (receives upstream DataFrame, returns
+  no DataFrame materialisation. It writes the column named as the
+  function, so the function name must be the variable name (or the
+  expression ends with `.alias("<variable>")`); otherwise `from_spec`
+  raises `SpecError`.
+- **`kind="frame"`** (receives upstream DataFrame, returns
   `pl.DataFrame`) — the pipeline is materialised at that point, the function
   is called, and the result is wrapped back into the namespace.
 
@@ -269,6 +272,32 @@ adsl = dm.adam.adsl.first_date(
 ).to_frame()
 ```
 
+### Record filters — `row_steps:`
+
+A step that removes records has no variable, so it does not sit in
+`variables:`. It sits in the dataset key `row_steps:`, in pipeline order
+(ADR-0034). Each step names the variable it follows with `after:` (`null`:
+before the first variable), and `from_spec()` runs it right after that
+variable. `whereclauses` keeps the records where `where:` is true; `nodup`
+keeps one record per `subset:` after the sort on `sort_by:`.
+
+```yaml
+datasets:
+  - name: ADSL
+    row_steps:
+      - algorithm: whereclauses
+        where: ARMCD != "SCRNFAIL"
+        after: ARMCD
+    variables:
+      - name: ARMCD
+        derivation: {algorithm: assign}
+```
+
+`to_spec_yaml()` writes these steps from an inline chain. A step it cannot
+write (a `pl.Expr` filter, `derive_param`) is written as `algorithm: TODO`
+with the verb name: `from_spec()` refuses the file until you write the step.
+Define-XML shows the steps as the dataset comment.
+
 ---
 
 ## End-to-End Flow
@@ -374,7 +403,18 @@ The spec keys below apply to every generation:
 - **`derivations_module:`** — a dotted module that `from_spec` imports itself, so
   `callable:` derivations register without a manual import.
 - **`output_format:`** — per-dataset or spec-level export format (`parquet`,
-  `json`, `xpt`) recorded in the DAG and Define-XML leaf hrefs.
+  `dataset-json`, `xpt`) recorded in the DAG and Define-XML leaf hrefs, and
+  the format `fleet run` writes when no `--format` is given.
+- **`output:`** — per-dataset Define-XML leaf href, used verbatim. It names
+  the leaf only: `fleet run` still writes `<name>.<ext>` and warns when the
+  two differ.
+- **`sdtm_role:`** — per-variable SDTM role (`Identifier`, `Topic`,
+  `Timing`, `Grouping Qualifier`, `Result Qualifier`, `Synonym Qualifier`,
+  `Record Qualifier`, `Variable Qualifier`, `Rule`), written as the ItemRef
+  `Role`. `fleet init define` fills it from the CDISC Library; check a
+  sponsor-specific role by hand (ADR 0042). It is apart from `role:
+  qualifier`, which marks a Non-Standard Variable for `SUPP<domain>` (see
+  *Supplemental qualifiers* below).
 - **`value_level:`** — value-level metadata entries emitted as Define-XML
   `<ValueListDef>` / where-clause elements.
 - **`ct: {validate: true, file: ...}`** — opt the spec into CT validation
@@ -395,6 +435,41 @@ Variables can reference codelists declared in the `codelists` block:
     algorithm: assign
     source: SEX
 ```
+
+The terms of a codelist decide its Define-XML form:
+
+- every term has a `decode:`: `CodeListItem`;
+- no term has a `decode:` (units, test codes): `EnumeratedItem`;
+- some terms have a `decode:` and some do not: a `SpecError` that names the
+  codelist and the first term without one;
+- `external: {dictionary: MedDRA, version: "26.0"}` in place of `items:`:
+  `ExternalCodeList`.
+
+`nci_code:` on a codelist or a term writes the NCI `Alias`, and
+`extended: true` on a term marks a sponsor term (`def:ExtendedValue="Yes"`).
+A codelist whose `oid` is an NCI code (`C66731`) gets
+`def:StandardOID="STD.CT"` when `study.ct_version` is set; `standard_oid:`
+sets another declared standard (`STD.CT.ADAM` with `study.adam_ct_version`).
+
+<!-- docs:no-run -->
+
+```yaml
+codelists:
+  - oid: C66731
+    name: Sex
+    type: text
+    nci_code: C66731
+    items:
+      - { coded_value: F, decode: Female, nci_code: C16576 }
+      - { coded_value: X, decode: X, extended: true }
+  - oid: CL.UNIT
+    name: Unit
+    type: text
+    items: [{ coded_value: mg }, { coded_value: kg }]
+```
+
+Each dataset variable has its own `ItemDef` (`IT.ADSL.AGE`, `IT.ADAE.AGE`), so
+each one keeps the type, length, origin and codelist of its own dataset.
 
 ### Controlled terminology in the spec path
 
@@ -562,9 +637,22 @@ What it catches:
 - a spec that does not conform to `define_spec_schema.json` (`SpecSchemaError`,
   with the path of the bad entry);
 - a `codelist:` reference to a codelist that the spec does not declare;
+- a key, a value-level variable or a where-clause variable that its dataset
+  does not declare, and a `crf_pages` document that `study.documents` does
+  not declare;
+- in an SDTMIG 3.4 (or earlier) spec, a `role: qualifier` variable that
+  cannot move to its generated `SUPP<domain>` (see *Supplemental qualifiers*
+  below). The message names `SUPP<domain>` and the reason;
+- a `study.ct_version` (or `adam_ct_version`) that is not the date of the CT
+  package that `study_config.yaml` pins;
 - a Define-XML gap: method text, `Length` or `SignificantDigits` (see
   *Define-XML gaps* above);
 - a generated document that fails the CDISC XSDs or the semantic lint.
+
+`fleet check` imports no study code: it does not import the
+`derivations_module` of the spec, and a `callable:` derivation is described
+by its `comment:` or its dotted path. `fleet define-xml` imports the module to
+write the method text of each `callable:`.
 
 The derivation blocks themselves are checked by layer 1: the verb's model
 knows the required keys, so there are no separate per-algorithm rules.
@@ -611,6 +699,54 @@ VS Code or any LSP-enabled editor:
 
 ---
 
+## Supplemental qualifiers
+
+An SDTM variable with `role: qualifier` (or `algorithm: nsv`) is a
+Non-Standard Variable. `fleet run` builds it, then moves it to a
+`SUPP<domain>` dataset (SDTMIG 3.4 section 8.4) and writes the parent
+without it. IDVAR is `<domain>SEQ`; only DM may have no IDVAR, so another
+domain with no `--SEQ` stops the run. Later datasets of the same run still
+read the qualifier from the full frame.
+
+The same define.yaml gives the Define-XML. For SDTMIG 3.4 or earlier,
+`fleet define-xml` and `fleet check` leave the qualifier out of the parent
+ItemGroupDef and add a `SUPP<domain>` ItemGroupDef (ADR 0044):
+
+- the variables STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM, QLABEL,
+  QVAL, QORIG and QEVAL, with the keys STUDYID, RDOMAIN, USUBJID, IDVAR,
+  IDVARVAL and QNAM;
+- value-level metadata on QVAL: one where clause `QNAM EQ <name>` per
+  qualifier, with its label, type, length, codelist, origin and method;
+- IDVAR text `<domain>SEQ` (for DM: null), the rule of `fleet run`;
+- the leaf `supp<domain>` in the format of the parent.
+
+<!-- docs:no-run -->
+
+```yaml
+- name: AE
+  variables:
+    - name: AESEQ
+      # ...
+    - name: AETRTEM
+      label: Treatment Emergent Flag
+      type: text
+      length: 1
+      origin: Derived
+      role: qualifier  # fleet run: SUPPAE; define: IG.SUPPAE, QVAL where QNAM EQ AETRTEM
+      derivation:
+        algorithm: assign
+        source: trtem
+```
+
+The define refuses a qualifier that cannot move: the parent has no STUDYID
+or USUBJID, a parent other than DM has no `<domain>SEQ`, the spec also
+declares `SUPP<domain>`, the name has more than 8 characters (QNAM), the
+label has more than 40 characters (QLABEL), or the qualifier is a key of the
+parent. Give CRF pages of a qualifier with `crf_pages:` on the variable: a
+key `AE.AETRTEM` in an external page map does not reach `SUPPAE`.
+
+---
+
 ## CRF Page References
 
 Variables with `origin: Collected` can include page references to the annotated
@@ -634,8 +770,10 @@ How the Origin **description** renders, per origin type:
   carried with `algorithm: assign` and `source:` but still marked `Collected`
   triggers a generation-time warning suggesting the Predecessor form. When
   freezing an inline pipeline, `to_spec_yaml(dataset="ADSL", predecessor="DM")`
-  pre-fills these entries for carry-through columns and pure copies — the
-  emitted YAML stays the explicit, reviewable source of truth.
+  pre-fills these entries for carry-through columns and pure copies of a
+  column present at the start of the chain. A column a verb added with no
+  lineage (`merge`) gets a TODO stub, never a Predecessor. The emitted YAML
+  stays the explicit, reviewable source of truth.
 - **`Derived`** describes the derivation in its `MethodDef`.
 - **`Assigned` / `Protocol`** show the `comment:` — e.g.
   `comment: DM.ARM` renders `Assigned: DM.ARM`.
@@ -702,7 +840,13 @@ variables:
 ```
 
 The string value maps directly to the `PageRefs` attribute with
-`Type="PhysicalRef"`.
+`Type="PhysicalRef"`. A number (`crf_pages: 8` in YAML) is read as the page
+string `"8"`. Without `study.documents.annotated_crf`, the pages cannot be
+written: Fleet gives a warning that names each variable.
+
+A value-level variable takes its own pages: the key of its page map entry is
+`DATASET.VARIABLE.<where values>` (for example `LB.LBORRES.ALB`), and the
+parent `DATASET.VARIABLE` is the fallback.
 
 ### Layer 2 — Rich references (named destinations, page ranges)
 
@@ -723,6 +867,10 @@ For PDF bookmarks or page ranges, use the dict form:
     first_page: "8" # optional range attributes
     last_page: "9"
 ```
+
+`doc:` names the `href` of the annotated CRF or of a supplemental document.
+A `doc:` that matches no declared document stops generation with a
+`SpecError` that names the variable.
 
 ### Layer 3 — External page map (EDC-driven workflows)
 
@@ -748,7 +896,9 @@ VS.VSTESTCD: "20"
 ```
 
 Inline `crf_pages` on individual variables always take precedence over the
-external page map.
+external page map. A `page_map` file that does not exist stops generation
+with a `SpecError`. Page map keys that match no variable of the spec give one
+warning that lists them.
 
 ### Supplemental documents
 

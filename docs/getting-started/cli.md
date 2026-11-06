@@ -107,8 +107,8 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 | ------ | ------- | ----------- |
 | `--dataset` | _(none)_ | Dataset to build (repeatable). Default: every dataset in the define files. |
 | `--config` / `-c` | _(none)_ | Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style). |
-| `--out` / `--output` / `-o` | _(none)_ | Output directory for every dataset. Default: the configured data/sdtm and data/adam directories. |
-| `--format` | `parquet` | Output format (default: parquet). Choices: `parquet`, `xpt`, `dataset-json`. |
+| `--out` / `--output` / `-o` | _(none)_ | Output directory for every dataset. Default: the configured data/sdtm and data/adam directories. Fleet only writes here: inputs are read from the run, a declared path:, the raw directory (type: raw) or the data directory of the input's standard (type: dataset). |
+| `--format` | _(none)_ | Output format of every dataset. Default: the output_format of the dataset, else of define.yaml, else parquet (the rule of the Define-XML leaf). Choices: `parquet`, `xpt`, `dataset-json`. |
 | `--strict` / `--no-strict` | _(on)_ | Raise on unknown spec algorithms (default). --no-strict warns and skips. |
 
 ---
@@ -124,7 +124,8 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 | `--config` / `-c` | _(none)_ | Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style). |
 | `--standard` | _(none)_ | Force the standard. Default: the configured data directory that holds the dataset, else AD* datasets → adam, others → sdtm. Choices: `sdtm`, `adam`. |
 | `--version` | _(none)_ | IG version. Default: the sdtm/adam ig_version declared in the discovered study_config.yaml (3.4 / 1.3 outside a study). |
-| `--custom-rules` | _(none)_ | Directory of custom validation rule YAML files. Default: validation.custom_rules from the discovered study_config.yaml. |
+| `--define` | _(none)_ | Define-XML file that CORE checks with the datasets (CORE -dxp). Opt-in: Fleet never passes a define by default. |
+| `--custom-rules` | _(none)_ | Directory of custom validation rule YAML files, relative to the working directory. Default: validation.custom_rules from the discovered study_config.yaml. |
 | `--timeout` | _(none)_ | Seconds before an engine run is stopped. Default: validation.timeout from the discovered study_config.yaml, else 300. |
 | `--report` | _(none)_ | Write an HTML findings report to PATH. |
 | `--encoding` | _(none)_ | Text encoding of the CSV and SAS files, e.g. iso-8859-1 for files from a WLATIN1 SAS session (default: UTF-8). |
@@ -259,7 +260,8 @@ PROC COMPARE analogue: pair the two datasets on --keys, match variables by name 
 | `--adsl` | _(none)_ | ADSL dataset path (population denominators for tables). |
 | `--output` / `-o` | _(none)_ | Output directory. Default: the configured outputs directory (current directory outside a study workspace). |
 | `--format` | `html` | Output format (default: html). Choices: `html`, `rtf`, `pdf`, `pptx`. |
-| `--groupby` | _(none)_ | Treatment-arm column. Default: auto-detect (TRTA → TRT01A → TRT01P). |
+| `--groupby` | _(none)_ | Treatment-arm column. Default: the spec's columns: field when it declares one, else auto-detect (TRTA → TRT01A → TRT01P). |
+| `--adsl-groupby` | _(none)_ | ADSL arm column for the big N when ADSL lacks the analysis arm (e.g. TRT01A for an ADAE grouped by TRTA). Sets adsl_group_col. |
 | `--title` | `""` | Output title (default: template title). |
 | `--subtitle` | `""` | Output subtitle. |
 | `--footnote` | _(none)_ | Footnote (repeatable). |
@@ -278,7 +280,8 @@ PROC COMPARE analogue: pair the two datasets on --keys, match variables by name 
 | `--data` | _(none)_ | Analysis dataset path, repeatable. Plain PATH applies to every spec; NAME=PATH (e.g. ADAE=adae.parquet) targets the template's analysis domain. |
 | `--adsl` | _(none)_ | ADSL dataset path (population denominators for tables). |
 | `--output` / `-o` | _(none)_ | Output HTML file. Default: explorer.html in the configured outputs directory (current directory outside a study workspace). |
-| `--groupby` | _(none)_ | Treatment-arm column for specs without a groupby axis. Default: auto-detect (TRTA → TRT01A → TRT01P). |
+| `--groupby` | _(none)_ | Treatment-arm column for specs without a groupby axis. Default: the spec's columns: field when it declares one, else auto-detect (TRTA → TRT01A → TRT01P). |
+| `--adsl-groupby` | _(none)_ | ADSL arm column for the big N when ADSL lacks the analysis arm (e.g. TRT01A for an ADAE grouped by TRTA). Sets adsl_group_col. |
 | `--title` | `""` | Output title (default: template title). |
 | `--subtitle` | `""` | Output subtitle. |
 | `--footnote` | _(none)_ | Footnote (repeatable). |
@@ -293,7 +296,9 @@ PROC COMPARE analogue: pair the two datasets on --keys, match variables by name 
 | `--data` | _(none)_ | Path to the primary analysis dataset. Default: the analysis dataset the domain's t_summary template declares (e.g. ADAE for ae, ADSL for dm/ds), found in the configured data directories. |
 | `--adsl` | _(none)_ | Path to the ADSL dataset. Default: ADSL found in the configured adam_data directory. |
 | `--output` / `-o` | _(none)_ | Output file path. Default: <domain>_summary.<format> in the configured outputs directory (current directory outside a study). |
-| `--groupby` | _(none)_ | Treatment-arm column. Default: auto-detect (TRTA → TRT01A → TRT01P). |
+| `--groupby` | _(none)_ | Treatment-arm column. Default: auto-detect (TRTA → TRT01A → TRT01P); TRT01A → TRT01P for the ADSL domains dm and ds. |
+| `--adsl-groupby` | _(none)_ | ADSL arm column for the big N when ADSL lacks the analysis arm (e.g. TRT01A for an ADAE grouped by TRTA). Sets adsl_group_col. |
+| `--population` | _(none)_ | ADSL population filter, passed to the spec's adsl_filter and shown in a footnote, e.g. 'pl.col("SAFFL") == "Y"'. Default: none (all ADSL subjects). |
 | `--title` | `""` | Table title. |
 | `--subtitle` | `""` | Table subtitle. |
 | `--footnote` | _(none)_ | Footnote (repeatable). |
@@ -305,6 +310,8 @@ PROC COMPARE analogue: pair the two datasets on --keys, match variables by name 
 
 ## `fleet define-xml`
 
+Generate Define-XML 2.1 from a define.yaml specification. This imports the spec's derivations_module (study Python code) to describe callable: derivations: run it only on a study you trust.
+
 | Option | Default | Description |
 | ------ | ------- | ----------- |
 | `--spec` / `-s` | _(none)_ | Path to the define.yaml specification file. Default: <metadata_sdtm\|metadata_adam>/define.yaml from the discovered study_config.yaml (per --standard). |
@@ -312,7 +319,7 @@ PROC COMPARE analogue: pair the two datasets on --keys, match variables by name 
 | `--standard` | `sdtm` | Which define.yaml to use for the config-based defaults (default: sdtm). Choices: `sdtm`, `adam`. |
 | `--config` / `-c` | _(none)_ | Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style). |
 | `--no-preview` | _(none)_ | Skip generating the HTML preview alongside the XML. |
-| `--enrich-methods` | _(none)_ | Kept for old scripts: MethodDefs are on by default. Every Derived variable with a comment: or a derivation: gets a MethodDef. |
+| `--enrich-methods` | _(none)_ | Kept for old scripts: MethodDefs are on by default. Every Derived variable with a comment: or a derivation: gets a MethodDef. This imports the spec's derivations_module (study Python code). |
 | `--strict` | _(none)_ | Refuse to write the file when the define has gaps: a Derived variable with no method text, a text, integer or float variable with no length, a float with no significant_digits. Without it the gaps are warnings. |
 | `--watch` | _(none)_ | Re-generate whenever the spec file changes (requires the 'watch' extra). |
 
@@ -395,7 +402,7 @@ PROC COMPARE analogue: pair the two datasets on --keys, match variables by name 
 | Option | Default | Description |
 | ------ | ------- | ----------- |
 | `--dataset` | `ADSL` | Target dataset name (default: ADSL). |
-| `--kind` | `column` | Derivation kind: column / frame / param (default: column). Choices: `column`, `frame`, `param`. |
+| `--kind` | `column` | Derivation kind: column / frame (default: column). For a new parameter row, use .adam.derive_param(). Choices: `column`, `frame`. |
 | `--config` / `-c` | _(none)_ | Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style). |
 
 ---

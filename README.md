@@ -70,10 +70,10 @@ Clinical statistical programming often requires hundreds of lines of boilerplate
 
 - **Workflow quality first** — one obvious path from raw data to submission artefact; one verb vocabulary whether a step is chained inline or declared in `define.yaml`
 - **Intent-driven syntax** — your code reads like the CDISC spec itself
-- **Lazy-first evaluation** — most verbs accumulate into a single Polars `with_columns` pass; window verbs (`baseline`, cross-domain joins) checkpoint internally without breaking the chain, and `pl.scan_parquet(...).sdtm` keeps a whole pipeline lazy
+- **Lazy-first evaluation** — most verbs append to one lazy plan. Some verbs read data before the chain continues: checks (`baseline`, `date` to a DTC variable) and verbs that build or filter records (`whereclauses`, `pick`, `derive_*`, `nodup`). The chain does not break at these verbs
 - **Zero Pandas** — built entirely on Polars for blazing-fast, multi-threaded execution
 - **AI-native by consequence** — a sharp workflow is what makes LLM-assisted programming reliable; the MCP server, language server and `llms.txt` just expose it
-- **Dual workflow** — the same pipeline chained inline in Python _or_ declared in `define.yaml`, and round-trippable between the two
+- **Dual workflow** — the same pipeline chained inline in Python _or_ declared in `define.yaml`. `to_spec_yaml()` writes a draft define.yaml from a chain: verbs listed in `fleet.spec_coverage()` round-trip, other verbs emit a TODO stub to complete
 - **Six core dependencies** — minimal footprint (`polars`, `pydantic`, `pyyaml`, `httpx`, `jsonschema`, `lxml`); everything else is an opt-in extra
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
@@ -108,7 +108,8 @@ raw_df = fleet.frame(
 """)
 )
 
-# SDTM DM domain — from raw data to submission-ready in one chain.
+# SDTM DM domain — from raw data to an SDTM-shaped frame in one chain.
+# keep() drops the raw columns and puts the DM variables in IG order.
 # `assign` is the one assignment verb: source= copies, value= hardcodes,
 # ct=/ct_map= add controlled-terminology validation & decoding.
 # A study passes the class that `fleet init ct` generates (ct=SEX); with the
@@ -119,6 +120,7 @@ dm = (
     .assign("USUBJID", source="patient_id")
     .assign("SEX", source="sex_raw", ct="C66731", ct_map={"Male": "M", "Female": "F"})
     .date("RFSTDTC", source="first_dose_date")
+    .keep("STUDYID", "DOMAIN", "USUBJID", "SEX", "RFSTDTC")
     .to_frame()
 )
 
@@ -144,10 +146,9 @@ advs = (
 )
 ```
 
-Most verbs accumulate into a single optimized Polars pass; the few that need a
-materialised column (`baseline`, cross-domain joins) checkpoint internally
-without breaking the chain — so `flag → baseline → chg` is one pipeline, not
-three. The pre-alpha verb spellings (`assign_no_ct`, `hardcode_no_ct`,
+Most verbs append to one lazy plan. Some verbs read data before the chain
+continues (the `baseline` duplicate check, for example), but the chain does not
+break: `flag → baseline → chg` is one pipeline, not three. The pre-alpha verb spellings (`assign_no_ct`, `hardcode_no_ct`,
 `if_then_else`, …) were removed outright; run `fleet migrate <files...> --write`
 to rewrite old external scripts. A define.yaml uses the same words: the
 `algorithm:` value is the verb name and the keys are its keyword arguments
@@ -175,6 +176,7 @@ written in the old spec vocabulary.
 Fleet is pre-release software. The verbs and the CLI can change between versions.
 
 ```bash
+uv init my-study && cd my-study
 uv add fleet-cdisc --prerelease=allow
 # or: pip install --pre fleet-cdisc
 ```
@@ -190,7 +192,7 @@ uv sync --extra docs --extra all --extra dev
 **Verify**
 
 ```bash
-python -c "import fleet; print(fleet.__version__)"
+uv run python -c "import fleet; print(fleet.__version__)"
 ```
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
@@ -260,7 +262,7 @@ Importing `fleet` registers chainable namespaces on **every** Polars DataFrame. 
 <details>
 <summary><b><code>df.adam.peds</code></b> — Pediatrics (26 verbs: 6 specific + 20 shared)</summary>
 
-**Specific:** `age_days` · `age_months` · `age_years` · `corrected_age` · `prematurity_flag` · `bmi_category`
+**Specific:** `age_days` · `age_months` · `age_years` · `corrected_age` · `prematurity_flag` · `bmi_percentile_category`
 
 **Shared:** `source` · `assign` · `case_when` · `derivation` · `recode` · `merge` · `keep` · `whereclauses` · `merge_adsl` · `date` · `duration` · `flag` · `pick` · `pin` · `repin` · `join_adsl` · `study_day` · `nodup` · `fk_policy` · `pins`
 
@@ -276,9 +278,9 @@ Importing `fleet` registers chainable namespaces on **every** Polars DataFrame. 
 </details>
 
 <details>
-<summary><b><code>df.adam.metabolic</code></b> — Metabolic (24 verbs: 4 specific + 20 shared)</summary>
+<summary><b><code>df.adam.metabolic</code></b> — Metabolic (25 verbs: 5 specific + 20 shared)</summary>
 
-**Specific:** `waist_hip_ratio` · `waist_height_ratio` · `body_fat_pct` · `visceral_fat_flag`
+**Specific:** `waist_hip_ratio` · `waist_height_ratio` · `body_fat_pct` · `visceral_fat_flag` · `bmi_category_adult`
 
 **Shared:** `source` · `assign` · `case_when` · `derivation` · `recode` · `merge` · `keep` · `whereclauses` · `merge_adsl` · `date` · `duration` · `flag` · `pick` · `pin` · `repin` · `join_adsl` · `study_day` · `nodup` · `fk_policy` · `pins`
 
@@ -457,6 +459,7 @@ uv run fleet new STUDY01 --domains DM,AE,VS --adam-datasets ADSL,ADVS,ADAE \
 # or step by step:
 uv run fleet init cfg --study-id CDISCPILOT01 --company "CDISC" \
   --domains DM,AE,VS,EX --adam-datasets ADSL,ADVS,ADAE --root ./my_study
+cd my_study
 uv run fleet init define    # define.yaml from the CDISC Library IG
 uv run fleet init ct        # codelists.py from define.yaml
 ```
@@ -468,7 +471,7 @@ uv run fleet run --dataset ADVS --out outputs/          # define.yaml -> from_sp
 uv run fleet validate data/sdtm --custom-rules metadata/custom_rules
 uv run fleet check                                       # one CI gate: config + define.yaml schema + run setup (IG versions, rules dir) + custom rules (engine/API key as warnings)
 uv run fleet tlg list                                    # registered TLG templates
-uv run fleet tlg run specs/aet01.yaml --data ADAE=adae.parquet --adsl adsl.parquet --format rtf --rows-per-page 40
+uv run fleet tlg run specs/aet01.yaml --data ADAE=adae.parquet --adsl adsl.parquet --adsl-groupby TRT01A --format rtf --rows-per-page 40
 uv run fleet tdd build                                   # trial design datasets + conformance audit (paths from study_config.yaml)
 uv run fleet tdd ctgov NCT04280705 --write               # seed TS parameters from ClinicalTrials.gov into trial_design.yaml
 uv run fleet migrate src/ --write                        # rewrite removed pre-alpha verb/kwarg spellings
@@ -529,13 +532,13 @@ For detailed module-by-module documentation, see [STRUCTURE.md](https://github.c
 - [x] OCCDS occurrence namespace (ADAE, ADCM)
 - [x] Therapeutic area extensions (Oncology, Ophthalmology, Pediatrics, Vaccine, Metabolic, Neuroscience, PK)
 - [x] Trial Design Domain support (TE, TA, TV, TS, TI, TD, TM) — `fleet.StudyDesign` define-once aggregate, P21-style conformance audit, `fleet tdd` CLI, USDM/Mermaid/ClinicalTrials.gov import
-- [x] Spec-driven pipeline (`define.yaml` → `from_spec()`) + code→spec round-trip (`to_spec_yaml()`)
+- [x] Spec-driven pipeline (`define.yaml` → `from_spec()`) + code→spec draft (`to_spec_yaml()`: verbs in `fleet.spec_coverage()` round-trip, other verbs emit a TODO stub)
 - [x] TLG engine — tables, listings, template registry, HTML/RTF/PDF/PPTX render
 - [x] Executable CLI (`fleet run/validate/check/tlg/migrate`) + Define-XML generation
 - [x] CDISC Rules Engine integration
 - [x] SAS XPT / Dataset-JSON export
-- [x] ADTTE time-to-event framework (`df.adam.tte` — typed event/censor sources, KM inputs)
-- [ ] Additional ADaM dataset structures (ADPC)
+- [x] ADTTE time-to-event framework (`df.adam.tte` — event/censor frames, stop_at window, KM inputs)
+- [ ] ADPC and ADPPK: `examples/adnca_example.py` builds both with the PK verbs; no test compares their values with admiral yet
 - [ ] Enhanced validation reporting
 
 See the [open issues](https://github.com/RealSlimMahdi/fleet-cdisc/issues) for a full list of proposed features and known issues.

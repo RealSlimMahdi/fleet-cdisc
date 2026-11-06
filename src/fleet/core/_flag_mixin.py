@@ -142,6 +142,8 @@ class FlagCriterionMixin:
                 missing key, and ``"first"`` takes one only when every
                 candidate misses it.  SAS sorts a missing value first, so a
                 QC program with PROC SORT differs on such a group.
+                ``"exists_after"``/``"exists_before"`` take one column
+                only; build one ordered key (ADTM) for date and time.
             value_col: Value column required for ``"max"``/``"min"``.
             where: Optional pre-filter — only matching rows are candidates;
                 rows that fail it take no part, even on a tie.
@@ -288,7 +290,6 @@ class FlagCriterionMixin:
                 on=on,
                 source_filter=source_filter,
                 flag_value=flag_value,
-                false_value=false_value,
                 false_lit=false_lit,
             )
         elif mode in ("before", "after"):
@@ -540,7 +541,11 @@ class FlagCriterionMixin:
             order_by: Sort column(s) defining record order within groups.
             by: Partition columns (default ``["USUBJID"]``).
             inclusive: Whether the landmark row itself is flagged.
-            flag_no_ref_groups: Behaviour for groups without a landmark.
+            flag_no_ref_groups: If ``True`` (default), every record of a
+                group with no landmark gets *flag_value*, in both
+                directions, as admiral ``derive_var_relative_flag``.  Pass
+                ``False`` for a post-event flag, so that such a group gets
+                *false_value*.
             flag_value: Value assigned to flagged records (default ``"Y"``).
             false_value: Value assigned otherwise (default null).
 
@@ -722,7 +727,6 @@ class FlagCriterionMixin:
         on,
         source_filter,
         flag_value,
-        false_value,
         false_lit,
     ) -> Self:
         """Handle exists set-membership flag criteria."""
@@ -739,28 +743,12 @@ class FlagCriterionMixin:
 
         if len(on) == 1:
             is_member = pl.col(on[0]).is_in(all_keys[on[0]].implode(), nulls_equal=True)
-            expr = pl.when(is_member).then(pl.lit(flag_value)).otherwise(false_lit).alias(target)
-            return self._chain(expr, verb="flag")
-
-        # Multi-column join path
-        df = self._lazy.collect()
-        df_with_idx = df.with_row_index("__flag_idx__")
-        result = (
-            (df_with_idx.drop(target) if target in df_with_idx.columns else df_with_idx)
-            .join(
-                df_with_idx.select(on + ["__flag_idx__"])
-                .unique()
-                .join(all_keys, on=on, how="semi", nulls_equal=True)
-                .with_columns(pl.lit(flag_value).alias(target)),
-                on="__flag_idx__",
-                how="left",
+        else:
+            is_member = pl.struct(on).is_in(
+                all_keys.select(pl.struct(on)).to_series().implode(), nulls_equal=True
             )
-            .with_columns(
-                pl.col(target).fill_null(pl.lit(false_value) if false_value else pl.lit(None))
-            )
-            .drop("__flag_idx__")
-        )
-        return self._materialise_then(result)
+        expr = pl.when(is_member).then(pl.lit(flag_value)).otherwise(false_lit).alias(target)
+        return self._chain(expr, verb="flag")
 
     def _flag_relative(
         self,
@@ -786,12 +774,11 @@ class FlagCriterionMixin:
         landmark = pl.when(cond_bool).then(pos).otherwise(None).min().over(grps)
 
         norm_false = pl.lit(false_value) if false_value else pl.lit(None)
+        no_ref = pl.lit(flag_value) if flag_no_ref_groups else norm_false
         if criteria_lower == "before":
             flagged = (pos <= landmark) if inclusive else (pos < landmark)
-            no_ref = pl.lit(flag_value) if flag_no_ref_groups else norm_false
         else:
             flagged = (pos >= landmark) if inclusive else (pos > landmark)
-            no_ref = pl.lit(false_value) if flag_no_ref_groups else norm_false
 
         expr = (
             pl.when(landmark.is_null())
@@ -833,6 +820,13 @@ class FlagCriterionMixin:
         if source_filter is not None:
             src = src.filter(source_filter)
 
+        if len(order_cols) > 1:
+            raise VerbUsageError(
+                f"flag criteria='{criteria_lower}' takes one order_by column, got "
+                f"{order_cols}. Build one ordered key column first, for example "
+                "pl.concat_str([pl.col('ADT').cast(pl.String), pl.col('ATM')]) or ADTM, "
+                "and pass it as order_by."
+            )
         if order_cols:
             time_col = order_cols[0]
         else:
@@ -884,7 +878,7 @@ class FlagCriterionMixin:
         if isinstance(criteria, pl.Expr):
             row_cond = criteria
         else:
-            row_cond = parse_expression(str(criteria))
+            row_cond = parse_expression(str(criteria), self._lazy.collect_schema())
         final_cond = (where_expr & row_cond) if where_expr is not None else row_cond
         expr = pl.when(final_cond).then(pl.lit(flag_value)).otherwise(false_lit).alias(target)
         return self._chain(expr, verb="flag")
@@ -906,8 +900,16 @@ class FlagCriterionMixin:
         Produces three columns following CDISC ADaM conventions:
 
         - ``{prefix}{number}`` — the criterion description (constant string).
-        - ``{prefix}{number}FL`` — ``"Y"`` if condition is met, ``"N"`` otherwise.
-        - ``{prefix}{number}FN`` — ``1`` if met, ``0`` otherwise.
+        - ``{prefix}{number}FL`` — ``"Y"`` if condition is met, ``"N"`` if not.
+        - ``{prefix}{number}FN`` — ``1`` if met, ``0`` if not.
+
+        When the condition is null (for example AVAL is missing), FL and FN are
+        null, as admiral ``derive_vars_crit_flag()``. For a SAP rule "missing is
+        not met", pass ``condition=(...).fill_null(False)``.
+
+        References:
+            admiral ``derive_vars_crit_flag(values_yn = TRUE,
+            create_numeric_flag = TRUE)``; ADR-0033.
 
         Args:
             number: Criterion number (e.g. 1 → CRIT1, CRIT1FL, CRIT1FN).
@@ -939,7 +941,9 @@ class FlagCriterionMixin:
             if description is not None
             else pl.lit(None).cast(pl.String).alias(col_crit)
         )
-        fl_expr = pl.when(condition).then(pl.lit("Y")).otherwise(pl.lit("N")).alias(col_fl)
-        fn_expr = pl.when(condition).then(pl.lit(1)).otherwise(pl.lit(0)).alias(col_fn)
+        fl_expr = (
+            pl.when(condition).then(pl.lit("Y")).when(~condition).then(pl.lit("N")).alias(col_fl)
+        )
+        fn_expr = pl.when(condition).then(pl.lit(1)).when(~condition).then(pl.lit(0)).alias(col_fn)
 
         return self._chain(desc_expr, fl_expr, fn_expr, verb="criterion")

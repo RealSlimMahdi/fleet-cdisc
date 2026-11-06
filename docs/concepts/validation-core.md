@@ -69,6 +69,10 @@ uv run fleet validate --report findings.html   # HTML findings report
   (`--custom-rules` overrides). They run in a second engine run next to the
   official rules, so a sweep of both standards with custom rules makes four
   engine runs. See [Custom Validation Rules](custom-rules.md).
+- **Define-XML**: `--define outputs/define_sdtm.xml` gives the define to
+  CORE (`-dxp`), so the define rules (for example CG0010 on the ItemRef
+  Role) run. It is opt-in: Fleet never passes a define by default
+  (ADR 0042).
 - The report header of each dataset shows every input with its source, as on
   the verb.
 - **HTML report**: `--report findings.html` writes one page: a status row
@@ -103,6 +107,16 @@ uv run fleet validate --report findings.html   # HTML findings report
 - Exit codes: 0 nothing blocks, 1 a finding blocks, 2 a dataset could not
   run. So `fleet validate` drops straight into CI. The last line counts each
   status and the findings.
+- **Rule counts**: each report states, per engine run (official, custom),
+  how many rules executed, were skipped and could not run, for example
+  `Rules (engine run, official): 90 executed, 313 skipped, 27 could not run`.
+  The counts belong to the engine run, not to one dataset. A rule that could
+  not run (status `EXECUTION_ERROR`, often because a dataset it needs is
+  absent) is a rule problem, not a data finding: its rows are left out of the
+  findings, and it does not change the status or the exit code. The rows are
+  chosen by the rule status in `Rules_Report`, never by the message text.
+  `fleet validate` and the HTML report also list the IDs of these rules; the
+  verb prints the count line only.
 - **Engine version**: `fleet install-engine` installs the newest tested CORE
   release. The report header and `fleet doctor` name a version Fleet is not
   tested with. A weekly CI job runs Fleet on the newest CORE release.
@@ -176,6 +190,20 @@ Some setups are refused before the engine starts. The verb then raises
   or `ae.sdtm.validate("ADAE")`,
 - the IG version is not supported, for example SDTMIG 3.1.3,
 - the custom rules directory does not exist.
+
+## What a PASS does not cover: controlled terminology
+
+CORE checks only a few controlled terminology values. A `PASS` or a `FAIL`
+for other rules does not mean that the codelist values are correct. Fleet
+checks a value against its codelist at the line that assigns it
+(`assign(..., ct=SEX)`), and warns.
+
+Example: a DM with `SEX = "X"`, `AGEU = "DECADES"`, `RACE = "MARTIAN"` and
+`ETHNIC = "UNKNOWN ETHNIC"`, and an AE with `AESER = "YES"`,
+`AESEV = "HORRIBLE"`, `AEOUT = "BETTER"` and `AESTDTC = "2020-13-45"`.
+`fleet validate` (CORE 0.15.0) reports only CORE-000087 and CORE-000266
+(AESER) and CORE-000726 (ETHNIC) for these values. It names no finding for
+SEX, AGEU, RACE, AESEV, AEOUT or the bad ISO 8601 date.
 
 ## Which rules actually exist upstream
 

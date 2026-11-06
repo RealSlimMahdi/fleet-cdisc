@@ -143,13 +143,15 @@ class TestCase4DerivationObject:
         result = simple_df.sdtm.derivation(add_extra).to_frame()
         assert "EXTRA" in result.columns
 
-    def test_adam_param_kind(self, simple_df):
-        @derivation(by=["USUBJID"], set_values_to={"PARAMCD": "BMI"})
-        def BMI_DRV(df: pl.DataFrame) -> pl.DataFrame:
-            return df.with_columns(pl.lit(22.5).alias("AVAL"))
+    def test_adam_param_kind_is_refused(self, simple_df):
+        """c1-44: kind param overwrote AVAL and added no row; derive_param adds the row."""
+        from fleet.core.exceptions import VerbUsageError
 
-        result = simple_df.adam.derivation(BMI_DRV).to_frame()
-        assert "AVAL" in result.columns
+        with pytest.raises(VerbUsageError, match="derive_param"):
+
+            @derivation(by=["USUBJID"], set_values_to={"PARAMCD": "BMI"})
+            def BMI_DRV(df: pl.DataFrame) -> pl.DataFrame:
+                return df.with_columns(pl.lit(22.5).alias("AVAL"))
 
     def test_frame_kind_wrong_return_type_raises(self, simple_df):
         @derivation(targets=["BAD"])

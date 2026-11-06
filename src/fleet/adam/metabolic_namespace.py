@@ -3,11 +3,12 @@ ADaM Metabolic namespace extension (admiralmetabolic-inspired).
 
 Accessed via ``df.adam.metabolic`` on any Polars DataFrame.
 
-Key derivations ported from pharmaverse/admiralmetabolic:
+Key derivations, inspired by pharmaverse/admiralmetabolic (not ports; values can differ):
   - ``waist_hip_ratio``    — WAISTHIP = WSTCIR / HIPCIR (per subject/visit)
   - ``waist_height_ratio`` — WAISTHGT = WSTCIR / height (same units)
   - ``body_fat_pct``       — estimated body fat % via Deurenberg formula
   - ``visceral_fat_flag``  — flag excessive waist circumference per sex
+  - ``bmi_category_adult`` — adult BMI class label (WHO cut-offs)
 
 Usage
 -----
@@ -51,7 +52,8 @@ class MetabolicNamespace(SharedADaMVerbsMixin):
     ) -> Self:
         """Derive waist-to-hip ratio: ``waist_col / hip_col``.
 
-        Both columns must be in the same unit.
+        Both columns must be in the same unit.  A hip circumference of 0
+        gives null.
 
         Args:
             target: Name of the output column.
@@ -72,7 +74,7 @@ class MetabolicNamespace(SharedADaMVerbsMixin):
                     .to_frame()
                 )
         """
-        expr = pl.col(waist_col) / pl.col(hip_col)
+        expr = pl.when(pl.col(hip_col) != 0).then(pl.col(waist_col) / pl.col(hip_col))
         if round_digits is not None:
             expr = expr.round(round_digits)
         return self._chain(expr.alias(target))
@@ -91,7 +93,7 @@ class MetabolicNamespace(SharedADaMVerbsMixin):
     ) -> Self:
         """Derive waist-to-height ratio: ``waist_col / height_col``.
 
-        Both columns must be in the same unit.
+        Both columns must be in the same unit.  A height of 0 gives null.
 
         Args:
             target: Name of the output column.
@@ -112,7 +114,7 @@ class MetabolicNamespace(SharedADaMVerbsMixin):
                     .to_frame()
                 )
         """
-        expr = pl.col(waist_col) / pl.col(height_col)
+        expr = pl.when(pl.col(height_col) != 0).then(pl.col(waist_col) / pl.col(height_col))
         if round_digits is not None:
             expr = expr.round(round_digits)
         return self._chain(expr.alias(target))
@@ -129,12 +131,15 @@ class MetabolicNamespace(SharedADaMVerbsMixin):
         age_col: str,
         sex_col: str,
         sex_male_value: str = "M",
+        sex_female_value: str = "F",
         round_digits: int | None = 1,
     ) -> Self:
         """Estimate body fat percentage using the Deurenberg formula.
 
         ``BF% = 1.2 × BMI + 0.23 × age − 10.8 × sex_num − 5.4``
-        where sex_num = 1 (male) or 0 (female).
+        where sex_num = 1 (male) or 0 (female).  Any other sex value (null,
+        ``U``, ``UNDIFFERENTIATED``) gives null, because the equation has no
+        value for it.
 
         Args:
             target: Name of the output column.
@@ -142,6 +147,7 @@ class MetabolicNamespace(SharedADaMVerbsMixin):
             age_col: Column containing age in years.
             sex_col: Column containing sex code.
             sex_male_value: Value indicating male (default ``"M"``).
+            sex_female_value: Value indicating female (default ``"F"``).
             round_digits: Decimal places to round to (default ``1``).
 
         Returns:
@@ -161,10 +167,15 @@ class MetabolicNamespace(SharedADaMVerbsMixin):
             Deurenberg P, Weststrate JA, Seidell JC. Body mass index as a measure of
             body fatness: age- and sex-specific prediction formulas. Br J Nutr.
             1991;65(2):105-114. Constants 1.2, 0.23, 10.8 and 5.4 are the adult
-            equation; admiralmetabolic ships the same rule.
+            equation; admiralmetabolic ships the same rule. CDISC CT C66731 (SEX) also
+            holds U and UNDIFFERENTIATED, for which the equation has no value.
         """
+        sex = pl.col(sex_col)
         sex_num = (
-            pl.when(pl.col(sex_col) == sex_male_value).then(pl.lit(1.0)).otherwise(pl.lit(0.0))
+            pl.when(sex == sex_male_value)
+            .then(pl.lit(1.0))
+            .when(sex == sex_female_value)
+            .then(pl.lit(0.0))
         )
         expr = 1.2 * pl.col(bmi_col) + 0.23 * pl.col(age_col) - 10.8 * sex_num - 5.4
         if round_digits is not None:
@@ -182,6 +193,7 @@ class MetabolicNamespace(SharedADaMVerbsMixin):
         waist_col: str,
         sex_col: str,
         sex_male_value: str = "M",
+        sex_female_value: str = "F",
         male_threshold: float = 102.0,
         female_threshold: float = 88.0,
         flag_value: str = "Y",
@@ -189,12 +201,14 @@ class MetabolicNamespace(SharedADaMVerbsMixin):
         """Flag subjects with abdominal obesity by waist circumference.
 
         Default ATP III / NCEP thresholds: male ≥ 102 cm, female ≥ 88 cm.
+        Any other sex value (null, ``U``, ``UNDIFFERENTIATED``) gets no flag.
 
         Args:
             target: Name of the output flag column.
             waist_col: Column containing waist circumference in cm.
             sex_col: Column containing sex code.
             sex_male_value: Value indicating male (default ``"M"``).
+            sex_female_value: Value indicating female (default ``"F"``).
             male_threshold: Threshold for males (default ``102.0``).
             female_threshold: Threshold for females (default ``88.0``).
             flag_value: Value to assign (default ``"Y"``).
@@ -220,12 +234,71 @@ class MetabolicNamespace(SharedADaMVerbsMixin):
             for Europids. Check the SAP for the population.
         """
         is_male = pl.col(sex_col) == sex_male_value
+        is_female = pl.col(sex_col) == sex_female_value
         waist = pl.col(waist_col)
         return self._chain(
             pl.when(
-                (is_male & (waist >= male_threshold)) | (~is_male & (waist >= female_threshold))
+                (is_male & (waist >= male_threshold)) | (is_female & (waist >= female_threshold))
             )
             .then(pl.lit(flag_value))
             .otherwise(pl.lit(None))
             .alias(target)
         )
+
+    # ------------------------------------------------------------------ #
+    # 5. bmi_category_adult — WHO adult BMI class label                   #
+    # ------------------------------------------------------------------ #
+
+    def bmi_category_adult(
+        self,
+        target: str,
+        *,
+        bmi_col: str,
+        labels: dict[str, float] | None = None,
+    ) -> Self:
+        """Categorise an adult BMI with the WHO cut-offs.
+
+        Default classes: Underweight (< 18.5), Normal weight (18.5 to < 25.0),
+        Overweight (25.0 to < 30.0), Obese (>= 30.0).  A null, NaN or infinite
+        BMI gets null.  For a child, use ``peds.bmi_percentile_category``.
+
+        Args:
+            target: Name of the output column.
+            bmi_col: Column containing the BMI value.
+            labels: Optional ``{"label": upper_bound}`` dict, in increasing
+                order, to override the default classes.  A BMI that is not
+                below the last bound gets null.
+
+        Returns:
+            Self: The namespace with *target* appended.
+
+        References:
+            WHO. Obesity: preventing and managing the global epidemic. WHO Technical
+            Report Series 894 (2000): adult classes at 18.5, 25.0 and 30.0 kg/m2.
+            admiral ``derive_vars_cat``: a missing value gets no class.
+            ADR-0026: the adult rule lives in ``metabolic``.
+
+        Examples:
+            Categorise an adult BMI::
+
+                adsl = (
+                    dm_raw.adam.metabolic
+                    .bmi_category_adult("BMICG", bmi_col="BMI")
+                    .to_frame()
+                )
+        """
+        thresholds = (
+            list(labels.items())
+            if labels is not None
+            else [
+                ("Underweight", 18.5),
+                ("Normal weight", 25.0),
+                ("Overweight", 30.0),
+                ("Obese", float("inf")),
+            ]
+        )
+        bmi = pl.col(bmi_col).cast(pl.Float64).fill_nan(None)
+        chain = pl.when(bmi.is_null()).then(pl.lit(None, dtype=pl.String))
+        for label, upper in thresholds:
+            chain = chain.when(bmi < upper).then(pl.lit(label))
+        return self._chain(chain.otherwise(pl.lit(None, dtype=pl.String)).alias(target))

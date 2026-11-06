@@ -49,7 +49,7 @@
     },
     "derivations_module": {
       "type": "string",
-      "description": "Dotted Python module imported by from_spec() before execution so that its @derivation / register_transform callables are available (removes the import-order footgun for `algorithm: callable`)."
+      "description": "Dotted Python module imported by from_spec() before execution so that its @derivation / register_transform callables are available (removes the import-order footgun for `algorithm: derivation` with `callable:`)."
     },
     "ct": {
       "type": "object",
@@ -177,7 +177,7 @@
     "codelist": {
       "type": "object",
       "title": "Codelist",
-      "description": "A controlled terminology codelist referenced by variables.",
+      "description": "A controlled terminology codelist referenced by variables. Every term with a decode gives CodeListItem, no term with a decode gives EnumeratedItem (a mix is an error); external: gives ExternalCodeList.",
       "required": [
         "oid",
         "name",
@@ -205,7 +205,7 @@
         },
         "standard_oid": {
           "type": "string",
-          "description": "Reference to the IG standard OID for this codelist (e.g. STD.CT)."
+          "description": "def:StandardOID: the declared CT standard of this codelist (STD.CT when study.ct_version is set, STD.CT.ADAM when study.adam_ct_version is set). Default: STD.CT for a codelist whose oid is an NCI code (C66731) when study.ct_version is set."
         },
         "items": {
           "type": "array",
@@ -223,11 +223,50 @@
               },
               "decode": {
                 "type": "string",
-                "description": "Human-readable meaning of the coded value."
+                "description": "Human-readable meaning of the coded value. Give it on every term (CodeListItem) or on none (EnumeratedItem)."
+              },
+              "nci_code": {
+                "type": "string",
+                "description": "NCI code of the term (e.g. C16576), written as Alias Context nci:ExtCodeID.",
+                "pattern": "^C\\d+$"
+              },
+              "extended": {
+                "type": "boolean",
+                "description": "True for a sponsor term that extends an extensible CDISC codelist: def:ExtendedValue Yes."
               }
             }
           }
+        },
+        "nci_code": {
+          "type": "string",
+          "description": "NCI code of the codelist (e.g. C66731), written as Alias Context nci:ExtCodeID.",
+          "pattern": "^C\\d+$"
+        },
+        "external": {
+          "type": "object",
+          "description": "An external dictionary (e.g. MedDRA) in place of terms: written as ExternalCodeList.",
+          "required": [
+            "dictionary",
+            "version"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "dictionary": {
+              "type": "string",
+              "description": "Dictionary name (e.g. MedDRA)."
+            },
+            "version": {
+              "type": "string",
+              "description": "Dictionary version (e.g. '26.0')."
+            }
+          }
         }
+      },
+      "not": {
+        "required": [
+          "items",
+          "external"
+        ]
       }
     },
     "dataset": {
@@ -259,8 +298,11 @@
         },
         "repeating": {
           "type": "boolean",
-          "description": "Whether the dataset has multiple records per subject.",
-          "default": true
+          "description": "Define-XML Repeating: whether the dataset has more than one record per subject. Default: No for DM, ADSL and the trial design datasets (TA, TE, TV, TI, TS, TD, TM), Yes for every other dataset."
+        },
+        "is_reference_data": {
+          "type": "boolean",
+          "description": "Define-XML IsReferenceData: whether the dataset holds reference data, not subject data. Default: Yes for TA, TE, TV, TI, TS, TD, TM and for class TRIAL DESIGN, No for every other dataset."
         },
         "class": {
           "type": "string",
@@ -308,6 +350,65 @@
           "description": "Value-level metadata entries (Define-XML ValueListDef/WhereClauseDef) \u2014 parameter-dependent derivations of BDS datasets.",
           "items": {
             "$ref": "#/$defs/value_level_entry"
+          }
+        },
+        "row_steps": {
+          "type": "array",
+          "description": "Steps that remove or add records, in pipeline order (ADR-0034). Each step runs after the variable named in after: (null: before the first variable). from_spec refuses algorithm: TODO. Rendered in Define-XML as the dataset comment.",
+          "items": {
+            "type": "object",
+            "required": [
+              "algorithm"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "algorithm": {
+                "enum": [
+                  "whereclauses",
+                  "nodup",
+                  "TODO"
+                ]
+              },
+              "after": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "where": {
+                "type": "string",
+                "description": "whereclauses: the records to keep."
+              },
+              "subset": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "nodup: the key of a duplicate."
+              },
+              "sort_by": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "keep": {
+                "enum": [
+                  "first",
+                  "last"
+                ]
+              },
+              "descending": {
+                "type": [
+                  "boolean",
+                  "array"
+                ]
+              },
+              "verb": {
+                "type": "string",
+                "description": "TODO: the inline verb that the spec does not describe yet."
+              }
+            }
           }
         }
       }
@@ -433,9 +534,24 @@
         },
         "role": {
           "type": "string",
-          "description": "Marks the variable as a Non-Standard Variable (qualifier) so supp() can build SUPPQUAL from this spec. Read by SDTMNamespace.supp(spec=...); 'qualifier' is the only value Fleet acts on.",
+          "description": "Marks the variable as a Non-Standard Variable (qualifier). fleet run moves it to SUPP<domain> with SDTMNamespace.export_supp(spec=...); 'qualifier' is the only value Fleet acts on.",
           "enum": [
             "qualifier"
+          ]
+        },
+        "sdtm_role": {
+          "type": "string",
+          "description": "The SDTM role of the variable, written as the ItemRef Role of the Define-XML (CORE rule CG0010 reads it). fleet init define fills it from the CDISC Library; check a sponsor-specific role by hand.",
+          "enum": [
+            "Identifier",
+            "Topic",
+            "Timing",
+            "Grouping Qualifier",
+            "Result Qualifier",
+            "Synonym Qualifier",
+            "Record Qualifier",
+            "Variable Qualifier",
+            "Rule"
           ]
         },
         "evaluator": {
@@ -763,6 +879,7 @@
               "map": "#/$defs/ADAMMapSpec",
               "merge": "#/$defs/ADAMMergeSpec",
               "nrind": "#/$defs/ADAMNrindSpec",
+              "occds.treatment_emergent": "#/$defs/ADAMOccdsTreatmentEmergentSpec",
               "on_treatment": "#/$defs/ADAMOnTreatmentSpec",
               "pchg": "#/$defs/ADAMPchgSpec",
               "pick": "#/$defs/ADAMPickSpec",
@@ -852,6 +969,9 @@
             },
             {
               "$ref": "#/$defs/ADAMCountEventsSpec"
+            },
+            {
+              "$ref": "#/$defs/ADAMOccdsTreatmentEmergentSpec"
             }
           ]
         },
@@ -971,6 +1091,10 @@
         },
         "direction": {
           "description": "``\"L\"`` (low) or ``\"H\"`` (high).",
+          "enum": [
+            "L",
+            "H"
+          ],
           "title": "Direction",
           "type": "string"
         },
@@ -980,17 +1104,9 @@
           "type": "string"
         },
         "unit_var": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Column holding the unit of measure.",
-          "title": "Unit Var"
+          "description": "Column holding the unit of measure (e.g.",
+          "title": "Unit Var",
+          "type": "string"
         },
         "signif_dig": {
           "default": 15,
@@ -1036,7 +1152,8 @@
       "required": [
         "algorithm",
         "direction",
-        "term_var"
+        "term_var",
+        "unit_var"
       ],
       "title": "ADAMAtoxgrSpec",
       "type": "object"
@@ -1125,6 +1242,19 @@
           "title": "Height",
           "type": "string"
         },
+        "round_digits": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Decimal places, rounded as SAS ``ROUND`` (half away from zero).",
+          "title": "Round Digits"
+        },
         "depends_on": {
           "anyOf": [
             {
@@ -1173,6 +1303,19 @@
           "description": "Formula to use \u2014 ``\"Mosteller\"`` (default), ``\"DuBois\"``, ``\"Haycock\"``, or ``\"Gehan-George\"``.",
           "title": "Method",
           "type": "string"
+        },
+        "round_digits": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Decimal places, rounded as SAS ``ROUND`` (half away from zero).",
+          "title": "Round Digits"
         },
         "depends_on": {
           "anyOf": [
@@ -1309,30 +1452,16 @@
           "type": "string"
         },
         "low_desc_var": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Optional low-grade term description column.",
-          "title": "Low Desc Var"
+          "default": "ATOXDSCL",
+          "description": "Low-grade term description column (default ``\"ATOXDSCL\"``).",
+          "title": "Low Desc Var",
+          "type": "string"
         },
         "high_desc_var": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Optional high-grade term description column.",
-          "title": "High Desc Var"
+          "default": "ATOXDSCH",
+          "description": "High-grade term description column (default ``\"ATOXDSCH\"``).",
+          "title": "High Desc Var",
+          "type": "string"
         },
         "depends_on": {
           "anyOf": [
@@ -2100,6 +2229,19 @@
           "title": "Diastolic",
           "type": "string"
         },
+        "round_digits": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Decimal places, rounded as SAS ``ROUND`` (half away from zero).",
+          "title": "Round Digits"
+        },
         "depends_on": {
           "anyOf": [
             {
@@ -2180,7 +2322,7 @@
             }
           ],
           "default": null,
-          "description": "Optional columns to keep from the joined result \u2014 the output is restricted to the *on* key(s) plus these columns (order preserved).",
+          "description": "Optional columns of *dataset* to bring in, besides the *on* key(s).",
           "title": "Keep"
         },
         "where": {
@@ -2193,7 +2335,7 @@
             }
           ],
           "default": null,
-          "description": "Optional filter expression applied to *dataset* before the join.",
+          "description": "Optional filter expression applied to *dataset* before the join; it may use a column that *keep* leaves out.",
           "title": "Where"
         },
         "depends_on": {
@@ -2244,6 +2386,12 @@
           "title": "High",
           "type": "string"
         },
+        "signif_dig": {
+          "default": 15,
+          "description": "Significant digits for the comparison (default 15).",
+          "title": "Signif Dig",
+          "type": "integer"
+        },
         "depends_on": {
           "anyOf": [
             {
@@ -2267,6 +2415,94 @@
         "high"
       ],
       "title": "ADAMNrindSpec",
+      "type": "object"
+    },
+    "ADAMOccdsTreatmentEmergentSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "occds.treatment_emergent",
+          "description": "Treatment-emergent flag, as admiral derive_var_trtemfl.",
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "start_date": {
+          "description": "Event start date column (``ASTDT``).",
+          "title": "Start Date",
+          "type": "string"
+        },
+        "end_date": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Event end date column (``AENDT``), or ``None``.",
+          "title": "End Date"
+        },
+        "trtsdt": {
+          "description": "Treatment start date column.",
+          "title": "Trtsdt",
+          "type": "string"
+        },
+        "trtedt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Treatment end date column; given with *end_window*.",
+          "title": "Trtedt"
+        },
+        "end_window": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Days after *trtedt* in which an event still counts; given with *trtedt*.",
+          "title": "End Window"
+        },
+        "offset_days": {
+          "default": 0,
+          "description": "Days added to *trtsdt* before the start-date comparison of case 4 (a Fleet extension; admiral has none).",
+          "title": "Offset Days",
+          "type": "integer"
+        },
+        "depends_on": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Depends On"
+        }
+      },
+      "required": [
+        "algorithm",
+        "start_date",
+        "end_date",
+        "trtsdt"
+      ],
+      "title": "ADAMOccdsTreatmentEmergentSpec",
       "type": "object"
     },
     "ADAMOnTreatmentSpec": {
@@ -2496,6 +2732,19 @@
           "description": "Unit of *rr*: ``\"ms\"`` (default) or ``\"msec\"``, or ``\"s\"`` or ``\"sec\"``.",
           "title": "Rr Unit",
           "type": "string"
+        },
+        "round_digits": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Decimal places, rounded as SAS ``ROUND`` (half away from zero).",
+          "title": "Round Digits"
         },
         "depends_on": {
           "anyOf": [
@@ -2985,7 +3234,7 @@
             }
           ],
           "default": null,
-          "description": "Imputation ceiling (DT/DTM only).",
+          "description": "Imputation ceiling, as admiral ``highest_imputation``: ``\"n\"``, ``\"D\"`` or ``\"M\"``, and on a DTM target also ``\"h\"``, ``\"m\"`` and ``\"s\"``.",
           "title": "Highest"
         },
         "flag": {
@@ -3246,7 +3495,7 @@
             }
           ],
           "default": null,
-          "description": "Optional columns to keep from the joined result \u2014 the output is restricted to the *on* key(s) plus these columns (order preserved).",
+          "description": "Optional columns of *dataset* to bring in, besides the *on* key(s).",
           "title": "Keep"
         },
         "where": {
@@ -3259,7 +3508,7 @@
             }
           ],
           "default": null,
-          "description": "Optional filter expression applied to *dataset* before the join.",
+          "description": "Optional filter expression applied to *dataset* before the join; it may use a column that *keep* leaves out.",
           "title": "Where"
         }
       },

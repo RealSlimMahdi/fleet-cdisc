@@ -29,11 +29,12 @@ Usage::
 from __future__ import annotations
 
 import re
+import warnings
 from enum import Enum, StrEnum
 from typing import Annotated, ClassVar, Literal
 
 import polars as pl
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 # ------------------------------------------------------------------ #
 # CT-bound Enum                                                        #
@@ -96,6 +97,8 @@ class TrialElement(BaseModel):
     element→epoch mapping used when deriving TA and SE.
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     _SDTM_MAP: ClassVar[dict[str, str]] = {
         "etcd": "ETCD",
         "element": "ELEMENT",
@@ -114,6 +117,8 @@ class TrialElement(BaseModel):
 
 class TrialArm(BaseModel):
     """One row-per-element in the TA (Trial Arms) domain."""
+
+    model_config = ConfigDict(extra="forbid")
 
     _SDTM_MAP: ClassVar[dict[str, str]] = {
         "armcd": "ARMCD",
@@ -139,11 +144,14 @@ class TrialArm(BaseModel):
 class TrialVisit(BaseModel):
     """One row in the TV (Trial Visits) domain."""
 
+    model_config = ConfigDict(extra="forbid")
+
     _SDTM_MAP: ClassVar[dict[str, str]] = {
         "visitnum": "VISITNUM",
         "visit": "VISIT",
         "visitdy": "VISITDY",
         "armcd": "ARMCD",
+        "arm": "ARM",
         "tvstrl": "TVSTRL",
         "tvenrl": "TVENRL",
     }
@@ -152,6 +160,7 @@ class TrialVisit(BaseModel):
     visit: str = Field(min_length=1, max_length=200)
     visitdy: int | None = None
     armcd: ArmCode | Literal[""] = ""
+    arm: str = Field(default="", max_length=200)
     tvstrl: RuleExpression = ""
     tvenrl: RuleExpression = ""
 
@@ -159,8 +168,11 @@ class TrialVisit(BaseModel):
 class TrialParameter(BaseModel):
     """One row in the TS (Trial Summary) domain."""
 
+    model_config = ConfigDict(extra="forbid")
+
     _SDTM_MAP: ClassVar[dict[str, str]] = {
         "tsseq": "TSSEQ",
+        "tsgrpid": "TSGRPID",
         "tsparmcd": "TSPARMCD",
         "tsparm": "TSPARM",
         "tsval": "TSVAL",
@@ -171,8 +183,9 @@ class TrialParameter(BaseModel):
     }
 
     tsseq: int = Field(default=1, ge=1)
+    tsgrpid: str = ""
     tsparmcd: str = Field(min_length=1, max_length=8, pattern=r"^[A-Z0-9_]+$")
-    tsparm: str = Field(min_length=1, max_length=200)
+    tsparm: str = Field(min_length=1, max_length=40)
     tsval: str = ""
     tsvalnf: str = ""
     tsvalcd: str = ""
@@ -182,6 +195,8 @@ class TrialParameter(BaseModel):
 
 class TrialCriterion(BaseModel):
     """One row in the TI (Trial Inclusion/Exclusion) domain."""
+
+    model_config = ConfigDict(extra="forbid")
 
     _SDTM_MAP: ClassVar[dict[str, str]] = {
         "ietestcd": "IETESTCD",
@@ -202,6 +217,8 @@ class TrialCriterion(BaseModel):
 
 class TrialDiseaseAssessment(BaseModel):
     """One row in the TD (Trial Disease Assessments) domain."""
+
+    model_config = ConfigDict(extra="forbid")
 
     _SDTM_MAP: ClassVar[dict[str, str]] = {
         "tdorder": "TDORDER",
@@ -224,6 +241,8 @@ class TrialDiseaseAssessment(BaseModel):
 
 class TrialMilestone(BaseModel):
     """One row in the TM (Trial Disease Milestones) domain."""
+
+    model_config = ConfigDict(extra="forbid")
 
     _SDTM_MAP: ClassVar[dict[str, str]] = {
         "midstype": "MIDSTYPE",
@@ -251,6 +270,18 @@ def _rows_to_polars(rows: list[BaseModel]) -> pl.DataFrame:
         for row in rows
     ]
     return pl.DataFrame(dicts)
+
+
+def _split_tsval(text: str, size: int = 200) -> list[str]:
+    """Split *text* into pieces of at most *size* characters at a word boundary."""
+    pieces: list[str] = []
+    while len(text) > size:
+        cut = text.rfind(" ", 1, size + 1)
+        cut = cut if cut > 0 else size
+        pieces.append(text[:cut])
+        text = text[cut:]
+    pieces.append(text)
+    return pieces
 
 
 class TrialElements(BaseModel):
@@ -365,8 +396,9 @@ class TrialVisits(BaseModel):
             schedule: ``(visit_name, day_offset)`` pairs; offsets are days
                 relative to the *anchor* event (day 0).
             anchor: Name of the anchoring milestone (e.g. ``"RANDOMIZATION"``).
-            window: Allowed deviation in days — a single int for a symmetric
-                window or a ``(before, after)`` tuple.
+            window: Allowed deviation in study days (no Day 0, as
+                ``visit_map``) — a single int for a symmetric window or a
+                ``(before, after)`` tuple.
 
         Returns:
             TrialVisits: A validated collection ready for ``add_visits()``.
@@ -389,7 +421,7 @@ class TrialVisits(BaseModel):
                 )
         """
         before, after = (window, window) if isinstance(window, int) else (window or (0, 0))
-        window_txt = f"; window -{before}/+{after} days" if window else ""
+        window_txt = f"; window -{before}/+{after} study days, no Day 0" if window else ""
         visits = []
         for num, (name, offset) in enumerate(sorted(schedule, key=lambda p: p[1]), start=1):
             if offset == 0:
@@ -488,6 +520,11 @@ class TrialParameters(BaseModel):
     def to_polars(self) -> pl.DataFrame:
         """Convert validated parameters to a Polars DataFrame with SDTM names.
 
+        A TSVAL over 200 characters is split at a word boundary into TSVAL,
+        TSVAL1, ..., TSVALn (SDTMIG 3.4 TS assumption 8).  The space goes to
+        the start of the next piece, so the pieces joined give the source
+        text.  A word over 200 characters is cut at 200.
+
         Returns:
             pl.DataFrame: DataFrame with columns named per CDISC SDTM (e.g.
                 ``TSPARMCD``, ``TSPARM``, ``TSVAL``).
@@ -498,7 +535,19 @@ class TrialParameters(BaseModel):
                 ts = TrialParameters(parameters=[...])
                 df = ts.to_polars()
         """
-        return _rows_to_polars(self.parameters)
+        df = _rows_to_polars(self.parameters)
+        pieces = [_split_tsval(p.tsval) for p in self.parameters]
+        width = max((len(p) for p in pieces), default=1)
+        if width == 1:
+            return df
+        split = pl.DataFrame(
+            {
+                ("TSVAL" if i == 0 else f"TSVAL{i}"): [p[i] if i < len(p) else "" for p in pieces]
+                for i in range(width)
+            }
+        )
+        at = df.columns.index("TSVAL")
+        return df.select(df.columns[:at]).hstack(split).hstack(df.select(df.columns[at + 1 :]))
 
 
 class TrialCriteria(BaseModel):
@@ -639,7 +688,14 @@ def _ctgov_to_parameters(study: dict) -> list[TrialParameter]:
     add("TBLIND", "Trial Blinding Schema", _CTGOV_MASKING.get(masking, masking))
     arms = proto.get("armsInterventionsModule", {}).get("armGroups", [])
     add("NARMS", "Planned Number of Arms", len(arms) or None)
-    add("PLANSUB", "Planned Number of Subjects", design.get("enrollmentInfo", {}).get("count"))
+    enrollment = design.get("enrollmentInfo", {})
+    # C66738: PLANSUB is the planned count, ACTSUB the enrolled count; no type, no row.
+    enrollment_parm = {
+        "ESTIMATED": ("PLANSUB", "Planned Number of Subjects"),
+        "ACTUAL": ("ACTSUB", "Actual Number of Subjects"),
+    }.get(enrollment.get("type", ""))
+    if enrollment_parm:
+        add(*enrollment_parm, enrollment.get("count"))
     add("AGEMIN", "Planned Minimum Age of Subjects", _ctgov_age_to_iso(elig.get("minimumAge")))
     add("AGEMAX", "Planned Maximum Age of Subjects", _ctgov_age_to_iso(elig.get("maximumAge")))
     add("SEXPOP", "Sex of Participants", _CTGOV_SEX.get(elig.get("sex", "")))
@@ -667,11 +723,95 @@ def _ctgov_to_parameters(study: dict) -> list[TrialParameter]:
 # Mermaid → TA/TE parser                                               #
 # ------------------------------------------------------------------ #
 
-# Regex patterns for Mermaid flowchart parsing
-_SUBGRAPH_RE = re.compile(r"subgraph\s+(\w+)\s*\[([^\]]+)\]", re.IGNORECASE)
-_NODE_RE = re.compile(r"(\w+)\[\"([^\"]+?)(?:<br/>(\S+))?\"\]")
-_EDGE_RE = re.compile(r"(\w+)\s*-->(?:\|([^|]+)\|)?\s*(\w+)")
-_SUBGRAPH_END_RE = re.compile(r"^\s*end\s*$", re.IGNORECASE)
+# Every non-blank line of the diagram must fully match one of these forms.
+_HEADER_RE = re.compile(r"(?:flowchart|graph)\s+(?:TD|TB|BT|LR|RL)", re.IGNORECASE)
+_SUBGRAPH_RE = re.compile(r"subgraph\s+(\w+)\s*\[\s*\"?([^\]\"]+?)\"?\s*\]", re.IGNORECASE)
+_SUBGRAPH_END_RE = re.compile(r"end", re.IGNORECASE)
+_NODE_RE = re.compile(r"(\w+)\[\"([^\"]+?)(?:<br\s*/?>\s*(\S+))?\"\]")
+_EDGE_RE = re.compile(r"(\w+)\s*-->\s*(?:\|([^|]+)\|\s*)?(\w+)")
+
+
+def _epoch_key(text: str) -> str:
+    return re.sub(r"[\s\-]+", " ", text.strip().upper())
+
+
+def _subgraph_epoch(label: str) -> EpochLike:
+    """The C99079 term of a subgraph title, else the title as a sponsor epoch."""
+    key = _epoch_key(label)
+    for ep in Epoch:
+        if _epoch_key(ep.value) == key:
+            return ep
+    sponsor = label.strip().upper()
+    warnings.warn(
+        f"parse_trial_design: subgraph title '{label}' is not a C99079 term; it is kept as "
+        f"the sponsor epoch '{sponsor}'. C99079 is extensible, so check the spelling.",
+        stacklevel=4,
+    )
+    return sponsor
+
+
+def _refuse_cycle(out: dict[str, list[tuple[str | None, str]]]) -> None:
+    """Raise when the edges hold a cycle (a crossover or a repeated element)."""
+    done: set[str] = set()
+
+    def visit(node: str, path: list[str]) -> None:
+        if node in path:
+            raise ValueError(
+                f"parse_trial_design: the path {' -> '.join([*path, node])} is a cycle. A "
+                "crossover or a repeated element cannot be read back from a diagram: use YAML."
+            )
+        if node in done:
+            return
+        for _, nxt in out[node]:
+            visit(nxt, [*path, node])
+        done.add(node)
+
+    for node in out:
+        visit(node, [])
+
+
+def _arm_paths(nodes: list[str], edges: list[tuple[str, str | None, str]]) -> dict[str, list[str]]:
+    """One path per arm, from the single start node to each end node."""
+    out: dict[str, list[tuple[str | None, str]]] = {n: [] for n in nodes}
+    incoming = {n: 0 for n in nodes}
+    for src, label, dst in edges:
+        out[src].append((label, dst))
+        incoming[dst] += 1
+    _refuse_cycle(out)
+    orphans = [n for n in nodes if not out[n] and not incoming[n]]
+    if len(nodes) > 1 and orphans:
+        raise ValueError(f"parse_trial_design: node(s) {orphans} have no edge")
+    for node, nexts in out.items():
+        if len(nexts) > 1 and any(label is None for label, _ in nexts):
+            raise ValueError(
+                f"parse_trial_design: node {node} forks with an unlabelled edge. Label every "
+                "edge of a fork with its ARMCD (A -->|ARMCD| B)."
+            )
+    roots = [n for n in nodes if not incoming[n]]
+    if len(roots) != 1:
+        raise ValueError(
+            f"parse_trial_design: the diagram must have one start node, found {roots or 'none'}"
+        )
+
+    paths: list[tuple[list[str], list[str]]] = []
+
+    def walk(node: str, path: list[str], labels: list[str]) -> None:
+        path = [*path, node]
+        if not out[node]:
+            paths.append((path, labels))
+        for label, nxt in out[node]:
+            walk(nxt, path, [*labels, label] if label else labels)
+
+    walk(roots[0], [], [])
+    arms: dict[str, list[str]] = {}
+    for path, labels in paths:
+        if not labels and len(paths) > 1:
+            raise ValueError(f"parse_trial_design: the path {' -> '.join(path)} has no ARMCD label")
+        armcd = (labels[-1] if labels else "SCRNARM").upper()[:20]
+        if armcd in arms:
+            raise ValueError(f"parse_trial_design: two paths give ARMCD '{armcd}'")
+        arms[armcd] = path
+    return arms
 
 
 def parse_trial_design(
@@ -679,16 +819,16 @@ def parse_trial_design(
 ) -> tuple[TrialElements, TrialArms]:
     """Parse a Mermaid flowchart into TE and TA collections.
 
-    Extracts epochs from ``subgraph`` blocks, elements from node labels,
-    and arm assignments from labelled edges.  BFS traversal per arm
-    determines ``TAETORD``.
+    Each ``subgraph ID[TITLE]`` is an epoch; each node inside it is an
+    element (``ETCD["Element name<br/>P14D"]``); each path from the start
+    node to an end node is an arm, named by the last ``|ARMCD|`` label on
+    its edges.  A title that is not a C99079 term is kept, upper case, as a
+    sponsor epoch, with a warning.  ``%%`` comment lines are skipped.
 
-    Handles branching (arm splits), convergence (shared elements), and
-    sequential paths.  Duration is extracted from ``<br/>P…`` suffixes in
-    node labels.
-
-    Does **not** handle crossover designs, adaptive arms, or
-    ``TESTRL``/``TEENRL`` rule expressions.
+    The diagram carries ETCD, ELEMENT, TEDUR, EPOCH and the arm paths.  It
+    does not carry ARM, TESTRL, TEENRL, TABRANCH or TATRANS, and it cannot
+    carry a crossover or an element that repeats in one arm: YAML is the
+    lossless round trip.
 
     Args:
         mermaid_text: A Mermaid ``flowchart TD`` string.
@@ -696,6 +836,12 @@ def parse_trial_design(
     Returns:
         tuple[TrialElements, TrialArms]: Validated collections ready for
             ``add_elements()`` and ``add_arms()``.
+
+    Raises:
+        ValueError: On an empty diagram, a line of an unknown form, a node
+            outside a subgraph, an unlabelled fork, a cycle, a node with no
+            edge, more than one start node, or two nodes or two arms that
+            give the same code.
 
     Examples:
         Parse a simple 3-element design::
@@ -715,143 +861,63 @@ def parse_trial_design(
                 TREAT --> FOLL
             ''')
     """
-    # 1. Parse subgraphs → epoch mapping (node_id → Epoch)
-    node_epoch: dict[str, Epoch] = {}
-    subgraph_nodes: dict[str, list[str]] = {}
-
-    lines = mermaid_text.strip().splitlines()
-    current_subgraph: str | None = None
-    epoch_map: dict[str, Epoch] = {}
-
-    for line in lines:
-        line_stripped = line.strip()
-
-        sg_match = _SUBGRAPH_RE.search(line_stripped)
-        if sg_match:
-            sg_id = sg_match.group(1)
-            sg_label = sg_match.group(2).strip()
-            current_subgraph = sg_id
-            subgraph_nodes[sg_id] = []
-            # Try to match label to Epoch enum
-            try:
-                epoch_map[sg_id] = Epoch(sg_label)
-            except ValueError:
-                # Try normalised form
-                for ep in Epoch:
-                    if ep.value.replace("-", " ").replace("  ", " ").upper() == sg_label.upper():
-                        epoch_map[sg_id] = ep
-                        break
-            continue
-
-        if _SUBGRAPH_END_RE.match(line_stripped):
-            current_subgraph = None
-            continue
-
-        node_match = _NODE_RE.search(line_stripped)
-        if node_match and current_subgraph:
-            node_id = node_match.group(1)
-            subgraph_nodes.setdefault(current_subgraph, []).append(node_id)
-            if current_subgraph in epoch_map:
-                node_epoch[node_id] = epoch_map[current_subgraph]
-
-    # 2. Parse nodes → elements
+    node_epoch: dict[str, EpochLike] = {}
     node_label: dict[str, str] = {}
     node_dur: dict[str, str] = {}
+    edges: list[tuple[str, str | None, str]] = []
+    current: EpochLike | None = None
 
-    for line in lines:
-        m = _NODE_RE.search(line.strip())
-        if m:
-            nid, label, dur = m.group(1), m.group(2), m.group(3)
-            node_label[nid] = label
-            if dur:
-                node_dur[nid] = dur
+    for raw in mermaid_text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("%%") or _HEADER_RE.fullmatch(line):
+            continue
+        if m := _SUBGRAPH_RE.fullmatch(line):
+            current = _subgraph_epoch(m.group(2))
+        elif _SUBGRAPH_END_RE.fullmatch(line):
+            current = None
+        elif m := _NODE_RE.fullmatch(line):
+            nid = m.group(1)
+            if current is None:
+                raise ValueError(f"parse_trial_design: node {nid} is outside every subgraph")
+            node_epoch[nid] = current
+            node_label[nid] = m.group(2).replace("#quot;", '"')
+            if m.group(3):
+                node_dur[nid] = m.group(3)
+        elif m := _EDGE_RE.fullmatch(line):
+            label = m.group(2).strip() if m.group(2) else None
+            edges.append((m.group(1), label, m.group(3)))
+        else:
+            raise ValueError(f"parse_trial_design: cannot read the line {line!r}")
 
-    # 3. Parse edges (with optional arm labels)
-    edges: list[tuple[str, str | None, str]] = []  # (from, arm_label, to)
-    for line in lines:
-        m = _EDGE_RE.search(line.strip())
-        if m:
-            src, arm_lbl, dst = m.group(1), m.group(2), m.group(3)
-            edges.append((src, arm_lbl.strip() if arm_lbl else None, dst))
+    if not node_label:
+        raise ValueError("parse_trial_design: the diagram holds no element node")
+    unknown = sorted({n for src, _, dst in edges for n in (src, dst)} - set(node_label))
+    if unknown:
+        raise ValueError(f"parse_trial_design: edge node(s) {unknown} are not declared")
+    etcd = {nid: nid.upper()[:8] for nid in node_label}
+    if len(set(etcd.values())) != len(etcd):
+        raise ValueError(f"parse_trial_design: node ids give the same ETCD: {sorted(etcd)}")
 
-    # 4. Build adjacency and discover arms via BFS
-    adj: dict[str, list[tuple[str | None, str]]] = {}
-    for src, arm_lbl, dst in edges:
-        adj.setdefault(src, []).append((arm_lbl, dst))
-
-    # Find root nodes (no incoming edges)
-    all_dst = {dst for _, _, dst in edges}
-    all_src = {src for src, _, _ in edges}
-    roots = all_src - all_dst
-    if not roots:
-        roots = {edges[0][0]} if edges else set()
-
-    # BFS per arm: discover arm paths
-    arm_paths: dict[str, list[str]] = {}
-
-    def _walk(node: str, arm: str, path: list[str], visited: set[str] | None = None) -> None:
-        if visited is None:
-            visited = set()
-        if node in visited:
-            arm_paths[arm] = list(path)
-            return
-        visited.add(node)
-        path.append(node)
-        neighbors = adj.get(node, [])
-        if not neighbors:
-            arm_paths[arm] = list(path)
-            path.pop()
-            return
-        for arm_lbl, nxt in neighbors:
-            target_arm = arm_lbl if arm_lbl else arm
-            _walk(nxt, target_arm, list(path), set(visited))
-        if arm not in arm_paths:
-            arm_paths[arm] = list(path)
-
-    for root in sorted(roots):
-        _walk(root, "DEFAULT", [])
-
-    # If no labelled edges, treat as single-arm
-    if len(arm_paths) == 1 and "DEFAULT" in arm_paths:
-        arm_paths["SCRNARM"] = arm_paths.pop("DEFAULT")
-    # With labelled edges the walk also records the shared pre-branch prefix
-    # under "DEFAULT" — that is not a real arm, drop it.
-    elif "DEFAULT" in arm_paths:
-        del arm_paths["DEFAULT"]
-
-    # 5. Build TrialElements (deduplicated)
-    seen_etcd: set[str] = set()
-    te_list: list[TrialElement] = []
-    for path in arm_paths.values():
-        for nid in path:
-            etcd = nid.upper()[:8]
-            if etcd in seen_etcd:
-                continue
-            seen_etcd.add(etcd)
-            te_list.append(
-                TrialElement(
-                    etcd=etcd,
-                    element=node_label.get(nid, nid),
-                    tedur=node_dur.get(nid, ""),
-                    epoch=node_epoch.get(nid, Epoch.TREATMENT),
-                )
-            )
-
-    # 6. Build TrialArms
-    ta_list: list[TrialArm] = []
-    for armcd, path in arm_paths.items():
-        arm_name = armcd.replace("_", " ").title()
-        for order, nid in enumerate(path, 1):
-            etcd = nid.upper()[:8]
-            ta_list.append(
-                TrialArm(
-                    armcd=armcd.upper()[:20],
-                    arm=arm_name,
-                    taetord=order,
-                    etcd=etcd,
-                    element=node_label.get(nid, nid),
-                    epoch=node_epoch.get(nid, Epoch.TREATMENT),
-                )
-            )
-
+    arm_paths = _arm_paths(list(node_label), edges)
+    te_list = [
+        TrialElement(
+            etcd=etcd[nid],
+            element=node_label[nid],
+            tedur=node_dur.get(nid, ""),
+            epoch=node_epoch[nid],
+        )
+        for nid in dict.fromkeys(n for path in arm_paths.values() for n in path)
+    ]
+    ta_list = [
+        TrialArm(
+            armcd=armcd,
+            arm=armcd.replace("_", " ").title(),
+            taetord=order,
+            etcd=etcd[nid],
+            element=node_label[nid],
+            epoch=node_epoch[nid],
+        )
+        for armcd, path in arm_paths.items()
+        for order, nid in enumerate(path, 1)
+    ]
     return TrialElements(elements=te_list), TrialArms(arms=ta_list)

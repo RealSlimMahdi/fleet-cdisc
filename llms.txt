@@ -255,6 +255,26 @@ dm = (
     .date("RFSTDTC", source="first_dose_date")
     .date("RFENDTC", source="last_dose_date")
     .date("RFICDTC", source="informed_consent_date")
+    # Only DM variables, in SDTMIG order: the raw columns are not written to dm.json.
+    .keep(
+        "STUDYID",
+        "DOMAIN",
+        "USUBJID",
+        "SUBJID",
+        "RFSTDTC",
+        "RFENDTC",
+        "RFICDTC",
+        "SITEID",
+        "AGE",
+        "AGEU",
+        "SEX",
+        "RACE",
+        "ETHNIC",
+        "ARMCD",
+        "ARM",
+        "ACTARMCD",
+        "ACTARM",
+    )
     .to_frame()
 )
 print(f"\n── 2a. SDTM DM : {dm.shape[0]} subjects × {dm.shape[1]} variables")
@@ -856,9 +876,10 @@ adae = (
     .source("AEREL")
     .source("AEOUT")
     .source("AEACN")
-    # admiral: derive_vars_dt
-    .date("ASTDT", source="AESTDTC")
-    .date("AENDT", source="AEENDTC")
+    # admiral: derive_vars_dt (ad_adae.R: partial start to the first day but not
+    # before TRTSDT, partial end to the last day; the SAP decides the rule)
+    .date("ASTDT", source="AESTDTC", min_date="TRTSDT")
+    .date("AENDT", source="AEENDTC", impute="last")
     .duration("ADY", start="TRTSDT", end="ASTDT")
     .to_frame()
     .adam.occds.treatment_emergent(  # admiral: derive_var_trtemfl
@@ -999,7 +1020,7 @@ End-to-end CDISCPILOT01 pipeline — spec-driven style.
 
 Every ADaM column derivation is defined in examples/cdiscpilot01/adam/define.yaml
 and executed via ``df.adam.from_spec()``.  OCCDS-specific verbs that the spec
-cannot yet express (treatment_emergent, seq) are applied inline
+cannot yet express (worst-severity flag, seq) are applied inline
 immediately after the spec phase.
 
 Shared-verb mixin architecture
@@ -1197,19 +1218,16 @@ print(f"SDTM AE  : {ae.shape[0]} records  ·  {ae.shape[1]} columns")
 
 # ════════════════════════════════════════════════════════════════════════════
 # 5. ADaM ADSL — spec-driven
-#    Simple derivations (source/rename/assigned) live in the spec.
-#    Join-based pre-computations (TRTSDT from EX, AGEGR1, SAFFL, ITTFL,
-#    TRT01P/TRT01A) are added to the DM frame before from_spec() runs.
+#    Simple derivations (source/rename/assigned) live in the spec, and so do
+#    TRTSDT/TRTEDT (first_date/last_date on the pinned EX).
+#    Join-based pre-computations (AGEGR1, SAFFL, ITTFL, TRT01P/TRT01A)
+#    are added to the DM frame before from_spec() runs.
 # ════════════════════════════════════════════════════════════════════════════
 print("\n── ADaM ADSL (spec-driven) ──────────────────────────────────────────────")
 
 dm_enriched = (
-    dm.adam.adsl.first_date(  # Treatment dates from EX (admiral: derive_vars_merged)
-        "TRTSDT", from_dataset=ex, date_col="EXSTDTC"
-    )
-    .last_date("TRTEDT", from_dataset=ex, date_col="EXENDTC")
     # Treatment variables (admiral: mutate TRT01P=ARM, TRT01A=ACTARM)
-    .assign("TRT01P", source="ARM")
+    dm.adam.adsl.assign("TRT01P", source="ARM")
     .assign("TRT01A", source="ACTARM")
     # Age grouping (admiral: derive_vars_cat)
     .case_when(
@@ -1239,11 +1257,13 @@ assert (dm_enriched["SAFFL"] == "Y").sum() == dm_enriched.height, "every pilot s
 # The columns below are derived inline above (or upstream in DM) with a
 # *different* method than the spec documents, so they are omitted from the
 # spec pass — from_spec()'s overwrite guard would (rightly) raise otherwise.
+# TRTSDT and TRTEDT run from the spec on the pinned EX.
 adsl = (
-    dm_enriched.adam.from_spec(
+    dm_enriched.adam.pin("EX", ex)
+    .from_spec(
         ADAM_SPEC,
         dataset="ADSL",
-        omit=["STUDYID", "TRT01P", "TRT01A", "TRTSDT", "TRTEDT"],
+        omit=["TRT01P", "TRT01A"],
     )
     .select(spec=ADAM_SPEC, dataset="ADSL")
     .write_parquet(OUT / "adsl.parquet")
@@ -1289,9 +1309,9 @@ vs_with_adsl = (
     .to_frame()
 )
 
-# USUBJID is renamed inline above (the merge needs it) — omit the spec's copy.
+# The spec copies USUBJID as it is (an identity copy of the merge key).
 advs = (
-    vs_with_adsl.adam.from_spec(ADAM_SPEC, dataset="ADVS", omit=["USUBJID"])
+    vs_with_adsl.adam.from_spec(ADAM_SPEC, dataset="ADVS")
     .select(spec=ADAM_SPEC, dataset="ADVS")
     .write_parquet(OUT / "advs.parquet")
 )
@@ -1299,7 +1319,7 @@ print(f"   {advs.shape[0]} records × {advs.shape[1]} variables")
 print(f"   Parameters: {sorted(advs['PARAMCD'].unique().to_list())}")
 
 # ════════════════════════════════════════════════════════════════════════════
-# 7. ADaM ADAE — hybrid: spec for source columns, occds for OCCDS-specific verbs
+# 7. ADaM ADAE — hybrid: spec for source columns and TRTEMFL, occds for the rest
 #    admiral ref: https://pharmaverse.github.io/admiral/articles/adae.html
 # ════════════════════════════════════════════════════════════════════════════
 print("\n── ADaM ADAE (spec-driven + occds verbs) ────────────────────────────────")
@@ -1307,17 +1327,12 @@ print("\n── ADaM ADAE (spec-driven + occds verbs) ────────�
 _adsl_trt = adsl.select(["USUBJID", "TRTSDT", "TRTEDT", "TRT01P", "AGE", "SEX", "SAFFL"])
 ae_with_trt = fleet.frame(ae).adam.merge(dataset=_adsl_trt, on="USUBJID", how="left").to_frame()
 # STUDYID already exists on the SDTM AE frame — keep it, skip the spec's copy.
+# The spec derives TRTEMFL with occds.treatment_emergent (end window 0 days).
 adae_sourced = ae_with_trt.adam.from_spec(ADAM_SPEC, dataset="ADAE", omit=["STUDYID"]).to_frame()
 adae = (
-    adae_sourced.adam.occds.treatment_emergent(
-        "TRTEMFL",
-        start_date="AESTDTC",
-        end_date="AEENDTC",
-        trtsdt="TRTSDT",
-        trtedt="TRTEDT",
-        end_window=0,
+    adae_sourced.adam.occds.recode(
+        "AESEVN", source="AESEV", recode_map={"MILD": 1, "MODERATE": 2, "SEVERE": 3}
     )
-    .recode("AESEVN", source="AESEV", recode_map={"MILD": 1, "MODERATE": 2, "SEVERE": 3})
     .flag(
         "ANL01FL",
         criteria="max",
@@ -1405,7 +1420,8 @@ Demonstrates the two ways to create trial design datasets:
 
 1. **StudyDesign aggregate** (recommended) — define the design once, derive
    every protocol-reference domain (TE, TA, TV, TS, TI, TD, TM), audit it
-   against P21-style conformance rules, and round-trip through Mermaid/YAML.
+   against P21-style conformance rules, render it as a Mermaid review
+   diagram, and round-trip it losslessly through YAML.
 
 2. **Row-level pipeline** — the fixed-sequence verb chain
    ``fetch_structure() → study_header() → add_*() → to_frame()``
@@ -1516,14 +1532,18 @@ def main() -> None:
     print(findings.head(5))
 
     # ════════════════════════════════════════════════════════════════════
-    # 3. Mermaid round trip — diagram in, diagram out
+    # 3. Mermaid review diagram — it carries the arm paths, not ARM or rules
     # ════════════════════════════════════════════════════════════════════
-    print("\n── 3. Mermaid round trip ───────────────────────────────────")
+    print("\n── 3. Mermaid review diagram ───────────────────────────────")
 
     mermaid = design.to_mermaid()
     print(mermaid)
-    reparsed = fleet.StudyDesign.from_mermaid(mermaid, study_id="CDISCPILOT01")
-    print(f"   Round trip OK: {reparsed.arms == design.arms}")
+    reparsed = fleet.StudyDesign.from_mermaid(
+        mermaid, study_id="CDISCPILOT01", arm_names=design.arm_names
+    )
+    ta_cols = ["ARMCD", "ARM", "TAETORD", "ETCD", "ELEMENT", "EPOCH"]
+    same_ta = reparsed.to_ta().select(ta_cols).equals(design.to_ta().select(ta_cols))
+    print(f"   Arm paths and TA read back: {same_ta} (TESTRL/TEENRL need the YAML)")
 
     # ════════════════════════════════════════════════════════════════════
     # 4. Row-level pipeline — fetch_structure → study_header → add_*
@@ -1754,7 +1774,7 @@ Registered on every `pl.DataFrame` **and** `pl.LazyFrame` (so `pl.scan_parquet(.
 - `df.adam.vaccine` — Vaccine: fever flag, seroconversion, ADIS AVAL
 - `df.adam.metabolic` — Metabolic: waist-to-hip ratio, body fat %
 - `df.adam.neuro` — Neuroscience: Centiloid, MMSE, CDR-SoB
-- `df.adam.tte` — Time-to-event (ADTTE): EventSource/CensorSource objects, param, AVAL/AVALU, KM inputs
+- `df.adam.tte` — Time-to-event (ADTTE): param from plain event/censor frames, stop_at window, AVAL/AVALU, KM inputs
 
 ## SDTM verbs
 
@@ -1767,7 +1787,7 @@ Registered on every `pl.DataFrame` **and** `pl.LazyFrame` (so `pl.scan_parquet(.
 - `derivation(target: str | Derivation | None = None, *, expression: str | pl.Expr | Callable[[], pl.Expr] | None = None) -> Self` — Derive *target* using an expression, lambda, or ``Derivation`` object.
 - `condition_add(target: str, *, condition: str | pl.Expr, then_value: Any) -> SDTMNamespace` — Set *target* to *then_value* where *condition* is true, else null.
 - `ae_aerel(target: str = 'AEREL', *, source: str = 'ae_relationship', aerel_map: dict[str, str] | None = None) -> SDTMNamespace` — Map free-text AE causality strings to ``AEREL`` values.
-- `merge(dataset: pl.DataFrame | pl.LazyFrame | None = None, *, on: str | list[str] | None = None, how: str = 'left', keep: list[str] | None = None, where: str | pl.Expr | None = None) -> Self` — Join *dataset* into the pipeline using key column(s) *on*.
+- `merge(dataset: pl.DataFrame | pl.LazyFrame | None = None, *, on: str | list[str] | None = None, how: str = 'left', keep: list[str] | None = None, where: str | pl.Expr | None = None, validate: "Literal['m:1', '1:m', '1:1'] | None" = None) -> Self` — Join *dataset* into the pipeline using key column(s) *on*.
 - `keep(*columns: str | list[str]) -> Self` — Restrict the frame to *columns*, in the given order.
 - `nodup(*, subset: list[str], sort_by: list[str] | None = None, keep: "Literal['first', 'last'] | None" = None, descending: bool | list[bool] = False) -> Self` — Detect duplicate rows and optionally deduplicate after sorting.
 - `group_by(*, by: list[str], agg: list[pl.Expr]) -> SDTMNamespace` — Group by *by* and apply *agg* aggregations (lazily).
@@ -1792,7 +1812,7 @@ Fleet supports all 7 CDISC Trial Design Model domains through `df.sdtm`. Protoco
 
 ### Subject-level verbs
 
-- `visit_map(target_num: str, target_name: str, *, date_col: str, planned_visits: TrialVisits | pl.DataFrame, ref_date: str | None = None, tolerance: dict[str, int] | None = None) -> Self` — Map raw visit dates to planned visits from TV.
+- `visit_map(target_num: str, target_name: str, *, date_col: str, planned_visits: TrialVisits | pl.DataFrame, ref_date: str | None = None, tolerance: dict[str, int] | None = None) -> Self` — Map raw visit dates to planned visits from TV, by nearest study day.
 - `element_boundaries(target_start: str, target_end: str, *, milestones: dict[str, str], element_col: str = 'ETCD', subject_col: str = 'USUBJID') -> Self` — Derive element start/end dates from milestone columns.
 - `epoch_assign(target: str, *, date_col: str, epoch_ranges: list[dict[str, str]] | pl.DataFrame | None = None, se: pl.DataFrame | pl.LazyFrame | None = None, subject_col: str = 'USUBJID', same_day: "Literal['by_class', 'earlier', 'later']" = 'by_class') -> Self` — Assign ``EPOCH`` based on date ranges or per-subject SE intervals.
 
@@ -1817,7 +1837,7 @@ These verbs are defined once in `SharedADaMVerbsMixin` (`src/fleet/adam/_mixins.
 - `case_when(target: str, *, when: list[dict[str, Any]], else_: Any = None) -> Self` — Multi-branch conditional derivation (first matching branch wins).
 - `derivation(target: str | Derivation | None = None, *, expression: str | pl.Expr | Callable[[], pl.Expr] | None = None) -> Self` — Derive *target* using an expression, lambda, or ``Derivation`` object.
 - `recode(target: str, *, source: str, recode_map: dict[Any, Any], default: Any = None) -> Self` — Map values in *source* to recoded values in *target*.
-- `merge(dataset: pl.DataFrame | pl.LazyFrame | None = None, *, on: str | list[str] | None = None, how: str = 'left', keep: list[str] | None = None, where: str | pl.Expr | None = None) -> Self` — Join *dataset* into the pipeline using key column(s) *on*.
+- `merge(dataset: pl.DataFrame | pl.LazyFrame | None = None, *, on: str | list[str] | None = None, how: str = 'left', keep: list[str] | None = None, where: str | pl.Expr | None = None, validate: "Literal['m:1', '1:m', '1:1'] | None" = None) -> Self` — Join *dataset* into the pipeline using key column(s) *on*.
 - `keep(*columns: str | list[str]) -> Self` — Restrict the frame to *columns*, in the given order.
 - `whereclauses(*, where: str | pl.Expr) -> Self` — Filter records by a *where* expression.
 - `merge_adsl(adsl: pl.DataFrame, *, by: list[str] | None = None, keep: list[str] | None = None) -> Self` — Left-join ADSL columns onto the current dataset.
@@ -1834,17 +1854,17 @@ Available on `df.adam` (BDS base namespace). Shared verbs (source, assign, case_
 - `baseline(target: str, *, aval: str = 'AVAL', baseline_flag: str = 'ABLFL', by: list[str] | None = None, strict: bool = True) -> AdamNamespace` — Derive BASE as the AVAL where the baseline flag equals ``"Y"``.
 - `chg(target: str, *, aval: str = 'AVAL', base: str = 'BASE') -> AdamNamespace` — Compute change from baseline: ``CHG = AVAL - BASE``.
 - `pchg(target: str, *, aval: str = 'AVAL', base: str = 'BASE') -> AdamNamespace` — Compute percent change from baseline.
-- `bmi(target: str, *, weight: str, height: str) -> AdamNamespace` — Derive Body Mass Index: ``weight_kg / (height_cm / 100) ** 2``.
-- `bsa(target: str, *, weight: str, height: str, method: str = 'Mosteller') -> AdamNamespace` — Derive Body Surface Area in m².
-- `map(target: str = 'MAP', *, systolic: str = 'SYSBP', diastolic: str = 'DIABP') -> AdamNamespace` — Derive Mean Arterial Pressure: ``DBP + (SBP - DBP) / 3``.
-- `qtc(target: str = 'QTC', *, qt: str = 'QT', rr: str = 'RR', method: str = 'Fridericia', rr_unit: str = 'ms') -> AdamNamespace` — Derive corrected QT interval, as admiral ``compute_qtc``.
-- `nrind(target: str, *, value: str, low: str, high: str) -> AdamNamespace` — Categorise *value* relative to normal range: LOW / NORMAL / HIGH.
+- `bmi(target: str, *, weight: str, height: str, round_digits: int | None = None) -> AdamNamespace` — Derive Body Mass Index: ``weight_kg / (height_cm / 100) ** 2``.
+- `bsa(target: str, *, weight: str, height: str, method: str = 'Mosteller', round_digits: int | None = None) -> AdamNamespace` — Derive Body Surface Area in m², at full precision.
+- `map(target: str = 'MAP', *, systolic: str = 'SYSBP', diastolic: str = 'DIABP', round_digits: int | None = None) -> AdamNamespace` — Derive Mean Arterial Pressure: ``DBP + (SBP - DBP) / 3``, at full precision.
+- `qtc(target: str = 'QTC', *, qt: str = 'QT', rr: str = 'RR', method: str = 'Fridericia', rr_unit: str = 'ms', round_digits: int | None = None) -> AdamNamespace` — Derive corrected QT interval, as admiral ``compute_qtc``, at full precision.
+- `nrind(target: str, *, value: str, low: str, high: str, signif_dig: int = 15) -> AdamNamespace` — Categorise *value* relative to normal range: LOW / NORMAL / HIGH.
 - `on_treatment(target: str = 'ONTRTFL', *, adt: str, trtsdt: str, trtedt: str, open_ended: bool = True) -> AdamNamespace` — Set *target* to ``"Y"`` when *adt* is within [trtsdt, trtedt].
 - `shift(target: str, *, baseline_cat: str, post_cat: str, sep: str = ' to ') -> AdamNamespace` — Derive a categorical shift label: ``"<baseline><sep><post>"``.
-- `derive_summary_records(*, by: list[str], analysis_var: str = 'AVAL', set_values_to: dict[str, Any], stat: "Literal['mean', 'sum', 'min', 'max', 'median', 'count']" = 'mean') -> AdamNamespace` — Compute a summary statistic per group and append the results as new records.
-- `derive_locf_records(*, by: list[str] | None = None, analysis_var: str = 'AVAL', order_by: str = 'ADT') -> AdamNamespace` — Forward-fill *analysis_var* within each group (LOCF).
+- `derive_summary_records(*, by: list[str], analysis_var: str = 'AVAL', set_values_to: dict[str, Any], stat: "Literal['mean', 'sum', 'min', 'max', 'median', 'count']" = 'mean', where: str | pl.Expr | None = None) -> AdamNamespace` — Compute a summary statistic per group and append the results as new records.
+- `derive_locf_records(*, dataset_ref: pl.DataFrame, by: list[str], order_by: str | list[str], analysis_var: str = 'AVAL', imputation: "Literal['add', 'update', 'update_add']" = 'add', keep_vars: list[str] | None = None) -> AdamNamespace` — Add LOCF records for missed visits and for a null *analysis_var*.
 - `derive_param(*, by: list[str] | None = None, set_values_to: dict[str, Any], parameter_filter: dict[str, str], analysis_value: pl.Expr | str, from_dataset: pl.DataFrame | None = None, where: str | pl.Expr | None = None) -> AdamNamespace` — Derive a new parameter (e.g. BMI) from existing records and append
-- `atoxgr(target: str, *, system: str = 'ctcae_v5', direction: str, term_var: str, unit_var: str | None = None, signif_dig: int = 15, indicators: dict[str, list[str]] | None = None) -> AdamNamespace` — Derive a toxicity grade, as admiral ``derive_var_atoxgr_dir``.
+- `atoxgr(target: str, *, system: str = 'ctcae_v5', direction: "Literal['L', 'H']", term_var: str, unit_var: str, signif_dig: int = 15, indicators: dict[str, list[str]] | None = None) -> AdamNamespace` — Derive a toxicity grade, as admiral ``derive_var_atoxgr_dir``.
 - `transform(fn: str | Callable[[pl.DataFrame], pl.DataFrame], *, label: str | None = None) -> AdamNamespace` — Apply an arbitrary ``(pl.DataFrame) -> pl.DataFrame`` function.
 - `from_spec(spec_path: str | Path, *, dataset: str | None = None, only: list[str] | None = None, omit: list[str] | None = None, strict: bool = True, overwrite: bool = False) -> Self` — Build a derivation pipeline from a YAML specification file.
 
@@ -1854,7 +1874,7 @@ Available on `df.adam` (BDS base namespace). Shared verbs (source, assign, case_
 - `last_date(target: str, *, from_dataset: pl.DataFrame, date_col: str, where: str | pl.Expr | None = None, by: list[str] | None = None, impute: str | None = None) -> Self` — Derive *target* as the latest date in *date_col* from *from_dataset*.
 - `duration(target: str, *, start: str | pl.Expr, end: str | pl.Expr, unit: "Literal['seconds', 'minutes', 'hours', 'days', 'weeks', 'months', 'years']" = 'days', add_one: bool | None = None, out: "Literal['numeric', 'iso8601']" = 'numeric') -> Self` — Compute the duration between two date/datetime columns.
 - `count_events(target: str, *, from_dataset: pl.DataFrame, where: str | pl.Expr | None = None, by: list[str] | None = None) -> Self` — Derive *target* as the count of matching records in *from_dataset*.
-- `age_years(target: str = 'AAGE', *, age_col: str = 'AGE', age_unit_col: str = 'AGEU') -> Self` — Convert age to years, handling common unit strings.
+- `age_years(target: str = 'AAGE', *, age_col: str = 'AGE', age_unit_col: str = 'AGEU', round_digits: int | None = None) -> Self` — Convert age to years, handling common unit strings.
 - `derive_period(*, periods: list[dict[str, Any]]) -> Self` — Create standard Subperiod / Phase variables.
 
 ## OCCDS verbs
@@ -1892,7 +1912,7 @@ Available on `df.adam.occds` (and `df.adam.pk` for sequence). Shared verbs (sour
 | Normal range indicator | `nrind` | `adam` | Returns `LOW / NORMAL / HIGH` |
 | On-treatment flag | `on_treatment` | `adam` | `TRTSDT ≤ ADT ≤ TRTEDT` |
 | Categorical shift | `shift` | `adam` | `"BASELINE / POST-BASELINE"` string |
-| LOCF imputation records | `derive_locf_records` | `adam` | Forward-fill within patient groups |
+| LOCF imputation records | `derive_locf_records` | `adam` | Add LOCF records (DTYPE "LOCF") for expected visits |
 | Summary records | `derive_summary_records` | `adam` | Aggregate and append summary rows |
 | Derived parameter rows | `derive_param` | `adam` | New parameter rows from existing ones |
 | Join reference dataset | `merge` | `adam` / `sdtm` | Left-join another DataFrame into lazy plan |
@@ -1969,7 +1989,7 @@ A **study run** reads the study's define files, builds every dataset they declar
 import fleet
 
 ctx = fleet.load_study_context("study_config.yaml")
-plan = fleet.plan_study(ctx)  # SDTM define first, then ADaM, each in file order
+plan = fleet.plan_study(ctx)  # each dataset after the planned datasets it reads; else file order
 [(s.standard, s.dataset) for s in plan.steps]  # [("sdtm", "DM"), ("sdtm", "AE"), ("adam", "ADSL"), ...]
 
 for built in fleet.run_study(plan):  # a generator: each dataset as soon as it is built
@@ -1980,7 +2000,7 @@ plan = fleet.plan_study(ctx, datasets=["ADVS"])
 advs = next(fleet.run_study(plan, inputs={"ADSL": adsl_fixed})).frame
 ```
 
-Rules (ADR 0006): each input is taken from the first source that gives it — a seed, a dataset built earlier in the run, the input's `path:` relative to the study root, then its name in the raw / SDTM / ADaM data directories (`.parquet`, `.csv`, `.xpt`, `.sas7bdat`). The first input is the base frame. Every other input is **pinned** under its dataset name, so `merge`, `lookup`, `first_date`, `last_date` and `count_events` reach it. Only **carry-through columns** (declared with no `derivation:`) are left-joined from the other inputs on USUBJID; a column with a derivation comes from its algorithm alone. A seed that is also a step is refused. Every refusal is a `StudyRunError`, which `fleet run` turns into exit 1.
+Rules (ADR 0006): each input is taken from the first source that gives it — a seed, a dataset built earlier in the run, the input's `path:` relative to the study root, then a search by name that honours `type:`. A `type: raw` input, or one named as the dataset being built, comes from the raw directory only. A `type: dataset` input never comes from the raw directory: from the data directory of the standard a define declares it in, else ADaM then SDTM for an ADaM step and SDTM then ADaM for an SDTM step (`.parquet`, `.csv`, `.xpt`, `.sas7bdat`, `.json`). Two files for one dataset in one directory stop the run. The first input is the base frame. Every other input is **pinned** under its dataset name, so `merge`, `lookup`, `first_date`, `last_date` and `count_events` reach it. Only **carry-through columns** (declared with no `derivation:`) are left-joined from the other inputs on USUBJID, and an input with two records for one USUBJID stops the join; a column with a derivation comes from its algorithm alone. A seed that is also a step is refused. Every refusal is a `StudyRunError`, which `fleet run` turns into exit 1. `fleet run` writes each dataset in `--format`, else its `output_format:`, else the define's, else parquet: the rule of the Define-XML leaf.
 
 ## Controlled Terminology
 

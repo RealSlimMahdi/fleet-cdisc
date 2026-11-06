@@ -88,6 +88,8 @@ adsl = (
     .source("RACE")
     .source("ARM")
     .assign("TRT01P", source="ARM")
+    # The raw DM has no actual arm, so the actual arm is the planned arm here.
+    .assign("TRT01A", source="ARM")
     .date("TRTSDT", source="RFSTDTC")
     .date("TRTEDT", source="RFENDTC")
     .derivation(
@@ -96,10 +98,9 @@ adsl = (
     )
     .to_frame()
 )
-adsl = adsl.with_columns(pl.col("TRT01P").alias("TRTA"))
 
 print(f"   {adsl.shape[0]} subjects × {adsl.shape[1]} variables")
-print(f"   Arms: {sorted(adsl['TRTA'].unique().to_list())}")
+print(f"   Arms: {sorted(adsl['TRT01A'].unique().to_list())}")
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -110,7 +111,7 @@ print("\n══ 2. Build synthetic ADVS ═════════════�
 # Create a minimal ADVS from ADSL subjects with synthetic vital signs
 random.seed(42)
 
-subjects = adsl.select(["USUBJID", "TRTA", "SAFFL"]).to_dicts()
+subjects = adsl.select(["USUBJID", "TRT01A", "SAFFL"]).to_dicts()
 vs_records = []
 for subj in subjects:
     for paramcd, param_label in [
@@ -123,7 +124,8 @@ for subj in subjects:
             vs_records.append(
                 {
                     "USUBJID": subj["USUBJID"],
-                    "TRTA": subj["TRTA"],
+                    # Parallel design: the record's actual arm is the ADSL actual arm.
+                    "TRTA": subj["TRT01A"],
                     "SAFFL": subj["SAFFL"],
                     "PARAMCD": paramcd,
                     "PARAM": param_label,
@@ -142,7 +144,10 @@ print(f"   Visits: {advs['AVISIT'].unique().to_list()}")
 # 3. VS Summary — DEFAULT spec (zero-config)
 # ════════════════════════════════════════════════════════════════════════════
 print("\n══ 3. VS Summary — DEFAULT spec ════════════════════════════════════════")
-ard_default = advs.tlg.vs.t_summary(groupby="TRTA", adsl=adsl)
+# ADVS holds the arm as TRTA, ADSL as TRT01A: adsl_group_col names the ADSL arm.
+ard_default = advs.tlg.vs.t_summary(
+    groupby="TRTA", adsl=adsl, spec=VSSummarySpec(adsl_group_col="TRT01A")
+)
 print(ard_default)
 print(f"\n   ARD shape: {ard_default.shape[0]} rows × {ard_default.shape[1]} cols")
 
@@ -153,7 +158,7 @@ print(f"\n   ARD shape: {ard_default.shape[0]} rows × {ard_default.shape[1]} co
 print("\n══ 4. VS Summary — INLINE BUILDER ══════════════════════════════════════")
 
 ard_builder = (
-    advs.tlg.vs.population(adsl, adsl_filter=pl.col("SAFFL") == "Y")
+    advs.tlg.vs.population(adsl, adsl_filter=pl.col("SAFFL") == "Y", group_col="TRT01A")
     .filter(pl.col("PARAMCD").is_in(["SYSBP", "DIABP"]))
     .by("TRTA")
     .header_rows(
@@ -181,6 +186,7 @@ print("\n══ 5. VS Summary — SPEC with pools ══════════
 spec = VSSummarySpec(
     dataset_filter=pl.col("PARAMCD") == "SYSBP",
     adsl_filter=pl.col("SAFFL") == "Y",
+    adsl_group_col="TRT01A",
     pools=[GroupPool(label="Total", arms="*")],
     column_order=["Placebo", "Xanomeline Low Dose", "Xanomeline High Dose", "Total"],
 )
@@ -211,7 +217,7 @@ print(f"   Age groups: {sorted(advs_strat['AGEGR1'].unique().to_list())}")
 # One visit only: the hierarchy has two levels, so the visit is a filter.
 ard_strat = (
     fleet.frame(advs_strat)
-    .tlg.vs.population(adsl_age)
+    .tlg.vs.population(adsl_age, group_col="TRT01A")
     .filter(pl.col("AVISIT") == "Week 8")
     .by("TRTA")
     .rows(["AGEGR1", "PARAMCD"])

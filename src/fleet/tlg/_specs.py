@@ -11,6 +11,7 @@ flag values, pool arm existence).
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from enum import Enum
 from typing import Any, ClassVar, Literal, Self
 
@@ -20,6 +21,10 @@ from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_va
 
 from fleet.core.exceptions import SchemaError
 from fleet.sdtm.utils import parse_expression
+
+#: The arm of a subject-level (ADSL) table: actual arm, then planned arm
+#: (ADaMIG 1.3, section 3.1.4; ADR-0046).
+ADSL_ARM_FALLBACK: tuple[str, ...] = ("TRT01A", "TRT01P")
 
 
 def resolve_filter(value: Any) -> pl.Expr | None:
@@ -229,6 +234,74 @@ class Uncoded(BaseModel):
     )
 
     model_config = {"extra": "forbid"}
+
+
+#: Display label of the missing level (FDA CDER ST&F IG v2.0, 2.1.2).
+MISSING_LABEL = "Missing"
+
+
+class MissingLevel(BaseModel):
+    """The missing-level rule: count a null category under a visible row.
+
+    A subject whose category value is null (or blank) is counted in a
+    ``"Missing"`` row, last in the block, so the rows add up to N.  The
+    row appears only when a null exists.  ``label=None`` adds no row:
+    the count goes to the ARD ``warning`` column of that variable, with
+    one ``UserWarning``.  A spec carries one ``MissingLevel`` (or
+    ``None`` to switch the rule off); set inline via
+    [`TLGBuilder.missing()`][fleet.tlg.TLGBuilder.missing].
+
+    References:
+        FDA CDER Standard Safety Tables and Figures IG v2.0, 2.1.2;
+        ADR-0038.
+    """
+
+    columns: list[str] = Field(
+        ...,
+        description=(
+            "Category columns whose null or blank values get the missing "
+            "level (e.g. ``RACE``).  Names absent from the dataset are skipped."
+        ),
+    )
+    label: str | None = Field(
+        default=MISSING_LABEL,
+        description=(
+            "Row label of the missing level.  ``null`` adds no row and "
+            "writes the count to the ARD warning column instead."
+        ),
+    )
+
+    model_config = {"extra": "forbid"}
+
+
+def blank_filter_columns(expr: pl.Expr | None, df: pl.DataFrame) -> list[str]:
+    """Return the columns of *expr* that are null or blank on every record.
+
+    A filter on such a column selects no record, so its row prints 0
+    and looks like a true zero.  An empty *df* gives no column.
+
+    Args:
+        expr: A resolved filter expression, or ``None``.
+        df: The frame the filter runs on.
+
+    Returns:
+        list[str]: Column names in first-seen order.
+
+    Examples:
+        ``blank_filter_columns(pl.col("AEACN") == "DRUG WITHDRAWN", adae)``
+    """
+    if expr is None or df.height == 0:
+        return []
+    out: list[str] = []
+    for name in dict.fromkeys(expr.meta.root_names()):
+        if name not in df.columns:
+            continue
+        col = df[name]
+        if col.dtype == pl.Utf8:
+            col = col.str.strip_chars().replace("", None)
+        if col.null_count() == col.len():
+            out.append(name)
+    return out
 
 
 class ChoiceOption(BaseModel):
@@ -482,7 +555,55 @@ class TLGSpec(BaseModel):
                 "interactive.groupby needs a summary spec — listings have no "
                 "column grouping. Remove the axis."
             )
+        self._check_interactive_defaults()
         return self
+
+    def _check_interactive_defaults(self) -> None:
+        """Reject an axis default that differs from the spec field it maps onto.
+
+        The explorer marks the all-defaults variant as the batch output.
+        That claim holds only when each axis default equals the
+        top-level field that ``fleet tlg run`` reads.  Filters compare
+        as parsed expressions, so a whitespace difference does not count.
+
+        Raises:
+            ValueError: Names the axis, its default and the spec value.
+        """
+        block = self.interactive
+        assert block is not None
+        mismatches: list[str] = []
+        gb = block.groupby
+        columns = getattr(self, "columns", None)
+        if gb is not None and columns and gb.default != columns[0]:
+            mismatches.append(
+                f"interactive.groupby default {gb.default!r} differs from columns[0] {columns[0]!r}"
+            )
+        for axis, field in (("population", "adsl_filter"), ("dataset_filter", "dataset_filter")):
+            options = getattr(block, axis)
+            if options is None:
+                continue
+            chosen = next(o for o in options if o.default)
+            expected, actual = resolve_filter(chosen.filter), resolve_filter(getattr(self, field))
+            if expected is None or actual is None:
+                same = expected is None and actual is None
+            else:
+                same = expected.meta.eq(actual)
+            if not same:
+                mismatches.append(
+                    f"interactive.{axis} default {chosen.label!r} ({chosen.filter!r}) "
+                    f"differs from {field} ({getattr(self, field)!r})"
+                )
+        if block.stats is not None:
+            chosen = next(o for o in block.stats if o.default)
+            if list(chosen.statistics or []) != list(getattr(self, "statistics", None) or []):
+                mismatches.append(
+                    f"interactive.stats default {chosen.label!r} differs from statistics"
+                )
+        if mismatches:
+            raise ValueError(
+                "; ".join(mismatches) + ". The default variant is the batch output: make each axis "
+                "default equal to the spec field."
+            )
 
     @field_validator("schema_version", mode="before")
     @classmethod
@@ -512,9 +633,9 @@ class TLGSpec(BaseModel):
     def _validate_structural(self, df: pl.DataFrame, *, group_col: str | None = None) -> None:
         """Tier 1: check required columns exist."""
         required = list(self.required_columns)
-        default_group = getattr(self, "columns", None)
-        if group_col and default_group and isinstance(default_group[0], str):
-            required = [group_col if c == default_group[0] else c for c in required]
+        if group_col:
+            arm_names = self._default_arm_names()
+            required = [group_col if c in arm_names else c for c in required]
         available = set(df.columns)
         missing = [c for c in required if c not in available]
         if missing:
@@ -533,6 +654,39 @@ class TLGSpec(BaseModel):
                 f"{getattr(self, 'prefilter_hint', '')} "
                 f"Available: {sorted(available)}"
             )
+
+    def uses_default(self, name: str) -> bool:
+        """Return whether field *name* holds the template's default value.
+
+        A YAML round trip writes every field, so ``model_fields_set``
+        cannot tell a default from a user choice; the value can.
+
+        Args:
+            name: A field name of the spec.
+
+        Returns:
+            bool: ``True`` when the value equals the class default.
+
+        Examples:
+            ``DMSummarySpec().uses_default("categorical_vars") is True``
+        """
+        field = type(self).model_fields[name]
+        return getattr(self, name) == field.get_default(call_default_factory=True)
+
+    def _default_arm_names(self) -> set[str]:
+        """Arm column names that the effective group column replaces.
+
+        The class default arm (``TRTA``) and the instance's own
+        ``columns[0]``: after ``.by("TRT01A")`` the instance holds
+        ``TRT01A`` while ``required_columns`` still names ``TRTA``.
+        """
+        names: set[str] = set()
+        field = type(self).model_fields.get("columns")
+        default = field.get_default(call_default_factory=True) if field is not None else None
+        for value in (default, getattr(self, "columns", None)):
+            if value and isinstance(value[0], str):
+                names.add(value[0])
+        return names
 
     def prefilter_columns(self) -> list[str]:
         """Return the columns the spec's prefilter names.
@@ -566,18 +720,25 @@ class TLGSpec(BaseModel):
                     f"Available: {sorted(actual)}"
                 )
 
-    def check(self, df: pl.DataFrame) -> list[str]:
+    def check(self, df: pl.DataFrame, *, group_col: str | None = None) -> list[str]:
         """Pre-validation diagnostic — returns warnings without raising.
 
         Args:
             df: The DataFrame to check.
+            group_col: Effective treatment-arm column.  It replaces the
+                default arm column in the required columns, as in
+                [`validate_dataframe()`][fleet.tlg.TLGSpec.validate_dataframe].
 
         Returns:
             list[str]: Diagnostic messages (empty if all checks pass).
         """
         diagnostics: list[str] = []
         available = set(df.columns)
-        missing = [c for c in self.required_columns if c not in available]
+        required = list(self.required_columns)
+        if group_col:
+            arm_names = self._default_arm_names()
+            required = [group_col if c in arm_names else c for c in required]
+        missing = [c for c in required if c not in available]
         if missing:
             diagnostics.append(
                 f"MISSING COLUMNS: {missing} required by {self.__class__.__name__} are not present."
@@ -596,6 +757,13 @@ class TLGSpec(BaseModel):
                 absent = [v for v in required_vals if v not in actual]
                 if absent:
                     diagnostics.append(f"MISSING VALUES: {col} missing {absent}.")
+        for hdr in getattr(self, "header_rows", []):
+            blank = blank_filter_columns(resolve_filter(hdr.filter), df)
+            if blank:
+                diagnostics.append(
+                    f"WARNING: filter column {', '.join(blank)} is null or blank on "
+                    f"every record (row '{hdr.label}'); the row counts 0."
+                )
         return diagnostics
 
     def to_yaml(self) -> str:
@@ -630,10 +798,11 @@ class TLGSpec(BaseModel):
                     "Use a string expression instead."
                 )
         data = self.model_dump(exclude_none=True, exclude_defaults=False)
-        # An explicit prefilter=None switches a template's default rule
-        # off; dropping it would bring the default back on reload.
-        if "prefilter" in self.model_fields_set and getattr(self, "prefilter", 0) is None:
-            data["prefilter"] = None
+        # An explicit None switches a template's default rule off;
+        # dropping it would bring the default back on reload.
+        for field_name in ("prefilter", "uncoded", "missing"):
+            if field_name in self.model_fields_set and getattr(self, field_name, 0) is None:
+                data[field_name] = None
         # Convert enums to their values
         data = _enum_to_value(data)
         return yaml.dump(data, default_flow_style=False, sort_keys=False)
@@ -674,6 +843,9 @@ class SummarySpecBase(TLGSpec):
     #: Extra text for the missing-prefilter-column error (e.g. how to
     #: state a post-baseline rule without ONTRTFL).
     prefilter_hint: ClassVar[str] = ""
+    #: Arm columns tried in order when ``columns`` is not set: the first
+    #: one in the data is the arm.  Empty: ``columns[0]`` is the arm.
+    arm_fallback: ClassVar[tuple[str, ...]] = ()
 
     output_type: str = "summary"
     rows: list[Row] = Field(
@@ -706,6 +878,27 @@ class SummarySpecBase(TLGSpec):
     )
 
     _validate_prefilter = field_validator("prefilter")(_check_filter_field)
+    missing: MissingLevel | None = Field(
+        default=None,
+        description=(
+            "The missing-level rule: category columns whose null or blank "
+            'values are counted in a "Missing" row, last in the block, '
+            "with big N as the percent base.  Each template sets its own "
+            "default; ``null`` switches the rule off.  Set inline via "
+            "[`TLGBuilder.missing()`][fleet.tlg.TLGBuilder.missing]."
+        ),
+    )
+    adsl_group_col: str | None = Field(
+        default=None,
+        description=(
+            "Arm column of ADSL for the big N when it differs from the "
+            "analysis arm column (e.g. ``TRT01A`` for an ADAE grouped by "
+            "``TRTA``).  The arm values must match.  In a crossover the "
+            "N is then the period 1 count.  Set inline via "
+            "[`TLGBuilder.population()`][fleet.tlg.TLGBuilder.population]; "
+            "CLI ``--adsl-groupby``."
+        ),
+    )
     columns: list[str] = Field(
         default_factory=lambda: ["TRTA"],
         description=(
@@ -786,15 +979,44 @@ class SummarySpecBase(TLGSpec):
             return []
         return list(dict.fromkeys(expr.meta.root_names()))
 
-    def check(self, df: pl.DataFrame) -> list[str]:
+    def default_group_col(self, columns: Iterable[str]) -> str:
+        """Return the arm column of a run that gives no ``groupby``.
+
+        A subject-level template (DM, DS on ADSL) sets
+        ``arm_fallback = ("TRT01A", "TRT01P")``: when ``columns`` is not
+        set, the first of them in the data is the arm.  In all other
+        cases the arm is ``columns[0]``.
+
+        Args:
+            columns: Column names of the analysis dataset.
+
+        Returns:
+            str: The arm column.  When no fallback column is in the
+                data, ``columns[0]``, so the required-columns error
+                names it.
+
+        Examples:
+            ``DMSummarySpec().default_group_col(["USUBJID", "TRT01P"]) == "TRT01P"``
+        """
+        if self.arm_fallback and "columns" not in self.model_fields_set:
+            present = set(columns)
+            found = next((c for c in self.arm_fallback if c in present), None)
+            if found is not None:
+                return found
+        return self.columns[0] if self.columns else "TRTA"
+
+    def check(self, df: pl.DataFrame, *, group_col: str | None = None) -> list[str]:
         """Run the pre-validation diagnostic without computing.
 
         The base checks (required columns, prefilter columns, required
-        flag values) plus one warning per row field absent from *df*,
-        whose sub-analysis the engine would skip.
+        flag values) plus one line per row field absent from *df*, for
+        which the engine stops.
 
         Args:
             df: The DataFrame to check.
+            group_col: Treatment-arm column.  ``None`` takes the arm a
+                run without ``groupby`` takes
+                ([`default_group_col()`][fleet.tlg.SummarySpecBase.default_group_col]).
 
         Returns:
             list[str]: Diagnostic messages (empty if all checks pass).
@@ -802,15 +1024,34 @@ class SummarySpecBase(TLGSpec):
         Examples:
             ``MHSummarySpec().check(admh)``
         """
-        diagnostics = super().check(df)
+        group_col = group_col or self.default_group_col(df.columns)
+        diagnostics = super().check(df, group_col=group_col)
         available = set(df.columns)
         for row_def in self.rows:
             if row_def.field not in available:
                 diagnostics.append(
-                    f"WARNING: Column '{row_def.field}' not present — "
-                    f"'{row_def.label or row_def.field}' sub-analysis will be skipped."
+                    f"MISSING ROW FIELD: Column '{row_def.field}' not present — "
+                    f"the '{row_def.label or row_def.field}' rows cannot be built "
+                    "and the table stops."
                 )
         return diagnostics
+
+    def leaf_rank(self) -> tuple[list[str], str] | None:
+        """Return the rank that reduces the last row level, or ``None``.
+
+        A worst-case table (greatest intensity, highest grade) counts a
+        subject once at the worst value of its last row field.  The
+        engine applies the rank after the pools, at the last depth only.
+
+        Returns:
+            tuple[list[str], str] | None: The values from least to most
+                severe and the spec field name that holds them; ``None``
+                for a table without a reduction.
+
+        Examples:
+            ``AESeveritySpec().leaf_rank() == (["MILD", "MODERATE", "SEVERE"], "severity_order")``
+        """
+        return None
 
     @field_validator("columns")
     @classmethod
@@ -829,6 +1070,34 @@ class SummarySpecBase(TLGSpec):
                 "or file a feature request."
             )
         return value
+
+
+def check_listing_columns(spec: TLGSpec, available: set[str]) -> None:
+    """Raise when a listing column that the user set is not in the data.
+
+    The default columns of a listing template that the data lacks are
+    left out.  A column the user named is a request: a typo must stop
+    the listing, as SAS stops on an unknown variable.
+
+    Args:
+        spec: A listing spec with a ``columns`` list of ``Column``.
+        available: Column names of the listing frame.
+
+    Raises:
+        SchemaError: If ``columns`` differs from the template default and
+            names an absent column.
+
+    Examples:
+        ``check_listing_columns(AEListingSpec(columns=[Column(field="AEDECODE")]), set(adae.columns))``
+    """
+    if spec.uses_default("columns"):
+        return
+    absent = [c.field for c in getattr(spec, "columns", []) if c.field not in available]
+    if absent:
+        raise SchemaError(
+            f"Listing column(s) {absent} are not in the analysis dataset. "
+            f"Available: {sorted(available)}"
+        )
 
 
 def change_from_baseline_prefilter(value_col: str) -> str:

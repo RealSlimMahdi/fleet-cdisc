@@ -14,7 +14,7 @@ Usage
         .blq_flag("BLQFL", conc_col="PCSTRESN", lloq_col="PCLLOQ")
         .blq_impute("AVAL", conc_col="PCSTRESN", lloq_col="PCLLOQ", method="half_lloq")
         .nominal_time("NTIME", from_col="PCTPTNUM")
-        .actual_time("ATIME", sample_dtm="PCDTC", dose_dtm="EXSTDTC")
+        .duration("ATIME", start="EXSTDTC", end="PCDTC", unit="hours", add_one=False)
         .predose_flag("PREDFL", time_col="ATIME")
         .dose_normalized("AVALDNM", conc_col="AVAL", dose_col="DOSE")
         .seq("PCSEQ", by=["USUBJID"])
@@ -31,6 +31,7 @@ import polars as pl
 
 from fleet.adam._mixins import MultiRowMixin, SharedADaMVerbsMixin
 from fleet.core.exceptions import DerivationError
+from fleet.sdtm.utils import to_char
 
 _UNIT_SCALE: dict[str, float] = {
     "s": 1.0,
@@ -611,7 +612,8 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
         """Derive a listing-ready categorised analysis value (AVALCAT1).
 
         A BLQ record (as :meth:`blq_flag`) gets *blq_label*.  Another record
-        gets its number as text, else the *text_col* text (``">1000"``,
+        gets its number as text (15 significant digits, no ``.0`` end, so
+        ``5.0`` gives ``"5"``), else the *text_col* text (``">1000"``,
         ``"NQ"``), else null (a missed sample).
 
         Args:
@@ -642,7 +644,7 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
         """
         conc_num = pl.col(conc_col).cast(pl.Float64, strict=False)
         is_blq = self._is_blq("avalcat", conc_num, lloq_col, text_col, blq_text, numeric_below_lloq)
-        shown = conc_num.cast(pl.String)
+        shown = to_char(conc_num, pl.Float64)
         if text_col is not None:
             shown = pl.coalesce(shown, pl.col(text_col).cast(pl.String))
 

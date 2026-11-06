@@ -62,7 +62,7 @@ def build_schema(schema_path: str | Path = SCHEMA_PATH) -> dict[str, Any]:
             import json
             from fleet.define_xml.schema_builder import SCHEMA_PATH, build_schema
 
-            assert json.loads(SCHEMA_PATH.read_text()) == build_schema()
+            assert json.loads(SCHEMA_PATH.read_text(encoding="utf-8")) == build_schema()
     """
     current = json.loads(Path(schema_path).read_text(encoding="utf-8"))
     schema = {k: v for k, v in current.items() if k != "$defs"}
@@ -81,7 +81,7 @@ def build_schema(schema_path: str | Path = SCHEMA_PATH) -> dict[str, Any]:
         "description": (
             "Dotted Python module imported by from_spec() before execution so "
             "that its @derivation / register_transform callables are available "
-            "(removes the import-order footgun for `algorithm: callable`)."
+            "(removes the import-order footgun for `algorithm: derivation` with `callable:`)."
         ),
     }
     schema["properties"] = properties

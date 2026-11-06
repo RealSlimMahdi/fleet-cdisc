@@ -315,9 +315,9 @@ class TestSdtmDateDtmTime:
             output="dtm",
         ).to_frame()
         assert result["EXSTDTM"].to_list() == [
-            datetime(2024, 2, 15, 8, 59),
+            datetime(2024, 2, 15, 8, 59, 59),  # c1-119: hh:mm takes seconds 59, as admiral
             datetime(2024, 3, 1, 23, 59, 59),  # null time → 23:59:59
-            datetime(2024, 4, 10, 9, 7),
+            datetime(2024, 4, 10, 9, 7, 59),
             datetime(2024, 5, 22, 23, 59, 59),  # null time → 23:59:59
         ]
 
@@ -371,8 +371,8 @@ class TestSdtmDateDtmTime:
 
     # ── Flags ─────────────────────────────────────────────────────────
 
-    def test_dtm_time_column_tmf_is_null(self, raw_ex: pl.DataFrame) -> None:
-        """TMF is null when time was observed (not imputed)."""
+    def test_dtm_time_column_tmf_flags_the_imputed_seconds(self, raw_ex: pl.DataFrame) -> None:
+        """c1-119: an hh:mm time has imputed seconds, so TMF is S (admiral derive_vars_dtm)."""
         result = raw_ex.sdtm.date(
             "EXSTDTM",
             source="ex_start_date",
@@ -380,8 +380,7 @@ class TestSdtmDateDtmTime:
             output="dtm",
             flag=True,
         ).to_frame()
-        assert "EXSTTMF" in result.columns
-        assert result["EXSTTMF"].null_count() == len(result)
+        assert result["EXSTTMF"].to_list() == ["S"] * len(result)
 
     def test_dtm_time_column_dtf_still_derived(self, raw_ex: pl.DataFrame) -> None:
         """DTF is still derived from date source precision."""

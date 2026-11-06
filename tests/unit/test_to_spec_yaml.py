@@ -319,3 +319,224 @@ class TestDedupAndEdgeCases:
         data = yaml.safe_load(ns.to_spec_yaml())
         jsonschema.Draft202012Validator(_schema()).validate(data)
         assert data["datasets"][0]["name"] == "DATASET"
+
+
+class TestSourceRoundTrip:
+    """c1-168, c1-185: source() wrote callable: TODO_<name>, so the frozen file did not run."""
+
+    @pytest.fixture
+    def dm(self) -> pl.DataFrame:
+        return pl.from_repr("""\
+┌─────────┬─────┬─────┐
+│ USUBJID ┆ AGE ┆ age │
+│ ---     ┆ --- ┆ --- │
+│ str     ┆ i64 ┆ i64 │
+╞═════════╪═════╪═════╡
+│ S1      ┆ 40  ┆ 41  │
+└─────────┴─────┴─────┘
+""")
+
+    def test_source_freezes_as_assign_and_reruns(self, dm, tmp_path):
+        ns = dm.adam.source("USUBJID", "AGE").source("AGE2", from_col="age")
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            text = ns.to_spec_yaml(dataset="ADSL", path=tmp_path / "define.yaml")
+
+        assert "TODO_" not in text and "# TODO:" not in text
+        assert [str(w.message) for w in caught if "to_spec_yaml" in str(w.message)] == []
+        variables = yaml.safe_load(text)["datasets"][0]["variables"]
+        blocks = {v["name"]: v.get("derivation") for v in variables}
+        assert blocks["USUBJID"] == {"algorithm": "assign"}
+        assert blocks["AGE2"] == {"algorithm": "assign", "source": "age"}
+
+        rerun = dm.adam.from_spec(tmp_path / "define.yaml", dataset="ADSL").to_frame()
+        inline = ns.to_frame()
+        assert rerun.select("USUBJID", "AGE", "AGE2").equals(
+            inline.select("USUBJID", "AGE", "AGE2")
+        )
+
+    def test_the_readme_advs_chain_stubs_only_study_day(self):
+        vs_sdtm = pl.from_repr("""\
+┌─────────┬─────────┬───────┬────────────┬────────────┬──────────┐
+│ USUBJID ┆ PARAMCD ┆ AVAL  ┆ ADT        ┆ TRTSDT     ┆ VISITNUM │
+│ ---     ┆ ---     ┆ ---   ┆ ---        ┆ ---        ┆ ---      │
+│ str     ┆ str     ┆ f64   ┆ date       ┆ date       ┆ i64      │
+╞═════════╪═════════╪═══════╪════════════╪════════════╪══════════╡
+│ 001     ┆ SYSBP   ┆ 120.0 ┆ 2024-01-15 ┆ 2024-01-15 ┆ 1        │
+│ 001     ┆ SYSBP   ┆ 115.0 ┆ 2024-02-15 ┆ 2024-01-15 ┆ 2        │
+└─────────┴─────────┴───────┴────────────┴────────────┴──────────┘
+""")
+        chain = (
+            vs_sdtm.adam.source("USUBJID", "PARAMCD", "AVAL")
+            .study_day("ADY", date_col="ADT", ref_col="TRTSDT")
+            .flag("ABLFL", criteria='pl.col("VISITNUM") == 1', by=["USUBJID", "PARAMCD"])
+            .baseline("BASE", aval="AVAL", baseline_flag="ABLFL", by=["USUBJID", "PARAMCD"])
+            .chg("CHG", aval="AVAL", base="BASE")
+        )
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            text = chain.to_spec_yaml(dataset="ADVS")
+
+        assert "TODO_ADY" in text
+        for name in ("USUBJID", "PARAMCD", "AVAL"):
+            assert f"TODO_{name}" not in text
+
+
+class TestVerbsThatBypassChainLeaveANode:
+    """c1-695: seq, first_date, last_date and count_events wrote no block and no warning."""
+
+    def test_an_ae_chain_with_seq_round_trips_on_all_columns(self, tmp_path):
+        raw = pl.from_repr("""\
+┌────────────────┬──────────┬───────────────┬─────────────┐
+│ patient_number ┆ ae_term  ┆ ae_start_date ┆ ae_severity │
+│ ---            ┆ ---      ┆ ---           ┆ ---         │
+│ str            ┆ str      ┆ str           ┆ str         │
+╞════════════════╪══════════╪═══════════════╪═════════════╡
+│ 01-701-1015    ┆ HEADACHE ┆ 2014-01-05    ┆ MILD        │
+│ 01-701-1015    ┆ NAUSEA   ┆ 2014-01-03    ┆ MODERATE    │
+└────────────────┴──────────┴───────────────┴─────────────┘
+""")
+        ae_ns = (
+            raw.sdtm.assign("STUDYID", value="CDISCPILOT01")
+            .assign("USUBJID", source="patient_number")
+            .assign("AETERM", source="ae_term")
+            .assign("AESTDTC", source="ae_start_date")
+            .seq("AESEQ", order_by=["AESTDTC"])
+        )
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            text = ae_ns.to_spec_yaml(dataset="AE", path=tmp_path / "define.yaml")
+
+        assert [str(w.message) for w in caught if "to_spec_yaml" in str(w.message)] == []
+        variables = yaml.safe_load(text)["datasets"][0]["variables"]
+        aeseq = next(v for v in variables if v["name"] == "AESEQ")
+        assert aeseq["derivation"]["algorithm"] == "seq"
+
+        inline = ae_ns.to_frame()
+        rerun = raw.sdtm.from_spec(tmp_path / "define.yaml", dataset="AE").to_frame()
+        cols = [v["name"] for v in variables]
+        assert cols == ["STUDYID", "USUBJID", "AETERM", "AESTDTC", "AESEQ"]
+        assert rerun.select(cols).sort("AESEQ").equals(inline.select(cols).sort("AESEQ"))
+        assert inline.sort("AESEQ")["AETERM"].to_list() == ["NAUSEA", "HEADACHE"]
+
+    def test_date_and_count_verbs_with_an_inline_frame_are_named_stubs(self):
+        dm = pl.from_repr("""\
+┌─────────┬─────────┐
+│ STUDYID ┆ USUBJID │
+│ ---     ┆ ---     │
+│ str     ┆ str     │
+╞═════════╪═════════╡
+│ X       ┆ S1      │
+└─────────┴─────────┘
+""")
+        ex = pl.from_repr("""\
+┌─────────┬────────────┐
+│ USUBJID ┆ EXSTDTC    │
+│ ---     ┆ ---        │
+│ str     ┆ str        │
+╞═════════╪════════════╡
+│ S1      ┆ 2024-01-02 │
+└─────────┴────────────┘
+""")
+        ns = (
+            dm.adam.adsl.first_date("TRTSDT", from_dataset=ex, date_col="EXSTDTC")
+            .last_date("TRTEDT", from_dataset=ex, date_col="EXSTDTC")
+            .count_events("NUMEX", from_dataset=ex)
+        )
+        with pytest.warns(UserWarning, match="TRTSDT, TRTEDT, NUMEX"):
+            text = ns.to_spec_yaml(dataset="ADSL")
+
+        assert "verb 'first_date'" in text and "verb 'count_events'" in text
+
+
+class TestRowStepsRoundTrip:
+    """c1-39: a row step (whereclauses, nodup) left no block, so the frozen spec kept every row."""
+
+    @pytest.fixture
+    def raw(self) -> pl.DataFrame:
+        return pl.from_repr("""\
+┌─────────┬─────────┬─────┬────────────┐
+│ STUDYID ┆ USUBJID ┆ AGE ┆ ADT        │
+│ ---     ┆ ---     ┆ --- ┆ ---        │
+│ str     ┆ str     ┆ i64 ┆ str        │
+╞═════════╪═════════╪═════╪════════════╡
+│ X       ┆ S1      ┆ 40  ┆ 2024-01-01 │
+│ X       ┆ S2      ┆ 50  ┆ 2024-01-05 │
+│ X       ┆ S3      ┆ 60  ┆ 2024-01-03 │
+│ X       ┆ S3      ┆ 60  ┆ 2024-01-02 │
+└─────────┴─────────┴─────┴────────────┘
+""")
+
+    def test_filter_and_nodup_freeze_in_order_and_rerun(self, raw, tmp_path):
+        ns = (
+            raw.adam.source("STUDYID", "USUBJID", "AGE")
+            .whereclauses(where='pl.col("AGE") > 45')
+            .nodup(subset=["USUBJID"], sort_by=["USUBJID", "ADT"], keep="first")
+            .seq("ASEQ", by=["STUDYID"], order_by=["USUBJID"])
+        )
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            text = ns.to_spec_yaml(dataset="ADXX", path=tmp_path / "define.yaml")
+        assert [str(w.message) for w in caught if "to_spec_yaml" in str(w.message)] == []
+
+        steps = yaml.safe_load(text)["datasets"][0]["row_steps"]
+        assert steps == [
+            {"algorithm": "whereclauses", "where": 'pl.col("AGE") > 45', "after": "AGE"},
+            {
+                "algorithm": "nodup",
+                "subset": ["USUBJID"],
+                "sort_by": ["USUBJID", "ADT"],
+                "keep": "first",
+                "after": "AGE",
+            },
+        ]
+        jsonschema.validate(yaml.safe_load(text), _schema())
+
+        inline = ns.to_frame()
+        rerun = raw.adam.from_spec(tmp_path / "define.yaml", dataset="ADXX").to_frame()
+        cols = ["STUDYID", "USUBJID", "AGE", "ASEQ"]
+        assert inline.shape == (2, 5)
+        assert rerun.select(cols).equals(inline.select(cols))
+        assert rerun["ASEQ"].to_list() == [1, 2]
+
+    def test_an_expression_filter_is_a_todo_step_that_from_spec_refuses(self, raw, tmp_path):
+        from fleet.core.exceptions import SpecError
+
+        ns = raw.adam.source("USUBJID", "AGE").whereclauses(where=pl.col("AGE") > 45)
+        with pytest.warns(UserWarning, match="row step"):
+            text = ns.to_spec_yaml(dataset="ADXX", path=tmp_path / "define.yaml")
+
+        assert yaml.safe_load(text)["datasets"][0]["row_steps"] == [
+            {"algorithm": "TODO", "verb": "whereclauses", "after": "AGE"}
+        ]
+        with pytest.raises(SpecError, match="row_steps #1 is a TODO"):
+            raw.adam.from_spec(tmp_path / "define.yaml", dataset="ADXX")
+
+    def test_a_row_step_after_an_unknown_variable_is_refused(self, raw, tmp_path):
+        from fleet.core.exceptions import SpecError
+
+        p = tmp_path / "define.yaml"
+        p.write_text(
+            "datasets:\n  - name: ADXX\n    row_steps:\n"
+            "      - {algorithm: whereclauses, where: 'AGE > 45', after: AGEX}\n"
+            "    variables:\n      - name: AGE\n",
+            encoding="utf-8",
+        )
+        with pytest.raises(SpecError, match="after 'AGEX'"):
+            raw.adam.from_spec(p, dataset="ADXX")
+
+    def test_a_merged_column_is_a_stub_with_a_warning(self, raw):
+        """c1-39: merge(trt) lost TRT from the frozen spec with no message."""
+        trt = pl.from_repr("""\
+┌─────────┬─────┐
+│ USUBJID ┆ TRT │
+│ ---     ┆ --- │
+│ str     ┆ str │
+╞═════════╪═════╡
+│ S1      ┆ A   │
+└─────────┴─────┘
+""")
+        ns = raw.adam.merge(trt, on="USUBJID")
+        with pytest.warns(UserWarning, match="TRT"):
+            text = ns.to_spec_yaml(dataset="ADXX")
+        assert "callable: TODO_TRT" in text

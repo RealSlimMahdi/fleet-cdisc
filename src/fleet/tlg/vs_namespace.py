@@ -89,12 +89,13 @@ class VSTLGNamespace(BuilderVerbsMixin):
                 default spec is used.
 
         Returns:
-            pl.DataFrame: Long-format {cards}-compatible ARD.
+            pl.DataFrame: ARD in the {cards} long layout.
 
         Examples:
-            Zero-config VS summary::
+            VS summary, ADSL arm in TRT01A::
 
-                ard = advs.tlg.vs.t_summary(groupby="TRTA", adsl=adsl)
+                spec = VSSummarySpec(adsl_group_col="TRT01A")
+                ard = advs.tlg.vs.t_summary(spec=spec, adsl=adsl)
 
             Custom spec with pooled arms::
 
@@ -102,6 +103,7 @@ class VSTLGNamespace(BuilderVerbsMixin):
 
                 spec = VSSummarySpec(
                     pools=[GroupPool(label="Total", arms="*")],
+                    adsl_group_col="TRT01A",
                 )
                 ard = advs.tlg.vs.t_summary(spec=spec, adsl=adsl)
         """

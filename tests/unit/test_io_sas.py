@@ -146,6 +146,36 @@ def test_an_unknown_keyword_for_a_sas_file_raises(tmp_path: Path) -> None:
         load_raw_data(path, not_an_option=1)
 
 
+def test_a_transport_file_with_two_members_names_them_and_stops(tmp_path: Path) -> None:
+    """c1-242: PROC COPY of DM and AE into one file must not read as one table."""
+    dm = pl.from_repr("""
+┌─────────┬──────┐
+│ USUBJID ┆ AGE  │
+│ ---     ┆ ---  │
+│ str     ┆ f64  │
+╞═════════╪══════╡
+│ 01-001  ┆ 63.0 │
+└─────────┴──────┘
+""")
+    ae = pl.from_repr("""
+┌─────────┬──────────┐
+│ USUBJID ┆ AETERM   │
+│ ---     ┆ ---      │
+│ str     ┆ str      │
+╞═════════╪══════════╡
+│ 01-001  ┆ HEADACHE │
+└─────────┴──────────┘
+""")
+    first = _write_fixture(dm, tmp_path / "dm.xpt").read_bytes()
+    second = _write_fixture(ae, tmp_path / "ae.xpt").read_bytes()
+    library_header = 3 * 80
+    both = tmp_path / "all.xpt"
+    both.write_bytes(first + second[library_header:])
+
+    with pytest.raises(FleetIOError, match=r"all\.xpt holds 2 members \(DM, AE\)"):
+        load_raw_data(both)
+
+
 # ── Write ─────────────────────────────────────────────────────────────────────
 
 

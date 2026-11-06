@@ -25,7 +25,12 @@ uv run fleet tdd build --format xpt           # trial design domains → <sdtm_d
 
 Declare the format once in `define.yaml` — per dataset or spec-wide. The
 choice is recorded in the pipeline DAG and drives the Define-XML leaf
-`href`s, so the metadata always points at the files you actually ship:
+`href`s. `fleet run` writes each dataset in the same format: `--format`,
+else the dataset's `output_format:`, else the spec's, else parquet. A
+`--format` that differs from the define warns, and `fleet define-xml` warns
+when a leaf names a file that the data folder does not hold. `output:`
+names the leaf `href` only; `fleet run` warns when it writes another file
+name:
 
 ```yaml
 output_format: parquet          # spec-level default
@@ -59,7 +64,17 @@ Format-specific behaviour worth knowing:
   for the dataset and variable labels; `fleet run` takes them from
   `define.yaml`. Install the writer with `uv add "fleet-cdisc[io]"`.
 - **Dataset-JSON** embeds dataset metadata (`domain`, `label`, originator,
-  file OID) alongside typed column data — pass them as keyword arguments.
+  file OID) alongside typed column data. Pass `columns=` for the variable
+  labels, lengths and key sequence, and `study_oid=` and
+  `metadata_version_oid=` for the define. `fleet run` and `to_dataset_json`
+  after `from_spec` take them from `define.yaml`. Each `itemOID` is the
+  ItemDef OID of the Define-XML. A `pl.Date`, `pl.Datetime` or `pl.Time` is
+  written with `targetDataType: integer` and DATE9., DATETIME20. or TIME8.,
+  so `read_dataset_json` gives the date back. NaN and infinity are written
+  as null, with a warning, because JSON has no such number. A duration
+  column stops the write: convert it to a number first.
+  `read_dataset_json` reads `float` and `decimal` as `pl.Float64`, as SAS
+  holds them, and an integer written as `63.0` as 63.
 - **Parquet** forwards any keyword arguments to Polars'
   `write_parquet` (compression, statistics, ...).
 

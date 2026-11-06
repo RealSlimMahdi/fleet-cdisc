@@ -302,54 +302,6 @@ class PinMixin:
             raise PinError(f"No pin found for domain '{key}'.")
         return list(pinned[key][1])
 
-    def _check_fk(
-        self,
-        col: str,
-        *,
-        pin: str,
-        ref_col: str | None = None,
-        severity: str | None = None,
-    ) -> set[str]:
-        """Validate foreign-key integrity against a pinned domain.
-
-        Args:
-            col: Column in the current frame to validate.
-            pin: Pinned domain name (e.g. ``"DM"``).
-            ref_col: Column in the pinned frame to validate against.
-                Defaults to *col*.
-            severity: Override the pipeline-level FK severity.
-
-        Returns:
-            set[str]: The set of orphan values (empty when clean).
-        """
-        sev = severity or getattr(self, "_fk_severity", "warn")
-        if sev == "off":
-            return set()
-
-        pinned: dict[str, tuple[pl.DataFrame, list[str]]] = getattr(self, "_pinned", {})
-        if pin.upper() not in pinned:
-            return set()
-
-        ref_df, _ = pinned[pin.upper()]
-        ref_column = ref_col or col
-        if ref_column not in ref_df.columns:
-            return set()
-
-        # Materialise only the column we need
-        current_vals = set(self._lazy.select(col).collect()[col].drop_nulls().to_list())
-        ref_vals = set(ref_df[ref_column].drop_nulls().to_list())
-        orphans = current_vals - ref_vals
-
-        if orphans:
-            msg = (
-                f"FK check: {len(orphans)} value(s) in '{col}' not found in "
-                f"pinned {pin}.{ref_column}: {sorted(orphans)[:5]}"
-            )
-            if sev == "error":
-                raise DerivationError(msg)
-            warnings.warn(msg, stacklevel=3)
-        return orphans
-
     def _auto_fk_check(self, target: str) -> None:
         """Queue an FK check if *target* matches a rule in ``_FK_RULES``.
 
@@ -381,16 +333,15 @@ class PinMixin:
 
         Called by ``to_frame()`` after collection — one batched pass
         over the final frame instead of one collect per assign verb.
-        Emits the same ``FK check`` warnings / errors as the immediate
-        path.
+        A warning is given once; an ``"error"`` check stays queued, so
+        every later ``to_frame()`` and terminal verb raises again.
         """
         pending: list[tuple[str, str, str, str]] = list(getattr(self, "_pending_fk_checks", []))
         if not pending:
             return
-        # Clear before raising/warning so repeated to_frame() calls on the
-        # same instance do not re-report (rebind, never mutate — earlier
-        # chain copies keep their own queue).
-        self._pending_fk_checks = []
+        # Drop the warn entries before warning so a second to_frame() does not
+        # repeat them (rebind, never mutate — earlier chain copies keep their own queue).
+        self._pending_fk_checks = [entry for entry in pending if entry[3] == "error"]
         pinned: dict[str, tuple[pl.DataFrame, list[str]]] = getattr(self, "_pinned", {})
         for col, pin, ref_col, severity in pending:
             if severity == "off" or pin.upper() not in pinned:

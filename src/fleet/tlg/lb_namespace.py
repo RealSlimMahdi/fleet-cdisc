@@ -33,6 +33,7 @@ from ._specs import (
     SummarySpecBase,
     TLGSpec,
     change_from_baseline_prefilter,
+    check_listing_columns,
     resolve_filter,
 )
 
@@ -170,7 +171,7 @@ class LBShiftSpec(SummarySpecBase):
     prefilter_hint: ClassVar[str] = _POST_BASELINE_HINT
 
     _unconsumed_spec_fields: ClassVar[frozenset[str]] = frozenset(
-        {"rows", "header_rows", "value_col"}
+        {"rows", "header_rows", "value_col", "missing"}
     )
 
     prefilter: Any | None = Field(
@@ -199,7 +200,7 @@ class LBAbnormalSpec(SummarySpecBase):
     prefilter_hint: ClassVar[str] = _POST_BASELINE_HINT
 
     _unconsumed_spec_fields: ClassVar[frozenset[str]] = frozenset(
-        {"rows", "statistics", "header_rows", "pools", "value_col", "label_col"}
+        {"rows", "statistics", "header_rows", "pools", "value_col", "label_col", "missing"}
     )
 
     prefilter: Any | None = Field(
@@ -216,6 +217,24 @@ class LBAbnormalSpec(SummarySpecBase):
     required_columns: list[str] = Field(
         default_factory=lambda: ["USUBJID", "TRTA", "PARAMCD", "ANRIND"],
     )
+
+
+#: ANRIND values that mean "in range" or "not graded".
+_NORMAL_CODES = frozenset({"", "NORMAL", "N"})
+
+
+def _check_anrind_codes(post: pl.DataFrame, spec: LBAbnormalSpec) -> None:
+    """Raise when ANRIND has abnormal codes that no direction names."""
+    present = set(post["__anrind"].drop_nulls().str.strip_chars().unique().to_list())
+    present -= _NORMAL_CODES
+    levels = {v.upper() for v in [*spec.low_values, *spec.high_values]}
+    if present and not present & levels:
+        raise SchemaError(
+            f"ANRIND has codes {sorted(present)} and none is in low_values "
+            f"{spec.low_values} or high_values {spec.high_values}. Set them in the "
+            "spec: LBAbnormalSpec(low_values=['L'], high_values=['H']), or the "
+            "low_values and high_values keys of the YAML spec."
+        )
 
 
 class LBTLGNamespace(BuilderVerbsMixin):
@@ -264,16 +283,17 @@ class LBTLGNamespace(BuilderVerbsMixin):
                 default spec is used.
 
         Returns:
-            pl.DataFrame: Long-format {cards}-compatible ARD with columns
+            pl.DataFrame: ARD in the {cards} long layout, with columns
                 ``group1``, ``group1_level``, ``group2``, ``group2_level``,
                 ``variable``, ``variable_level``, ``stat_name``,
                 ``stat_label``, ``stat``, ``fmt_fn``, ``stat_fmt``,
                 ``warning``, ``error``, ``context``.
 
         Examples:
-            Zero-config lab summary::
+            lab summary, ADSL arm in TRT01A::
 
-                ard = adlb.tlg.lb.t_summary(groupby="TRTA", adsl=adsl)
+                spec = LBSummarySpec(adsl_group_col="TRT01A")
+                ard = adlb.tlg.lb.t_summary(spec=spec, adsl=adsl)
 
             Custom spec with pooled arms::
 
@@ -281,7 +301,10 @@ class LBTLGNamespace(BuilderVerbsMixin):
 
                 from fleet.tlg.lb_namespace import LBSummarySpec
 
-                spec = LBSummarySpec(pools=[GroupPool(label="Total", arms="*")])
+                spec = LBSummarySpec(
+                    pools=[GroupPool(label="Total", arms="*")],
+                    adsl_group_col="TRT01A",
+                )
                 ard = adlb.tlg.lb.t_summary(spec=spec, adsl=adsl)
         """
         return summarize_spec(self._df, spec or LBSummarySpec(), groupby=groupby, adsl=adsl)
@@ -312,10 +335,13 @@ class LBTLGNamespace(BuilderVerbsMixin):
             spec: Optional ``LBChgSpec`` override.
 
         Returns:
-            pl.DataFrame: {cards}-compatible ARD.
+            pl.DataFrame: ARD in the {cards} long layout.
 
         Examples:
-            ``ard = adlb.tlg.lb.t_chg(groupby="TRTA", adsl=adsl)``
+            ADSL arm in TRT01A::
+
+                spec = LBChgSpec(adsl_group_col="TRT01A")
+                ard = adlb.tlg.lb.t_chg(spec=spec, adsl=adsl)
         """
         return summarize_spec(self._df, spec or LBChgSpec(), groupby=groupby, adsl=adsl)
 
@@ -353,7 +379,7 @@ class LBTLGNamespace(BuilderVerbsMixin):
             spec: Optional ``LBShiftSpec`` override.
 
         Returns:
-            pl.DataFrame: {cards}-compatible ARD (subject counts).
+            pl.DataFrame: ARD in the {cards} long layout (subject counts).
 
         Raises:
             SchemaError: If the spec carries ``rows`` or ``header_rows``
@@ -362,7 +388,10 @@ class LBTLGNamespace(BuilderVerbsMixin):
                 missing.
 
         Examples:
-            ``ard = adlb.tlg.lb.t_shift(groupby="TRTA", adsl=adsl)``
+            ADSL arm in TRT01A::
+
+                spec = LBShiftSpec(adsl_group_col="TRT01A")
+                ard = adlb.tlg.lb.t_shift(spec=spec, adsl=adsl)
         """
         spec = spec or LBShiftSpec()
         if spec.rows or spec.header_rows:
@@ -402,6 +431,7 @@ class LBTLGNamespace(BuilderVerbsMixin):
             nested=spec.nested,
             label_col=spec.label_col,
             decimals=spec.decimals,
+            adsl_group_col=spec.adsl_group_col,
         )
 
     # ------------------------------------------------------------------ #
@@ -431,15 +461,36 @@ class LBTLGNamespace(BuilderVerbsMixin):
         lookup reads the records before the prefilter.  Without a
         ``BNRIND`` column no baseline exclusion is applied.
 
+        The directions read ``spec.low_values`` and ``spec.high_values``
+        (default ``LOW``/``LOW LOW`` and ``HIGH``/``HIGH HIGH``).  When
+        ANRIND holds other codes, such as ``H`` and ``L``, set them in
+        the spec; the table stops when no code of the data is in either
+        list.
+
         Args:
             groupby: Treatment-arm column.
             adsl: ADSL DataFrame for the arm universe and big-N rows.
+            spec: Optional ``LBAbnormalSpec`` override.
 
         Returns:
-            pl.DataFrame: {cards}-compatible ARD.
+            pl.DataFrame: ARD in the {cards} long layout.
+
+        Raises:
+            SchemaError: If ANRIND holds abnormal codes and none of them
+                is in ``low_values`` or ``high_values``.
 
         Examples:
-            ``ard = adlb.tlg.lb.t_abnormal(group_col="TRTA", adsl=adsl)``
+            ADSL arm in TRT01A::
+
+                spec = LBAbnormalSpec(adsl_group_col="TRT01A")
+                ard = adlb.tlg.lb.t_abnormal(spec=spec, adsl=adsl)
+
+            Sponsor low and high flags::
+
+                spec = LBAbnormalSpec(
+                    low_values=["L"], high_values=["H"], adsl_group_col="TRT01A"
+                )
+                ard = adlb.tlg.lb.t_abnormal(spec=spec, adsl=adsl)
         """
         spec = spec or LBAbnormalSpec()
         group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
@@ -467,12 +518,14 @@ class LBTLGNamespace(BuilderVerbsMixin):
         post = source.filter(post_rule) if post_rule is not None else source
         post = post.filter(pl.col("ANRIND").is_not_null())
         post = post.with_columns(pl.col("ANRIND").str.to_uppercase().alias("__anrind"))
+        _check_anrind_codes(post, spec)
 
         context = spec.context
         if adsl is not None:
-            if group_col not in adsl.columns:
-                raise SchemaError(f"Group column '{group_col}' not found in adsl.")
-            big_n = compute_big_n(adsl, group_col, [], filter_expr=resolve_filter(spec.adsl_filter))
+            adsl_col = spec.adsl_group_col or group_col
+            if adsl_col not in adsl.columns:
+                raise SchemaError(f"Group column '{adsl_col}' not found in adsl.")
+            big_n = compute_big_n(adsl, adsl_col, [], filter_expr=resolve_filter(spec.adsl_filter))
             data_arms = set(post[group_col].drop_nulls().unique().to_list())
             unknown = sorted(data_arms - set(big_n))
             if unknown:
@@ -630,6 +683,7 @@ class LBTLGNamespace(BuilderVerbsMixin):
 
         # Select only requested columns (that exist)
         available = set(df.columns)
+        check_listing_columns(spec, available)
         select_cols = [c.field for c in spec.columns if c.field in available]
         df = df.select(select_cols)
 
@@ -645,7 +699,7 @@ class LBTLGNamespace(BuilderVerbsMixin):
             if col_name in df.columns:
                 sort_cols.append(col_name)
         if sort_cols:
-            df = df.sort(sort_cols)
+            df = df.sort(sort_cols, maintain_order=True)
 
         return df
 

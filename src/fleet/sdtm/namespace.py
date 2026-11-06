@@ -25,7 +25,6 @@ Discover every available verb programmatically with ``df.sdtm.verbs()``.
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 from typing import Any
 
@@ -42,11 +41,24 @@ from fleet.sdtm.models import NSVMeta
 from fleet.sdtm.utils import (
     TIME_LITERAL,
     bad_time,
-    dtc_date_expr,
     dtc_text,
     dtc_with_time,
     guessed_values,
     parse_expression,
+    to_char,
+)
+
+_SUPP_COLUMNS = (
+    "STUDYID",
+    "RDOMAIN",
+    "USUBJID",
+    "IDVAR",
+    "IDVARVAL",
+    "QNAM",
+    "QLABEL",
+    "QVAL",
+    "QORIG",
+    "QEVAL",
 )
 
 
@@ -76,6 +88,7 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
 
     def __init__(self, df: pl.DataFrame | pl.LazyFrame) -> None:
         self._lazy = df.lazy()
+        self._root_lazy = self._lazy  # the start of the chain, for to_spec_yaml()
         self._nsv_meta: list[NSVMeta] = []
         self._domain: str | None = None
         self._pinned: dict[str, tuple[pl.DataFrame, list[str]]] = {}
@@ -123,7 +136,13 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
         gives ``-----T08:30`` (SDTMIG 3.4 section 4.4.2).  Imputation
         parameters are ignored.
 
-        For DT/DTM targets: delegates to the shared imputation engine.
+        For DT/DTM targets: delegates to the imputation engine that
+        ``.adam.date()`` uses, so both give the same result.  A
+        ``pl.Date`` or ``pl.Datetime`` source is read as its ISO 8601 text;
+        a number raises, because Fleet does not guess its origin.  With
+        *time*, the date and the time first become one ``--DTC`` value
+        (``2021-03--T08:30`` for a partial date), which then takes the
+        imputation and *highest* (ADR-0045).
 
         Args:
             target: Name of the output column.
@@ -135,7 +154,9 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
             time: Time column or literal to combine with date (DTM/DTC).
             impute: Imputation strategy (DT/DTM only).
             impute_time: Time-part imputation override (DTM only).
-            highest: Imputation ceiling (DT/DTM only).
+            highest: Imputation ceiling, as admiral ``highest_imputation``:
+                ``"n"``, ``"D"`` or ``"M"``, and on a DTM target also
+                ``"h"``, ``"m"`` and ``"s"``.  ``"Y"`` raises.
             flag: DTF/TMF flag control.
             min_date: Lower bound for an imputed date.  Applies only when
                 the bound is inside the possible range of the partial value;
@@ -148,6 +169,10 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
         Returns:
             SDTMNamespace: The namespace with *target* appended; call
                 ``.to_frame()`` to materialise.
+
+        References:
+            SDTMIG 3.4 section 4.4; admiral 1.4.1 ``derive_vars_dt`` and
+            ``derive_vars_dtm``; ADR-0021; ADR-0045.
 
         Examples:
             Parse raw date to ISO 8601 DTC::
@@ -167,7 +192,12 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
                     .to_frame()
                 )
         """
-        from fleet.adam.utils import _resolve_output_type, impute_and_flag
+        from fleet.adam.utils import (
+            _resolve_output_type,
+            dtm_source_text,
+            impute_and_flag,
+            source_text,
+        )
 
         # Validate source / value mutual exclusivity
         if source is not None and value is not None:
@@ -196,20 +226,15 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
                 f"time= parameter is only valid for DTM targets, "
                 f"but target '{target}' resolves to output='{output_type}'."
             )
-
-        # DTM + time=: combine date source with explicit time column/literal
-        if time is not None and output_type == "dtm":
-            return self._dtm_with_time(
-                source=source,
-                target=target,
-                time=time,
-                impute_time=impute_time,
-                flag=flag,
-                format=format,
+        schema = self._lazy.collect_schema()
+        if time is not None:
+            src = dtm_source_text(
+                schema, source=source, target=target, time=time, input_format=format
             )
-
+        else:
+            src = source_text(source, schema.get(source), verb=f"date('{target}')")
         exprs = impute_and_flag(
-            source,
+            src,
             target,
             output_type=output_type,
             impute=impute,
@@ -274,96 +299,6 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
                 shown=raw_time.cast(pl.String),
             )
         return self._chain(value.alias(target), verb="date")
-
-    def _dtm_with_time(
-        self,
-        source: str,
-        target: str,
-        time: str,
-        impute_time: str | None,
-        flag: bool | str,
-        format: str | None,
-    ) -> SDTMNamespace:
-        """Combine a date column with an explicit time column or literal into DTM.
-
-        When *time* is a column reference that does not exist in the current
-        schema, raises ``ValueError``.  For rows where the time column is null,
-        falls back to the *impute_time* strategy.
-        """
-        from fleet.adam.utils import _resolve_flag_names, _resolve_time
-
-        _TIME_LITERAL_RE = re.compile(r"^\d{2}:\d{2}(:\d{2})?$")
-        time_is_literal = bool(_TIME_LITERAL_RE.match(time))
-
-        # Validate column existence when time is a column reference
-        if not time_is_literal:
-            schema_cols = self._lazy.collect_schema().names()
-            if time not in schema_cols:
-                raise DerivationError(
-                    f"time='{time}' column not found in the DataFrame. "
-                    f"Available columns: {schema_cols}"
-                )
-
-        # Resolve fallback for null time values
-        fallback_strategy = impute_time or "first"
-        fallback_time = _resolve_time(fallback_strategy)
-
-        # Build time expression: literal broadcast or column reference
-        if time_is_literal:
-            # Pad HH:MM → HH:MM:SS
-            padded = time if len(time) == 8 else time + ":00"
-            time_expr = pl.lit(padded)
-        else:
-            # Column reference: pad HH:MM → HH:MM:SS, fallback for nulls
-            raw_time = pl.col(time).cast(pl.String)
-            padded_time = (
-                pl.when(raw_time.str.len_chars() == 5)
-                .then(raw_time + pl.lit(":00"))
-                .otherwise(raw_time)
-            )
-            if fallback_time is None:
-                # impute_time="none" → null when time column is null
-                time_expr = padded_time
-            elif isinstance(fallback_time, str) and fallback_time.startswith("T"):
-                time_expr = (
-                    pl.when(raw_time.is_null())
-                    .then(pl.lit(fallback_time[1:]))
-                    .otherwise(padded_time)
-                )
-            else:
-                # fallback is a column name
-                time_expr = (
-                    pl.when(raw_time.is_null())
-                    .then(pl.col(fallback_time).cast(pl.String))
-                    .otherwise(padded_time)
-                )
-
-        # Parse the date source column
-        date_expr = dtc_date_expr(source, "__dtm_date_tmp__", input_format=format)
-
-        # Combine date + time → Datetime
-        combined = (
-            (pl.col("__dtm_date_tmp__") + pl.lit("T") + time_expr)
-            .str.to_datetime("%Y-%m-%dT%H:%M:%S", strict=False)
-            .alias(target)
-        )
-
-        # Materialise and clean up temp column
-        df = self._lazy.with_columns(date_expr).collect()
-        result = df.with_columns(combined)
-        if "__dtm_date_tmp__" in result.columns:
-            result = result.drop("__dtm_date_tmp__")
-
-        # Flags: DTF from source precision, TMF is null (time was observed)
-        dtf_name, tmf_name = _resolve_flag_names(target, flag, "dtm")
-        if dtf_name is not None:
-            from fleet.adam.utils import dtf_expr
-
-            result = result.with_columns(dtf_expr(source, dtf_name))
-        if tmf_name is not None:
-            result = result.with_columns(pl.lit(None, dtype=pl.String).alias(tmf_name))
-
-        return self._materialise_then(result)
 
     # ------------------------------------------------------------------ #
     # 5b. nsv — Non-Standard Variable (qualifier) derivation               #
@@ -559,9 +494,18 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
         # Join reference if needed
         _ref_tmp = f"__pin_{ref_col}__"
         if ref_df is not None:
+            from fleet.core.joins import refuse_repeated_keys
+
             ref_slim = ref_df.select(
                 [c for c in dict.fromkeys(join_key + [ref_col]) if c in ref_df.columns]
-            ).unique(subset=join_key if join_key else None)
+            )
+            if join_key:
+                ref_slim = refuse_repeated_keys(
+                    "baseline_flag()",
+                    ref_slim,
+                    join_key,
+                    source="DM" if dm is not None else ref_pin.upper(),
+                )
             ref_slim = ref_slim.rename({ref_col: _ref_tmp})
             df = df.join(ref_slim, on=join_key, how="left", nulls_equal=True)
             ref_col_name = _ref_tmp
@@ -802,7 +746,8 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
                 ``"VSSEQ"``).  A warning is emitted if the name does not end
                 in ``SEQ``.
             order_by: Columns that define the sort order within each group.
-                When ``None``, the current row order is preserved.
+                Records that tie keep their input order, as PROC SORT
+                EQUALS.  When ``None``, the current row order is preserved.
             by: Subject-level grouping columns (default
                 ``["STUDYID", "USUBJID"]``).  The sequence restarts at
                 *start_at* for each unique combination.
@@ -861,6 +806,9 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
     ) -> SDTMNamespace:
         """Group by *by* and apply *agg* aggregations (lazily).
 
+        The groups come out in the order of their first record, so the
+        same input gives the same row order at each run.
+
         Args:
             by: Column(s) to group by.
             agg: List of Polars aggregation expressions.
@@ -881,7 +829,7 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
                     .to_frame()
                 )
         """
-        return self._with_lazy(self._lazy.group_by(by).agg(agg))
+        return self._with_lazy(self._lazy.group_by(by, maintain_order=True).agg(agg))
 
     # ------------------------------------------------------------------ #
     # 13. notsubmitted — mark variable as null / not-submitted            #
@@ -995,15 +943,22 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
                 to discover ``role: qualifier`` variables.
             dataset: Dataset name within the spec (e.g. ``"DM"``).
             idvar: Name of the identifying variable column (e.g.
-                ``"DMSEQ"``).  When ``None``, IDVAR and IDVARVAL are
-                set to null (typical for DM).
+                ``"AESEQ"``).  Required for every RDOMAIN except DM;
+                for DM, IDVAR and IDVARVAL are null.
             domain: Explicit RDOMAIN value.  When ``None``, inferred
                 from the ``DOMAIN`` column in the frame.
 
         Returns:
             pl.DataFrame: Vertical SUPPQUAL frame with columns STUDYID,
                 RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM, QLABEL, QVAL,
-                QORIG, QEVAL.
+                QORIG, QEVAL.  A null or blank value gives no record.  A
+                float is written with no ``.0`` end and a date as ISO 8601.
+
+        Raises:
+            DerivationError: When no source gives qualifier metadata, a
+                qualifier or *idvar* is not a column, *idvar* is missing
+                for a domain other than DM, RDOMAIN is unknown, or the
+                *spec* dataset is not found.
 
         Examples:
             Export from pipeline metadata (Pattern A)::
@@ -1020,8 +975,13 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
             Export from define.yaml spec (Pattern D)::
 
                 dm = raw_df.sdtm.from_spec("define.yaml", dataset="DM").to_frame()
-                suppdm = dm.sdtm.export_supp(
-                    spec="define.yaml", dataset="DM", idvar="DMSEQ"
+                suppdm = dm.sdtm.export_supp(spec="define.yaml", dataset="DM")
+
+            Export an AE qualifier linked by AESEQ::
+
+                suppae = ae.sdtm.export_supp(
+                    qualifiers={"AETOXGR": {"label": "AE Toxicity Grade"}},
+                    idvar="AESEQ",
                 )
 
             Export with explicit qualifier dict (Pattern C)::
@@ -1033,71 +993,68 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
                         "SAFETY": {"label": "Safety Population Flag",
                                    "origin": "Derived"},
                     },
-                    idvar="DMSEQ",
                 )
         """
         # Resolve qualifier metadata from one of three sources
         meta: list[NSVMeta] = self._resolve_supp_meta(qualifiers, spec, dataset)
 
         if not meta:
-            # Return empty frame with correct schema
-            return pl.DataFrame(
-                schema={
-                    "STUDYID": pl.String,
-                    "RDOMAIN": pl.String,
-                    "USUBJID": pl.String,
-                    "IDVAR": pl.String,
-                    "IDVARVAL": pl.String,
-                    "QNAM": pl.String,
-                    "QLABEL": pl.String,
-                    "QVAL": pl.String,
-                    "QORIG": pl.String,
-                    "QEVAL": pl.String,
-                }
-            )
+            if qualifiers is None and spec is None:
+                raise DerivationError(
+                    "export_supp(): no NSV metadata. Pass qualifiers= or spec=, or call "
+                    "export_supp() before to_frame(), which drops the nsv() metadata."
+                )
+            # qualifiers={} or a spec dataset with no qualifier: a legal empty SUPP
+            return pl.DataFrame(schema=dict.fromkeys(_SUPP_COLUMNS, pl.String))
 
         df = self._lazy.collect()
 
-        # Determine RDOMAIN
-        rdomain = domain or (df["DOMAIN"][0] if "DOMAIN" in df.columns else None)
-
-        # Filter to only qualifier columns present in the frame
-        present_meta = [m for m in meta if m.target in df.columns]
-        if not present_meta:
+        if domain:
+            rdomain = domain
+        elif "DOMAIN" in df.columns and not df.is_empty():
+            rdomain = df["DOMAIN"][0]
+        else:
             raise DerivationError(
-                f"No qualifier columns found in frame. "
-                f"Expected: {[m.target for m in meta]}. "
-                f"Available: {df.columns}"
+                "export_supp(): RDOMAIN is unknown, because the frame has no DOMAIN value. "
+                "Pass domain=."
             )
 
-        # Build SUPP rows via unpivot
-        qual_cols = [m.target for m in present_meta]
-        label_map = {m.target: m.label for m in present_meta}
-        origin_map = {m.target: m.origin for m in present_meta}
-        eval_map = {m.target: m.evaluator for m in present_meta}
+        absent = [m.target for m in meta if m.target not in df.columns]
+        if absent:
+            raise DerivationError(
+                f"export_supp(): qualifier(s) {absent} are not columns of the frame. "
+                f"Available: {df.columns}"
+            )
+        if idvar is not None and idvar not in df.columns:
+            raise DerivationError(f"export_supp(): idvar '{idvar}' is not a column of the frame.")
+        if idvar is None and rdomain != "DM":
+            raise DerivationError(
+                f"export_supp(): give idvar= (for example {rdomain}SEQ) for RDOMAIN "
+                f"{rdomain}. Only DM may have no IDVAR (SDTMIG 3.4 section 8.4)."
+            )
 
-        # Determine base columns needed
-        base_cols = []
-        if "STUDYID" in df.columns:
-            base_cols.append("STUDYID")
-        if "USUBJID" in df.columns:
-            base_cols.append("USUBJID")
+        qual_cols = [m.target for m in meta]
+        label_map = {m.target: m.label for m in meta}
+        origin_map = {m.target: m.origin for m in meta}
+        eval_map = {m.target: m.evaluator for m in meta}
 
-        # Unpivot qualifier columns
+        base_cols = [c for c in ("STUDYID", "USUBJID") if c in df.columns]
+        id_cols = [idvar] if idvar is not None and idvar not in base_cols else []
+
+        # Each qualifier becomes text before the unpivot, so mixed types keep their value.
         supp = df.select(
-            base_cols + ([idvar] if idvar and idvar in df.columns else []) + qual_cols
+            *base_cols,
+            *id_cols,
+            *(to_char(pl.col(c), df.schema[c]).alias(c) for c in qual_cols),
         ).unpivot(
             on=qual_cols,
-            index=base_cols + ([idvar] if idvar and idvar in df.columns else []),
+            index=base_cols + id_cols,
             variable_name="QNAM",
             value_name="QVAL",
         )
 
-        # Cast QVAL to string
-        supp = supp.with_columns(pl.col("QVAL").cast(pl.String))
-
-        # Drop null QVAL rows
-        supp = supp.filter(pl.col("QVAL").is_not_null())
+        # SDTMIG 3.4: no SUPP record with a null QVAL; a blank is missing too.
+        supp = supp.filter(pl.col("QVAL").is_not_null() & (pl.col("QVAL").str.strip_chars() != ""))
 
         # Add SUPPQUAL metadata columns
         supp = supp.with_columns(
@@ -1110,12 +1067,13 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
             pl.col("QNAM").replace_strict(eval_map, default=None).cast(pl.String).alias("QEVAL"),
         )
 
-        # Handle IDVAR / IDVARVAL
-        if idvar and idvar in supp.columns:
+        if idvar is not None:
             supp = supp.with_columns(
                 pl.lit(idvar).alias("IDVAR"),
-                pl.col(idvar).cast(pl.String).alias("IDVARVAL"),
-            ).drop(idvar)
+                to_char(pl.col(idvar), df.schema[idvar]).alias("IDVARVAL"),
+            )
+            if id_cols:
+                supp = supp.drop(idvar)
         else:
             supp = supp.with_columns(
                 pl.lit(None, dtype=pl.String).alias("IDVAR"),
@@ -1130,19 +1088,7 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
         if "USUBJID" not in supp.columns:
             supp = supp.with_columns(pl.lit(None, dtype=pl.String).alias("USUBJID"))
 
-        # Select final columns in CDISC order
-        return supp.select(
-            "STUDYID",
-            "RDOMAIN",
-            "USUBJID",
-            "IDVAR",
-            "IDVARVAL",
-            "QNAM",
-            "QLABEL",
-            "QVAL",
-            "QORIG",
-            "QEVAL",
-        )
+        return supp.select(_SUPP_COLUMNS)
 
     def _resolve_supp_meta(
         self,
@@ -1167,11 +1113,8 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
         if spec is not None:
             spec_data = load_define_spec(spec)
             if not spec_data.datasets:
-                return []
-            try:
-                ds = spec_data.select(dataset)
-            except DerivationError:
-                return []
+                raise DerivationError(f"export_supp(spec='{spec}'): the spec has no datasets.")
+            ds = spec_data.select(dataset)
             meta = []
             for var in ds.variables:
                 is_qual = (

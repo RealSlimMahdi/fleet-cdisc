@@ -1,68 +1,66 @@
 # yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
 # SDTMCHK-SS-002: ALIVE status date after DM death date
-# Source: sdtmchecks::check_ss_ssdtc_alive_dm
+# Based on: sdtmchecks::check_ss_ssdtc_alive_dm. Conditions follow the R function; a difference is stated in Description.
 
 Core:
   Id: SDTMCHK-SS-002
   Status: Draft
-  Version: "1"
-
+  Version: '1'
 Rule Type: Record Data
-
 Scope:
   Classes:
-    Include: [EVENTS]
+    Include:
+    - FINDINGS
   Domains:
-    Include: [SS]
-
+    Include:
+    - SS
 Check:
   all:
-    - name: SSSTRESC
-      operator: equal_to
-      value: "ALIVE"
-      value_is_literal: true
-    - name: SSDTC
-      operator: non_empty
-    - name: $dm_dthdtc
-      operator: non_empty
-    - name: SSDTC
-      operator: date_greater_than
-      value: $dm_dthdtc
-      date_component: auto
-
+  - name: SSTESTCD
+    operator: equal_to
+    value: SURVSTAT
+    value_is_literal: true
+  - name: SSORRES
+    operator: contains_case_insensitive
+    value: ALIVE
+  - name: SSDTC
+    operator: non_empty
+  - name: $dm_dthdtc
+    operator: non_empty
+  - name: SSDTC
+    operator: date_greater_than
+    value: $dm_dthdtc
+    date_component: auto
 Operations:
-  - operator: max_date
-    domain: DM
-    name: DTHDTC
-    id: $dm_dthdtc
-    group:
-      - USUBJID
-
+- operator: max_date
+  domain: DM
+  name: DTHDTC
+  id: $dm_dthdtc
+  group:
+  - USUBJID
 Outcome:
-  Message: >-
-    Subject survival status is ALIVE but SSDTC is after the death date (DTHDTC)
-    in DM. The survival assessment date should not be after death.
-  Output Variables: [USUBJID, SSSTRESC, SSDTC, $dm_dthdtc]
-
-Description: >-
-  When SSSTRESC='ALIVE', SSDTC should not be after DTHDTC in DM.
-  A subject recorded as alive after their death date is inconsistent.
-
+  Message: SSTESTCD is SURVSTAT and SSORRES is ALIVE, but SSDTC is after the death date (DM.DTHDTC).
+  Output Variables:
+  - USUBJID
+  - SSSTRESC
+  - SSDTC
+  - $dm_dthdtc
+Description: 'Flags: SSTESTCD is SURVSTAT and SSORRES is ALIVE, but SSDTC is after the death date (DM.DTHDTC).
+  Based on sdtmchecks::check_ss_ssdtc_alive_dm. Same conditions as the R function.'
 Sensitivity: Record
 Executability: Fully Executable
-
 Authorities:
-  - Organization: sdtmchecks
-    Standards:
-      - Name: SDTMIG
-        Version: "3.4"
-        References:
-          - Origin: sdtmchecks R package
-            Rule Identifier:
-              Id: SDTMCHK-SS-002
-              Version: "1"
-            Version: "1"
-            Citations:
-              - Cited Guidance: check_ss_ssdtc_alive_dm
-                Document: pharmaverse sdtmchecks
-                Section: SS Domain
+- Organization: sdtmchecks
+  Standards:
+  - Name: SDTMIG
+    Version: '3.4'
+    References:
+    - Origin: sdtmchecks R package
+      Rule Identifier:
+        Id: SDTMCHK-SS-002
+        Version: '1'
+      Version: '1'
+      Citations:
+      - Cited Guidance: check_ss_ssdtc_alive_dm
+        Document: pharmaverse sdtmchecks
+        Section: SS Domain

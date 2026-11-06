@@ -9,8 +9,10 @@ Covers all three layers:
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
+import pytest
 import yaml
 
+from fleet.core.exceptions import SpecError
 from fleet.define_xml.spec_generator import DefineSpecGenerator
 
 # Namespace URIs for parsing generated XML
@@ -231,12 +233,13 @@ class TestLayer1SimpleCRFPages:
         doc_ref = _find_doc_ref(origin)
         assert doc_ref is None
 
-    def test_crf_pages_without_acrf_document_skipped(self, tmp_path):
-        """crf_pages without documents.annotated_crf emits no DocumentRef."""
+    def test_crf_pages_without_acrf_document_warns(self, tmp_path):
+        """crf_pages without documents.annotated_crf warns and emits no DocumentRef (c1-563)."""
         spec = _build_spec(
             variables_patch={"SEX": {"crf_pages": "7"}},
         )
-        xml = _write_and_generate(spec, tmp_path)
+        with pytest.warns(UserWarning, match=r"DM\.SEX declare crf_pages.*no annotated_crf"):
+            xml = _write_and_generate(spec, tmp_path)
         root = _parse_xml(xml)
         item = _find_item_def(root, "SEX")
         origin = _find_origin(item)
@@ -468,8 +471,8 @@ class TestLayer3ExternalPageMap:
         pdf_ref = _find_pdf_ref(doc_ref)
         assert pdf_ref.get("PageRefs") == "7"  # inline wins
 
-    def test_missing_page_map_file_ignored(self, tmp_path):
-        """Non-existent page_map file is silently ignored."""
+    def test_missing_page_map_file_raises(self, tmp_path):
+        """A declared page_map file that does not exist stops generation (c1-563)."""
         spec = _build_spec(
             study_extra={
                 "documents": {
@@ -480,14 +483,8 @@ class TestLayer3ExternalPageMap:
                 },
             },
         )
-        # Should not raise
-        xml = _write_and_generate(spec, tmp_path)
-        root = _parse_xml(xml)
-        # Verify the AnnotatedCRF container is still emitted
-        mdv = _find_mdv(root)
-        assert mdv is not None
-        acrf = mdv.find(f"{{{_DEF}}}AnnotatedCRF")
-        assert acrf is not None
+        with pytest.raises(SpecError, match=r"page_map nonexistent\.yaml does not exist"):
+            _write_and_generate(spec, tmp_path)
 
     def test_derived_var_not_affected_by_page_map(self, tmp_path):
         """Derived-origin variables are not given CRF page refs even if in page map."""

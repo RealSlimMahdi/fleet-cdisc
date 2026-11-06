@@ -74,6 +74,15 @@ class TestRuleScaffolder:
             assert rule["Scope"]["Domains"]["Include"] == ["AE"]
             assert rule["Rule Type"] == "Record Data"
 
+    @pytest.mark.parametrize("domain", ["DM", "VS", "ADSL"])
+    def test_scaffold_scopes_by_domain_not_by_class(self, domain, tmp_path):
+        """c1-526: Classes EVENTS made a DM or VS rule never fire."""
+        out = scaffold_rule(domain=domain, description="x", output_dir=tmp_path)
+
+        scope = yaml.safe_load(out.read_text(encoding="utf-8"))["Scope"]
+
+        assert scope == {"Classes": {"Include": ["ALL"]}, "Domains": {"Include": [domain]}}
+
     def test_scaffold_auto_increment(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             # Create first rule
@@ -210,7 +219,7 @@ class TestCustomRulesEngineIntegration:
                     cmd = mock_run.call_args[0][0]
                     assert "-lr" in cmd
                     lr_idx = cmd.index("-lr")
-                    assert cmd[lr_idx + 1] == str(rules_dir)
+                    assert cmd[lr_idx + 1] == str(rules_dir.resolve())
 
     def test_validate_dataset_no_lr_without_custom_rules(self):
         """Verify -lr is NOT added when custom_rules is None."""
@@ -411,3 +420,35 @@ class TestCheckRule:
             rule_file.write_text(yaml.dump(rule))
             errors = check_rule(rule_file)
             assert any("combinator" in e for e in errors)
+
+
+class TestPopulationFlagRule:
+    """c1-216: fleet validate gave no finding on a null SAFFL."""
+
+    def test_rule_is_schema_valid_and_names_each_population_flag(self, tmp_path):
+        from fleet.validation.rule_scaffolder import (
+            POPULATION_FLAGS,
+            scaffold_population_flag_rule,
+        )
+
+        out = scaffold_population_flag_rule(tmp_path)
+
+        assert out.name == "FLEET-ADSL-001.yaml"
+        assert check_rule(out) == []
+        rule = yaml.safe_load(out.read_text(encoding="utf-8"))
+        assert rule["Scope"]["Domains"]["Include"] == ["ADSL"]
+        checked = {c["all"][0]["name"] for c in rule["Check"]["any"]}
+        assert checked == set(POPULATION_FLAGS) >= {"SAFFL", "ITTFL", "FASFL", "PPROTFL"}
+        saffl = next(c for c in rule["Check"]["any"] if c["all"][0]["name"] == "SAFFL")
+        assert saffl["all"][1]["any"] == [
+            {"name": "SAFFL", "operator": "empty"},
+            {"name": "SAFFL", "operator": "is_not_contained_by", "value": ["Y", "N"]},
+        ]
+        assert "DTHFL" not in POPULATION_FLAGS
+
+    def test_a_second_scaffold_refuses_to_overwrite(self, tmp_path):
+        from fleet.validation.rule_scaffolder import scaffold_population_flag_rule
+
+        scaffold_population_flag_rule(tmp_path)
+        with pytest.raises(FileExistsError):
+            scaffold_population_flag_rule(tmp_path)

@@ -1,66 +1,61 @@
 # yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
 # SDTMCHK-AE-013: AE start date after death date from DS
-# Source: sdtmchecks::check_ae_aestdtc_after_dd
+# Based on: sdtmchecks::check_ae_aestdtc_after_dd. Conditions follow the R function; a difference is stated in Description.
 
 Core:
   Id: SDTMCHK-AE-013
   Status: Draft
-  Version: "1"
-
+  Version: '1'
 Rule Type: Record Data
-
 Scope:
   Classes:
-    Include: [EVENTS]
+    Include:
+    - EVENTS
   Domains:
-    Include: [AE]
-
+    Include:
+    - AE
 Check:
   all:
-    - name: AESTDTC
-      operator: non_empty
-    - name: $ds_death_date
-      operator: non_empty
-    - name: AESTDTC
-      operator: date_greater_than
-      value: $ds_death_date
-      date_component: auto
-
+  - name: AESTDTC
+    operator: non_empty
+  - name: $dm_dthdtc
+    operator: non_empty
+  - name: AESTDTC
+    operator: date_greater_than
+    value: $dm_dthdtc
+    date_component: auto
 Operations:
-  - operator: max_date
-    domain: DS
-    name: DSSTDTC
-    id: $ds_death_date
-    group:
-      - USUBJID
-    filter:
-      DSDECOD: DEATH
-
+- operator: max_date
+  domain: DM
+  name: DTHDTC
+  id: $dm_dthdtc
+  group:
+  - USUBJID
 Outcome:
-  Message: >-
-    AESTDTC is after the death date (DSSTDTC where DSDECOD='DEATH') from DS domain.
-    Adverse events should not start after the subject's death.
-  Output Variables: [USUBJID, AETERM, AEDECOD, AESTDTC, $ds_death_date]
-
-Description: >-
-  AE start date should not be after the subject's death date recorded in DS.
-  Uses the maximum DSSTDTC where DSDECOD='DEATH' for each subject.
-
+  Message: AESTDTC is after the death date (DM.DTHDTC).
+  Output Variables:
+  - USUBJID
+  - AETERM
+  - AEDECOD
+  - AESTDTC
+  - $dm_dthdtc
+Description: 'Flags: AESTDTC is after the death date (DM.DTHDTC). Based on sdtmchecks::check_ae_aestdtc_after_dd.
+  Difference from the R function: The death date is DM.DTHDTC. The R function takes the earliest of AEDTHDTC
+  and the DS death dates. Partial dates are compared at their common precision; R imputes day 01.'
 Sensitivity: Record
 Executability: Fully Executable
-
 Authorities:
-  - Organization: sdtmchecks
-    Standards:
-      - Name: SDTMIG
-        Version: "3.4"
-        References:
-          - Origin: sdtmchecks R package
-            Rule Identifier:
-              Id: SDTMCHK-AE-013
-              Version: "1"
-            Version: "1"
-            Citations:
-              - Cited Guidance: check_ae_aestdtc_after_dd
-                Document: pharmaverse sdtmchecks
-                Section: AE Domain
+- Organization: sdtmchecks
+  Standards:
+  - Name: SDTMIG
+    Version: '3.4'
+    References:
+    - Origin: sdtmchecks R package
+      Rule Identifier:
+        Id: SDTMCHK-AE-013
+        Version: '1'
+      Version: '1'
+      Citations:
+      - Cited Guidance: check_ae_aestdtc_after_dd
+        Document: pharmaverse sdtmchecks
+        Section: AE Domain

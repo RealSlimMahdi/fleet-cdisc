@@ -331,7 +331,7 @@ dates, sequence number)
 - `df.adam.vaccine` — Vaccine: fever flag, seroconversion, ADIS AVAL
 - `df.adam.metabolic` — Metabolic: waist-to-hip ratio, body fat %
 - `df.adam.neuro` — Neuroscience: Centiloid, MMSE, CDR-SoB
-- `df.adam.tte` — Time-to-event (ADTTE): EventSource/CensorSource objects, param, AVAL/AVALU, KM inputs\
+- `df.adam.tte` — Time-to-event (ADTTE): param from plain event/censor frames, stop_at window, AVAL/AVALU, KM inputs\
 """
 
 
@@ -545,7 +545,7 @@ def _verb_mapping_section() -> str:
 | Normal range indicator | `nrind` | `adam` | Returns `LOW / NORMAL / HIGH` |
 | On-treatment flag | `on_treatment` | `adam` | `TRTSDT ≤ ADT ≤ TRTEDT` |
 | Categorical shift | `shift` | `adam` | `"BASELINE / POST-BASELINE"` string |
-| LOCF imputation records | `derive_locf_records` | `adam` | Forward-fill within patient groups |
+| LOCF imputation records | `derive_locf_records` | `adam` | Add LOCF records (DTYPE "LOCF") for expected visits |
 | Summary records | `derive_summary_records` | `adam` | Aggregate and append summary rows |
 | Derived parameter rows | `derive_param` | `adam` | New parameter rows from existing ones |
 | Join reference dataset | `merge` | `adam` / `sdtm` | Left-join another DataFrame into lazy plan |
@@ -653,7 +653,7 @@ inputs, and hands each **built dataset** forward to the datasets that take it as
 import fleet
 
 ctx = fleet.load_study_context("study_config.yaml")
-plan = fleet.plan_study(ctx)  # SDTM define first, then ADaM, each in file order
+plan = fleet.plan_study(ctx)  # each dataset after the planned datasets it reads; else file order
 [(s.standard, s.dataset) for s in plan.steps]  # [("sdtm", "DM"), ("sdtm", "AE"), ("adam", "ADSL"), ...]
 
 for built in fleet.run_study(plan):  # a generator: each dataset as soon as it is built
@@ -665,13 +665,20 @@ advs = next(fleet.run_study(plan, inputs={"ADSL": adsl_fixed})).frame
 ```
 
 Rules (ADR 0006): each input is taken from the first source that gives it — a seed, a dataset \
-built earlier in the run, the input's `path:` relative to the study root, then its name in the \
-raw / SDTM / ADaM data directories (`.parquet`, `.csv`, `.xpt`, `.sas7bdat`). The first input \
+built earlier in the run, the input's `path:` relative to the study root, then a search by name \
+that honours `type:`. A `type: raw` input, or one named as the dataset being built, comes from \
+the raw directory only. A `type: dataset` input never comes from the raw directory: from the \
+data directory of the standard a define declares it in, else ADaM then SDTM for an ADaM step and \
+SDTM then ADaM for an SDTM step (`.parquet`, `.csv`, `.xpt`, `.sas7bdat`, `.json`). Two files \
+for one dataset in one directory stop the run. The first input \
 is the base frame. Every other input is **pinned** under its dataset name, so `merge`, `lookup`, \
 `first_date`, `last_date` and `count_events` reach it. Only **carry-through columns** (declared \
-with no `derivation:`) are left-joined from the other inputs on USUBJID; a column with a \
+with no `derivation:`) are left-joined from the other inputs on USUBJID, and an input with two \
+records for one USUBJID stops the join; a column with a \
 derivation comes from its algorithm alone. A seed that is also a step is refused. Every refusal \
-is a `StudyRunError`, which `fleet run` turns into exit 1."""
+is a `StudyRunError`, which `fleet run` turns into exit 1. `fleet run` writes each dataset in \
+`--format`, else its `output_format:`, else the define's, else parquet: the rule of the \
+Define-XML leaf."""
 
 
 def _ct_section() -> str:
@@ -1106,7 +1113,7 @@ _README_PEDS_SPECIFIC = [
     "age_years",
     "corrected_age",
     "prematurity_flag",
-    "bmi_category",
+    "bmi_percentile_category",
 ]
 
 _README_VACCINE_SPECIFIC = [
@@ -1122,6 +1129,7 @@ _README_METABOLIC_SPECIFIC = [
     "waist_height_ratio",
     "body_fat_pct",
     "visceral_fat_flag",
+    "bmi_category_adult",
 ]
 
 _README_NEURO_SPECIFIC = [

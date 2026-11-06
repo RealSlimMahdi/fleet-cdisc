@@ -90,7 +90,7 @@ The complete description of one TLG output that a template consumes: rows, stati
 _Avoid_: config, settings, options, parameters
 
 **ARD**:
-The analysis results dataset: one long table with one row per statistic per cell, which every TLG output is first computed as and every renderer reads from. Compatible with the R `cards` package layout.
+The analysis results dataset: one long table with one row per statistic per cell, which every TLG output is first computed as and every renderer reads from. It uses the long layout of the R `cards` package, but the names differ (`fmt_fn`, `pct` on 0 to 100, big-N rows): convert it before R tools such as gtsummary read it.
 _Avoid_: result, output table, summary
 
 **Population filter**:

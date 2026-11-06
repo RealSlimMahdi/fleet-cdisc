@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
 # SDTMCHK-AE-001: AEDECOD must not be missing
-# Source: sdtmchecks::check_ae_aedecod
+# Based on: sdtmchecks::check_ae_aedecod. Conditions follow the R function; a difference is stated in Description.
 
 Core:
   Id: SDTMCHK-AE-001
@@ -28,6 +28,7 @@ Outcome:
 
 Description: >-
   AEDECOD (dictionary-derived decoded term) must be populated for every AE record.
+  Based on sdtmchecks::check_ae_aedecod. Same conditions as the R function.
 
 Sensitivity: Record
 Executability: Fully Executable

@@ -150,7 +150,7 @@ events = [
 ]
 ```
 
-This is equivalent to passing a `pl.Expr` directly and enables full round-tripping through `define.yaml`.
+This gives the same result as a `pl.Expr`, and a define.yaml can hold it. When an event holds a `pl.DataFrame` or a `pl.Expr`, `to_spec_yaml()` cannot write it and writes a TODO stub for the variable.
 
 ## Admiral Comparison
 
@@ -163,12 +163,12 @@ This is equivalent to passing a `pl.Expr` directly and enables full round-trippi
 | DTHCAUS template: first listed event with a record | No top-level `order`: first listed event with a record |
 | Requires pre-built event objects + explicit dataset references | Inline dicts with optional `"source"` — current frame used by default |
 
-Fleet's `pick()` is semantically equivalent but:
+Compared with admiral, Fleet's `pick()`:
 
 - Eliminates the need for a separate `event()` constructor
 - Supports per-event mode/order overrides
 - Accepts literals (`pl.lit("Y")`) directly in `"set"` alongside column references
-- Chains naturally into the ADaM pipeline without materialisation breaks
+- Chains into the ADaM pipeline with no `.to_frame()` call (it reads the data once, at the verb)
 
 ## When to Use `pick()` vs `@derivation`
 
@@ -183,24 +183,36 @@ Fleet's `pick()` is semantically equivalent but:
 
 ## Spec-Driven Usage
 
-In a `define.yaml`, the pick algorithm maps directly:
+In a `define.yaml`, the pick block goes under the variable's `derivation:`. Use date columns (AEENDT, not the text AEENDTC), so that the dates compare as dates:
 
 ```yaml
 variables:
   - name: LSTALVDT
     label: Last Date Known Alive
-    algorithm: pick
-    targets: [LSTALVDT]
-    events:
-      - when: 'pl.col("DTHDT").is_not_null()'
-        set: {LSTALVDT: DTHDT}
-        source: ADSL
-      - when: 'pl.col("AEENDTC").is_not_null()'
-        set: {LSTALVDT: AEENDTC}
-        source: AE
-    by: [USUBJID]
-    order: [LSTALVDT]
-    mode: last
+    type: date
+    derivation:
+      algorithm: pick
+      events:
+        - when: 'pl.col("DTHDT").is_not_null()'
+          set: {LSTALVDT: DTHDT}
+          source: ADSL
+        - when: 'pl.col("AEENDT").is_not_null()'
+          set: {LSTALVDT: AEENDT}
+          source: AE
+        - when: 'pl.col("TRTEDT").is_not_null()'
+          set: {LSTALVDT: TRTEDT}
+          source: ADSL
+      by: [USUBJID]
+      order: [LSTALVDT]
+      mode: last
 ```
 
-Fleet's `from_spec()` dispatches to `.pick()` automatically when `algorithm: pick` is detected.
+Each `source:` name is a pinned dataset. Pin them before `from_spec()`; a name with no pin raises `PinError`:
+
+```python
+adsl = (
+    adsl_df.adam.adsl.pin(ADSL=adsl_df, AE=adae).from_spec("define.yaml", dataset="ADSL").to_frame()
+)
+```
+
+`algorithm:`, `events:` or `targets:` beside `name:` (not under `derivation:`) raise `SpecError`.

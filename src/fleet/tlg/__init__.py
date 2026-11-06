@@ -9,8 +9,10 @@ accessed via properties:
 Usage
 -----
     import fleet
+    from fleet.tlg import AESummarySpec
 
-    ard = adae.tlg.ae.t_summary(groupby="TRTA", adsl=adsl)
+    spec = AESummarySpec(adsl_group_col="TRT01A")
+    ard = adae.tlg.ae.t_summary(spec=spec, adsl=adsl)
 """
 
 from ._ard import (
@@ -44,6 +46,7 @@ from ._runner import (
     NAMESPACE_CLASSES,
     detect_groupby,
     load_spec,
+    resolve_groupby,
     run_spec,
     spec_schema,
 )
@@ -53,6 +56,7 @@ from ._specs import (
     GroupbyChoice,
     GroupPool,
     InteractiveBlock,
+    MissingLevel,
     OverallStat,
     Row,
     Statistic,
@@ -157,6 +161,7 @@ __all__ = [
     "MHSummarySpec",
     "OverallStat",
     "Uncoded",
+    "MissingLevel",
     "resolve_filter",
     # Interactive explorer
     "ChoiceOption",
@@ -179,6 +184,7 @@ __all__ = [
     "NAMESPACE_CLASSES",
     "GROUPBY_CANDIDATES",
     "detect_groupby",
+    "resolve_groupby",
     "load_spec",
     "run_spec",
     "spec_schema",

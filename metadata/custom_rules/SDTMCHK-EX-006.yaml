@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
 # SDTMCHK-EX-006: EXOCCUR missing but EXDOSE populated
-# Source: sdtmchecks::check_ex_exoccur_mis_exdose_nonmis
+# Based on: sdtmchecks::check_ex_exoccur_mis_exdose_nonmis. Conditions follow the R function; a difference is stated in Description.
 
 Core:
   Id: SDTMCHK-EX-006
@@ -30,6 +30,7 @@ Outcome:
 
 Description: >-
   When EXDOSE is populated, EXOCCUR should also be populated.
+  Based on sdtmchecks::check_ex_exoccur_mis_exdose_nonmis. Same conditions as the R function.
 
 Sensitivity: Record
 Executability: Fully Executable

@@ -35,7 +35,7 @@ import yaml
 
 from fleet.core import log as fleet_log
 from fleet.core.define_spec import DefineSpec, load_define_spec
-from fleet.core.dtc import date_part, datetime_part, to_day, warn_on_collect
+from fleet.core.dtc import date_part, datetime_part, refuse_number, to_day, warn_on_collect
 from fleet.core.exceptions import (
     ComparisonError,
     DerivationError,
@@ -43,6 +43,12 @@ from fleet.core.exceptions import (
     ValidationError,
     ValidationSetupError,
     VerbUsageError,
+)
+from fleet.core.joins import (
+    JoinCheck,
+    refuse_repeated_keys,
+    refuse_shared_columns,
+    require_columns,
 )
 
 if TYPE_CHECKING:
@@ -82,6 +88,52 @@ def _settle_on_fail(on_fail: str, summary: str, error: type[Exception]) -> None:
         raise error(summary)
     if on_fail == "warn":
         warnings.warn(summary, stacklevel=3)
+
+
+_CLOCK_UNITS = {"seconds": (1, "S"), "minutes": (60, "M"), "hours": (3600, "H")}
+
+
+def _iso_sign(value: pl.Expr) -> pl.Expr:
+    """``"-"`` for a negative span, else empty text."""
+    return pl.when(value < 0).then(pl.lit("-")).otherwise(pl.lit(""))
+
+
+def _iso_clock(seconds: pl.Expr, unit: str, *, add_one: bool) -> pl.Expr:
+    """ISO 8601 duration ``[-]PTnHnMnS`` of a signed count of seconds (PT1H30M, -PT15M)."""
+    size, letter = _CLOCK_UNITS[unit]
+    if add_one:
+        seconds = pl.when(seconds >= 0).then(seconds + size).otherwise(seconds)
+    total = seconds.abs()
+
+    def part(value: pl.Expr, mark: str) -> pl.Expr:
+        return pl.when(value > 0).then(value.cast(pl.String) + pl.lit(mark)).otherwise(pl.lit(""))
+
+    body = pl.concat_str(
+        part(total // 3600, "H"), part(total % 3600 // 60, "M"), part(total % 60, "S")
+    )
+    body = pl.when(total == 0).then(pl.lit(f"0{letter}")).otherwise(body)
+    return pl.when(seconds.is_null()).then(None).otherwise(_iso_sign(seconds) + "PT" + body)
+
+
+def _iso_days(days: pl.Expr, unit: str, *, add_one: bool, call: str, target: str) -> pl.Expr:
+    """ISO 8601 duration ``[-]PnD`` or ``[-]PnW``; a span that is not whole weeks gives null."""
+    if add_one:
+        days = pl.when(days >= 0).then(days + 1).otherwise(days)
+    count = days.abs()
+    if unit == "days":
+        return _iso_sign(days) + "P" + count.cast(pl.String) + "D"
+    whole = count % 7 == 0
+    text = _iso_sign(days) + "P" + pl.when(whole).then((count // 7).cast(pl.String)) + "W"
+    return warn_on_collect(
+        text,
+        days.is_not_null() & ~whole,
+        lambda n, values: (
+            f"{call}: {n} span(s) are not whole weeks, so {target} is null for them. "
+            f"Use unit='days'. Days: {values}"
+        ),
+        dtype=pl.String,
+        shown=days,
+    )
 
 
 #: Spec-format version this Fleet build writes (``fleet_spec_version``).
@@ -151,7 +203,7 @@ def _extract_spec_variables(
                 value = getattr(var, meta, None)
                 if value and meta not in merged:
                     merged[meta] = value
-            codelist = (var.model_extra or {}).get("codelist")
+            codelist = var.codelist
             out.append((var.name, merged, str(codelist) if codelist else None))
         return ds.name, out
 
@@ -166,6 +218,62 @@ def _extract_spec_variables(
         codelist = entry.pop("codelist", None)
         out.append((name, entry, str(codelist) if codelist else None))
     return str(ds_name), out
+
+
+def _freeze_row_steps(ns: Any, var_names: list[str]) -> list[dict[str, Any]]:
+    """Return the chain's row steps for ``row_steps:``, anchored on written variables.
+
+    A step anchored on a variable the spec does not write moves back to the
+    nearest earlier written variable, so ``from_spec`` keeps its place.
+    """
+    written = set(var_names)
+    order = [n.name for n in getattr(ns, "_lineage", [])]
+    out: list[dict[str, Any]] = []
+    for step in getattr(ns, "_row_steps", []):
+        after = step.get("after")
+        if after is not None and after not in written:
+            before = order[: order.index(after) + 1] if after in order else []
+            after = next((n for n in reversed(before) if n in written), None)
+        out.append({**{k: v for k, v in step.items() if k != "after"}, "after": after})
+    return out
+
+
+def _run_row_step(ns: Any, step: dict[str, Any], context: str) -> Any:
+    """Execute one ``row_steps:`` entry of a define.yaml (ADR-0034)."""
+    from fleet.core.lineage import record_row_step
+    from fleet.sdtm.utils import parse_expression
+
+    params = {k: v for k, v in step.items() if k not in ("algorithm", "after")}
+    if step.get("algorithm") == "nodup":
+        return ns.nodup(**params)
+    where = str(params["where"])
+    df = ns.to_frame()
+    filtered = ns._materialise_then(df.filter(parse_expression(where, df.schema)))
+    return record_row_step(filtered, "whereclauses", {"where": where})
+
+
+def _check_row_steps(steps: list[dict[str, Any]], names: list[str], context: str) -> None:
+    """Refuse a TODO step, an unknown algorithm or an unknown anchor before any work."""
+    for nr, step in enumerate(steps, start=1):
+        algo = step.get("algorithm")
+        if algo == "TODO":
+            raise SpecError(
+                f"{context}: row_steps #{nr} is a TODO for verb {step.get('verb')!r}. "
+                "Write the step (algorithm: whereclauses or nodup) or remove it."
+            )
+        if algo not in ("whereclauses", "nodup"):
+            raise SpecError(
+                f"{context}: row_steps #{nr} has algorithm {algo!r}; "
+                "a row step is whereclauses or nodup."
+            )
+        if algo == "whereclauses" and "where" not in step:
+            raise SpecError(f"{context}: row_steps #{nr} (whereclauses) needs where:.")
+        after = step.get("after")
+        if after is not None and after not in names:
+            raise SpecError(
+                f"{context}: row_steps #{nr} is after {after!r}, which is not a variable "
+                "of the dataset."
+            )
 
 
 def _dtype_to_spec_type(dtype: pl.DataType | None) -> str:
@@ -336,7 +444,9 @@ class SharedVerbsMixin:
             DerivationError: When collection fails because a column is
                 missing — enriched with the lineage entries that
                 reference the column, so the error names the verb(s)
-                involved.
+                involved.  Also when a ``merge(validate=...)`` fails, with
+                the repeated keys named, or when a foreign-key check runs
+                under ``fk_policy("error")``.
 
         Examples:
             Collect the pipeline result::
@@ -356,9 +466,26 @@ class SharedVerbsMixin:
             pl.exceptions.StructFieldNotFoundError,
         ) as err:
             raise self._enrich_collect_error(err) from err
+        except pl.exceptions.ComputeError as err:
+            named = next(
+                (
+                    msg
+                    for check in getattr(self, "_pending_join_checks", [])
+                    if (msg := check.explain_validation()) is not None
+                ),
+                None,
+            )
+            if named is None:
+                raise
+            raise DerivationError(named) from err
         run_checks = getattr(self, "_run_pending_fk_checks", None)
         if run_checks is not None:
             run_checks(df)
+        join_checks = getattr(self, "_pending_join_checks", [])
+        # Rebind, never mutate: earlier chain copies keep their own queue.
+        self._pending_join_checks = []
+        for check in join_checks:
+            check.warn_many_to_many()
         return cast("DataFrame", df)
 
     def _enrich_collect_error(self, err: Exception) -> DerivationError:
@@ -391,15 +518,22 @@ class SharedVerbsMixin:
         """Materialise the pipeline and write a CDISC Dataset-JSON v1.1 file.
 
         This is a terminal verb — it collects the lazy plan and writes the
-        result.  No further chaining is possible after this call.
+        result.  No further chaining is possible after this call.  After
+        :meth:`from_spec` on a define.yaml, the file gets the define labels,
+        lengths, key sequence and OIDs of the dataset.
 
         Args:
             path: Destination file path (should end in ``.json``).
             domain: Dataset / domain name (e.g. ``"DM"``, ``"ADSL"``).
-            label: Optional human-readable dataset label.
+            label: Optional human-readable dataset label; it wins over
+                the define label.
 
         Returns:
             Path: Path to the written file.
+
+        Raises:
+            DerivationError: When a foreign-key check fails under
+                ``fk_policy("error")``; no file is written.
 
         Examples:
             Export a dataset to Dataset-JSON::
@@ -411,9 +545,15 @@ class SharedVerbsMixin:
                     .to_dataset_json("outputs/dm.json", domain="DM")
                 )
         """
-        from fleet.io.dataset_json import save_dataset_json
+        from fleet.io.dataset_json import metadata_from_define, save_dataset_json
 
-        return save_dataset_json(self._lazy.collect(), path, domain=domain, label=label)
+        meta: dict[str, Any] = {}
+        source = getattr(self, "_spec_source", None)
+        if source is not None and source[1].upper() == domain.upper():
+            meta = metadata_from_define(source[0], source[1])
+        if label is not None:
+            meta["label"] = label
+        return save_dataset_json(self.to_frame(), path, domain=domain, **meta)
 
     def inspect(self, prefix: str = "DEBUG") -> Self:
         """Materialise the pipeline at this point and log its state.
@@ -625,8 +765,10 @@ class SharedVerbsMixin:
                 the literal is validated at pipeline-build time.
             ct_map: Explicit ``{raw_value: ct_value}`` mapping applied to
                 *source* (raw codes that need remapping).  Requires
-                *source*.  A raw value outside the map is kept as it is,
-                as SAS PUT with no OTHER= keeps it.
+                *source*.  Keys match the text form of the value, so
+                ``{"1": "M"}`` and ``{1: "M"}`` both map a numeric 1; the
+                result is text.  A raw value outside the map is kept as
+                text, as SAS PUT with no OTHER= keeps it.
             ct_validator: Optional pre-built validator instance.
             validate_values: Controls the codelist check of the values the
                 column will hold (after *ct_map*).  ``None`` (default):
@@ -740,9 +882,11 @@ class SharedVerbsMixin:
         # ── source path ──
         assert source is not None
         if ct_map:
-            ns = self._chain(
-                pl.col(source).replace(ct_map).alias(target), verb=verb, params=lineage_params
+            text = pl.col(source).cast(pl.String)
+            mapped = text.replace_strict(
+                {str(k): v for k, v in ct_map.items()}, default=text, return_dtype=pl.String
             )
+            ns = self._chain(mapped.alias(target), verb=verb, params=lineage_params)
             if fk:
                 ns._auto_fk_check(target)
             if validate_values is not False and ct_id:
@@ -846,7 +990,8 @@ class SharedVerbsMixin:
             # Source values not retrievable — validation did not happen.
             return False
         if value_map:
-            unique_vals = list(dict.fromkeys(value_map.get(v, v) for v in unique_vals))
+            text_map = {str(k): v for k, v in value_map.items()}
+            unique_vals = list(dict.fromkeys(text_map.get(str(v), str(v)) for v in unique_vals))
         # Null and blank are missing values, not CT findings.
         invalid = [v for v in unique_vals if v not in (None, "") and v not in valid_values]
         if invalid:
@@ -912,8 +1057,10 @@ class SharedVerbsMixin:
         """Implementation behind ``case_when``."""
         from fleet.sdtm.utils import parse_expression
 
+        schema = self._lazy.collect_schema()
+
         def _cond(raw: Any) -> pl.Expr:
-            return raw if isinstance(raw, pl.Expr) else parse_expression(str(raw))
+            return raw if isinstance(raw, pl.Expr) else parse_expression(str(raw), schema)
 
         params = {"target": target, "when": when, "else_": else_}
         if not when:
@@ -932,42 +1079,68 @@ class SharedVerbsMixin:
         how: str = "left",
         keep: list[str] | None = None,
         where: str | pl.Expr | None = None,
+        validate: Literal["m:1", "1:m", "1:1"] | None = None,
     ) -> Self:
         """Join *dataset* into the pipeline using key column(s) *on*.
 
         The one canonical join verb.  The join is appended to the lazy
-        plan; nothing is materialised.
+        plan; nothing is materialised.  It reads as SAS
+        ``merge left right(keep=...)``: every pipeline column stays, and
+        *keep* limits the columns taken from *dataset*.  Keys match
+        exactly: ``"S1 "`` and ``"S1"`` are two keys.
+
+        A non-key column on both sides raises: select or rename the
+        columns of *dataset* first.  A key that repeats on both sides
+        warns at ``to_frame()``, because the join then gives every pair
+        of rows.  ``how="full"`` gives one key column, as SAS MERGE.
 
         Args:
             dataset: The ``pl.DataFrame`` / ``pl.LazyFrame`` to merge in.
             on: Key column name(s) for the join.
             how: Join strategy (default ``"left"``).
-            keep: Optional columns to keep from the joined result — the
-                output is restricted to the *on* key(s) plus these
-                columns (order preserved).  When ``None``, all columns
-                are retained.
+            keep: Optional columns of *dataset* to bring in, besides the
+                *on* key(s).  When ``None``, every column of *dataset* is
+                brought in.
             where: Optional filter expression applied to *dataset*
-                before the join.
+                before the join; it may use a column that *keep* leaves
+                out.
+            validate: Optional key rule, checked at ``to_frame()``:
+                ``"m:1"`` (each key once in *dataset*), ``"1:m"`` (once in
+                the pipeline) or ``"1:1"`` (once on both sides).
 
         Returns:
             Self: The namespace continuing from the joined plan.
 
         Raises:
             VerbUsageError: When *dataset* or *on* is missing.
-            DerivationError: When a *keep* entry is absent from the
-                joined result (with a did-you-mean suggestion).
+            DerivationError: When a *keep* entry is absent from *dataset*
+                (with a did-you-mean suggestion), or a non-key column is on
+                both sides.  At ``to_frame()``, when *validate* fails; the
+                message names the repeated keys.
+
+        References:
+            ADR-0032 (docs/adr/0032-merge-reads-as-sas-merge-and-stops-on-a-clash.md).
+            admiral ``derive_vars_merged`` stops on a column on both sides.
 
         Examples:
-            Merge supplemental qualifier data onto the DM domain::
+            Merge one supplemental qualifier onto the DM domain::
 
                 dm = (
                     raw_df.sdtm
                     .assign("DOMAIN", value="DM")
-                    .merge(suppdm_df, on="USUBJID", keep=["QVAL"])
+                    .merge(
+                        suppdm_df,
+                        on="USUBJID",
+                        keep=["QVAL"],
+                        where='pl.col("QNAM") == "RACE1"',
+                        validate="m:1",
+                    )
                     .to_frame()
                 )
         """
-        return self._merge_impl(dataset, on=on, how=how, keep=keep, where=where, verb="merge")
+        return self._merge_impl(
+            dataset, on=on, how=how, keep=keep, where=where, validate=validate, verb="merge"
+        )
 
     def _merge_impl(
         self,
@@ -977,6 +1150,7 @@ class SharedVerbsMixin:
         how: str = "left",
         keep: list[str] | None = None,
         where: str | pl.Expr | None = None,
+        validate: Literal["m:1", "1:m", "1:1"] | None = None,
         verb: str = "merge",
     ) -> Self:
         """Implementation behind ``merge``."""
@@ -993,27 +1167,38 @@ class SharedVerbsMixin:
             )
         if on is None:
             raise VerbUsageError(f"{verb}() requires on= (join key column(s)).")
+        on_list = [on] if isinstance(on, str) else list(on)
         if where is not None:
             where_expr = where if isinstance(where, pl.Expr) else parse_expression(str(where))
             right = right.filter(where_expr)
-
-        joined = self._lazy.join(right, on=on, how=how, nulls_equal=True)
         if keep:
-            on_list = [on] if isinstance(on, str) else list(on)
-            keep_list = list(dict.fromkeys(on_list + list(keep)))
-            schema_names = joined.collect_schema().names()
-            missing = [c for c in keep_list if c not in schema_names]
-            if missing:
-                hints = []
-                for col in missing:
-                    close = difflib.get_close_matches(col, schema_names, n=1)
-                    hints.append(f"'{col}'" + (f" (did you mean '{close[0]}'?)" if close else ""))
-                raise DerivationError(
-                    f"{verb}(keep=...): column(s) {', '.join(hints)} not found "
-                    f"in the joined result. Available columns: {schema_names}"
-                )
-            joined = joined.select(keep_list)
-        return self._with_lazy(joined)
+            right_names = right.collect_schema().names()
+            require_columns(f"{verb}(keep=...)", keep, right_names, where="the right dataset")
+            right = right.select(list(dict.fromkeys(on_list + list(keep))))
+
+        adds_columns = how not in ("semi", "anti")
+        if adds_columns:
+            refuse_shared_columns(
+                verb,
+                self._lazy.collect_schema().names(),
+                right.collect_schema().names(),
+                on_list,
+                hint="Select or rename the columns of the right dataset, or drop them "
+                "from the pipeline first.",
+            )
+        joined = self._lazy.join(
+            right,
+            on=on_list,
+            how=how,  # type: ignore[arg-type]
+            nulls_equal=True,
+            coalesce=True if how == "full" else None,
+            validate=validate or "m:m",
+        )
+        new = self._with_lazy(joined)
+        if adds_columns:
+            check = JoinCheck(verb, tuple(on_list), self._lazy, right, validate)
+            new._pending_join_checks = [*getattr(self, "_pending_join_checks", []), check]
+        return new
 
     def keep(self, *columns: str | list[str]) -> Self:
         """Restrict the frame to *columns*, in the given order.
@@ -1047,17 +1232,7 @@ class SharedVerbsMixin:
             cols = [c for c in columns]  # type: ignore[misc]
         if not cols:
             raise DerivationError("keep() requires at least one column name.")
-        schema_names = self._lazy.collect_schema().names()
-        missing = [c for c in cols if c not in schema_names]
-        if missing:
-            hints = []
-            for col in missing:
-                close = difflib.get_close_matches(col, schema_names, n=1)
-                hints.append(f"'{col}'" + (f" (did you mean '{close[0]}'?)" if close else ""))
-            raise DerivationError(
-                f"keep(): column(s) {', '.join(hints)} not found in the frame. "
-                f"Available columns: {schema_names}"
-            )
+        require_columns("keep()", cols, self._lazy.collect_schema().names(), where="the frame")
         return self._with_lazy(self._lazy.select(cols))
 
     # ------------------------------------------------------------------ #
@@ -1238,7 +1413,9 @@ class SharedVerbsMixin:
 
         # Case 1: string through AST sandbox.
         return self._chain(
-            parse_expression(str(expression)).alias(target), verb="derivation", params=params
+            parse_expression(str(expression), self._lazy.collect_schema()).alias(target),
+            verb="derivation",
+            params=params,
         )
 
     def _apply_derivation(self, drv: Derivation) -> Self:
@@ -1247,8 +1424,8 @@ class SharedVerbsMixin:
         Routing:
 
         * ``kind="column"`` — expression stays lazy; lineage via ``_chain()``.
-        * ``kind="frame"`` or ``kind="param"`` — the frame is materialised,
-          the function called, and the result re-wrapped.
+        * ``kind="frame"`` — the frame is materialised, the function
+          called, and the result re-wrapped.
 
         Args:
             drv: The :class:`~fleet.core.derivation.Derivation` to execute.
@@ -1257,7 +1434,7 @@ class SharedVerbsMixin:
             Self: Updated namespace.
 
         Raises:
-            TypeError: If a frame/param derivation returns a non-DataFrame.
+            TypeError: If a frame derivation returns a non-DataFrame.
         """
         from fleet.core.lineage import _append_lineage_nodes
 
@@ -1265,7 +1442,7 @@ class SharedVerbsMixin:
             expr: pl.Expr = drv()
             ns = self._chain(expr.alias(drv.targets[0]), verb="derivation", params={})
             # Registered derivations round-trip via to_spec_yaml as
-            # `algorithm: callable` blocks referencing their dotted path.
+            # `algorithm: derivation` blocks with their dotted path as `callable:`.
             if ns._lineage:
                 ns._lineage[-1].spec = {"algorithm": "derivation", "callable": drv.dotted_path}
             return ns
@@ -1297,9 +1474,11 @@ class SharedVerbsMixin:
         """Compute the duration between two date/datetime columns.
 
         Supports column references (``str``) and Polars expressions
-        for *start* and *end*.  ``--DTC`` text is read by its date part for
+        for *start* and *end*; an expression is read by its type, as a
+        column is.  ``--DTC`` text is read by its date part for
         day-based units and by its date-time for hours, minutes and
-        seconds; a partial value gives null.
+        seconds; a partial value gives null, and for hours, minutes and
+        seconds a warning gives the count of text values with no time.
 
         The ``add_one`` parameter controls inclusive counting:
 
@@ -1325,19 +1504,30 @@ class SharedVerbsMixin:
                 ``"days"`` (default), ``"weeks"``, ``"months"``, ``"years"``.
             add_one: Override for inclusive counting.
             out: Output format — ``"numeric"`` (default) or ``"iso8601"``.
-                ``"iso8601"`` is incompatible with the ``*DY`` study-day
-                convention: pass ``add_one`` explicitly (or use a non-DY
-                target) to combine them.
+                ``"iso8601"`` keeps the sign (``-PT15M``), writes hours,
+                minutes and seconds from the total (``PT1H30M``) and adds
+                one only when ``add_one=True`` is given (an elapsed time,
+                ``P9D`` for 1 to 10 January).  Weeks give null with a
+                warning for a span that is not whole weeks; months and
+                years raise.  ``"iso8601"`` is incompatible with the
+                ``*DY`` study-day convention: pass ``add_one`` explicitly
+                (or use a non-DY target) to combine them.
 
         Returns:
             Self: The namespace with *target* appended; call ``.to_frame()``
                 to materialise.
 
         Raises:
-            DerivationError: On an unknown *unit*/*out* value, or when
+            DerivationError: On an unknown *unit*/*out* value, when
                 ``out="iso8601"`` is combined with a ``*DY`` target while
                 ``add_one`` is unset (the study-day convention would
-                silently override the requested format).
+                silently override the requested format), with months or
+                years, or when a column holds numbers (no date origin is
+                guessed).
+
+        References:
+            ISO 8601 durations and SDTMIG 3.4 ``--ELTM``; admiral
+            ``compute_duration``; ADR-0011 and ADR-0022.
 
         Examples:
             ISO 8601 duration::
@@ -1387,18 +1577,35 @@ class SharedVerbsMixin:
 
         schema = self._lazy.collect_schema()
         sub_day = unit in ("seconds", "minutes", "hours")
+        call = f"duration('{target}')"
 
         def _to_date_expr(col_or_expr: str | pl.Expr) -> pl.Expr:
-            """Resolve a column reference to a date (day units) or a date-time (sub-day)."""
-            if not isinstance(col_or_expr, str):
-                return col_or_expr
-            dtype = schema.get(col_or_expr)
-            col = pl.col(col_or_expr)
+            """Resolve a column or an expression to a date (day units) or a date-time (sub-day)."""
+            if isinstance(col_or_expr, str):
+                col, dtype = pl.col(col_or_expr), schema.get(col_or_expr)
+            else:
+                col = col_or_expr
+                dtype = self._lazy.select(col).collect_schema().dtypes()[0]
             if not sub_day:
-                return to_day(col, dtype)
-            if dtype == pl.String:
-                return datetime_part(col)
-            return col
+                return to_day(col, dtype, verb=call)
+            refuse_number(
+                col.meta.output_name(raise_if_undetermined=False) or "the column", dtype, verb=call
+            )
+            if dtype != pl.String:
+                return col
+            name = col.meta.output_name(raise_if_undetermined=False) or "the text"
+            given = col.str.strip_chars().fill_null("") != ""
+            return warn_on_collect(
+                datetime_part(col),
+                given & datetime_part(col).is_null(),
+                lambda n, values: (
+                    f"{call}: {n} value(s) of {name} have no hour and minute, or are not "
+                    f"ISO 8601, so {target} is null for them. To impute a time with a flag, "
+                    f"derive a *DTM variable with .date() first. Values: {values}"
+                ),
+                dtype=pl.Datetime("us"),
+                shown=col,
+            )
 
         s_expr = _to_date_expr(start)
         e_expr = _to_date_expr(end)
@@ -1420,7 +1627,8 @@ class SharedVerbsMixin:
         if sub_day:
             s_dtm = s_expr.cast(pl.Datetime("us"))
             e_dtm = e_expr.cast(pl.Datetime("us"))
-            diff_s = (e_dtm - s_dtm).dt.total_seconds().cast(pl.Float64)
+            seconds = (e_dtm - s_dtm).dt.total_seconds()
+            diff_s = seconds.cast(pl.Float64)
             if unit == "seconds":
                 diff = diff_s.cast(pl.Int64)
             elif unit == "minutes":
@@ -1431,6 +1639,20 @@ class SharedVerbsMixin:
             diff_days = (e_expr - s_expr).dt.total_days()
             divisor = {"days": 1, "weeks": 7.0, "months": 30.4375, "years": 365.25}[unit]
             diff = diff_days if unit == "days" else diff_days.cast(pl.Float64) / divisor
+
+        if out == "iso8601":
+            if unit in ("months", "years"):
+                raise DerivationError(
+                    f"{call}: out='iso8601' with unit='{unit}' would cut the day count to whole "
+                    f"{unit}, because a month or a year has no fixed length. Use unit='days'."
+                )
+            if sub_day:
+                iso_expr = _iso_clock(seconds, unit, add_one=add_one is True)
+            else:
+                iso_expr = _iso_days(
+                    diff_days, unit, add_one=add_one is True, call=call, target=target
+                )
+            return self._chain(iso_expr.alias(target), verb="duration", params=duration_params)
 
         # Resolve add_one
         if add_one is None:
@@ -1451,23 +1673,6 @@ class SharedVerbsMixin:
             ).alias(target)
         else:
             result_expr = diff.alias(target)
-
-        if out == "iso8601":
-            abs_val = diff.abs()
-            unit_suffix_map = {
-                "days": ("P", "D"),
-                "hours": ("PT", "H"),
-                "weeks": ("P", "W"),
-                "months": ("P", "M"),
-                "years": ("P", "Y"),
-                "minutes": ("PT", "M"),
-                "seconds": ("PT", "S"),
-            }
-            prefix, suffix = unit_suffix_map[unit]
-            iso_expr = (
-                pl.lit(prefix) + abs_val.cast(pl.Int64).cast(pl.String) + pl.lit(suffix)
-            ).alias(target)
-            return self._chain(iso_expr, verb="duration", params=duration_params)
 
         return self._chain(result_expr, verb="duration", params=duration_params)
 
@@ -1525,6 +1730,8 @@ class SharedVerbsMixin:
                 any source.
             VerbUsageError: If more than one of *ref_df* / *dm* / *adsl*
                 is given.
+            DerivationError: If the reference frame has two different
+                reference dates for one subject (ADR-0032).
 
         Examples:
             Derive study day from pinned reference::
@@ -1566,8 +1773,8 @@ class SharedVerbsMixin:
             join_key = ["USUBJID"]
         elif _ref_col in schema.names():
             # ref_col already in frame — no join needed; stays lazy.
-            date_expr = to_day(pl.col(date_col), schema.get(date_col))
-            ref_expr = to_day(pl.col(_ref_col), schema.get(_ref_col))
+            date_expr = to_day(pl.col(date_col), schema.get(date_col), verb="study_day")
+            ref_expr = to_day(pl.col(_ref_col), schema.get(_ref_col), verb="study_day")
             diff = (date_expr - ref_expr).dt.total_days()
             study_day_expr = pl.when(diff >= 0).then(diff + 1).otherwise(diff).alias(target)
             return self._chain(
@@ -1582,17 +1789,22 @@ class SharedVerbsMixin:
         df = self._lazy.collect()
 
         # Join, compute, drop temp column
-        ref_slim = source_df.select(
-            [c for c in dict.fromkeys(join_key + [_ref_col]) if c in source_df.columns]
-        ).unique(subset=join_key)
+        ref_slim = refuse_repeated_keys(
+            "study_day()",
+            source_df.select(
+                [c for c in dict.fromkeys(join_key + [_ref_col]) if c in source_df.columns]
+            ),
+            join_key,
+            source=_ref_pin.upper() if ref_df is None else "the reference frame",
+        )
 
         _ref_tmp = f"__pin_{_ref_col}__"
         ref_slim = ref_slim.rename({_ref_col: _ref_tmp})
 
         df = df.join(ref_slim, on=join_key, how="left", nulls_equal=True)
 
-        date_expr = to_day(pl.col(date_col), df.schema.get(date_col))
-        ref_expr = to_day(pl.col(_ref_tmp), df.schema.get(_ref_tmp))
+        date_expr = to_day(pl.col(date_col), df.schema.get(date_col), verb="study_day")
+        ref_expr = to_day(pl.col(_ref_tmp), df.schema.get(_ref_tmp), verb="study_day")
 
         diff = (date_expr - ref_expr).dt.total_days()
         study_day_expr = pl.when(diff >= 0).then(diff + 1).otherwise(diff).alias(target)
@@ -1658,7 +1870,8 @@ class SharedVerbsMixin:
             target: Name of the output sequence variable (e.g. ``"AESEQ"``,
                 ``"ASEQ"``).
             order_by: Columns that define the sort order within each group.
-                When ``None``, the current row order is preserved.
+                Records that tie keep their input order, as PROC SORT
+                EQUALS.  When ``None``, the current row order is preserved.
             by: Partition columns.  Defaults to class constant
                 ``_SEQ_DEFAULT_GROUPS``.
             start_at: First sequence value (default ``1``).
@@ -1691,7 +1904,7 @@ class SharedVerbsMixin:
 
         lf = self._lazy
         if order_by:
-            lf = lf.sort(order_by)
+            lf = lf.sort(order_by, maintain_order=True)
 
         if check_uniqueness and order_by:
             key_cols = grps + list(order_by)
@@ -1712,7 +1925,18 @@ class SharedVerbsMixin:
                 )
 
         seq_expr = (pl.int_range(pl.len()).over(grps) + start_at).cast(pl.Int64).alias(target)
-        return self._with_lazy(lf.with_columns(seq_expr))
+        from fleet.core.lineage import append_verb_node
+
+        params = {"target": target, "order_by": order_by, "by": by}
+        if start_at != 1:
+            params["start_at"] = start_at
+        return append_verb_node(
+            self._with_lazy(lf.with_columns(seq_expr)),
+            target,
+            "seq",
+            [*grps, *(order_by or [])],
+            params,
+        )
 
     # ------------------------------------------------------------------ #
     # validate                                                             #
@@ -2064,7 +2288,7 @@ class SharedVerbsMixin:
 
     def select(
         self,
-        columns: list[str] | None = None,
+        columns: str | list[str] | None = None,
         *,
         spec: str | Path | None = None,
         dataset: str | None = None,
@@ -2090,15 +2314,22 @@ class SharedVerbsMixin:
         explicit selection — columns whose names match are removed.  This
         enforces the convention that ``_``-prefixed columns are scratch
         variables.  Set to ``None`` to disable (e.g. during debugging).
+        A scratch name listed in *columns* is removed too, unless
+        ``drop_pattern=None``.
 
         Args:
-            columns: Explicit list of columns to keep (in order).
+            columns: Explicit list of columns to keep (in order).  A single
+                string is one column name.
             spec: Path to a ``define.yaml`` file.
             dataset: Dataset name within the spec.
             drop_pattern: Regex for columns to auto-drop.
 
         Returns:
             Self: A fresh namespace continuing from the selected plan.
+
+        Raises:
+            DerivationError: When a name in *columns* is not in the frame
+                (with a did-you-mean suggestion).
 
         Examples:
             Keep only spec columns::
@@ -2111,6 +2342,10 @@ class SharedVerbsMixin:
         """
         schema = self._lazy.collect_schema()
         names = schema.names()
+
+        if spec is None and columns is not None:
+            columns = [columns] if isinstance(columns, str) else list(columns)
+            require_columns("select(columns=...)", columns, names, where="the frame")
 
         # Step 1: drop scratch variables matching the pattern
         if drop_pattern is not None:
@@ -2263,7 +2498,8 @@ class SharedVerbsMixin:
         Raises:
             SpecError: On unknown algorithms (strict mode), invalid or
                 misspelled derivation fields, column overwrites, unknown
-                ``fleet_spec_version``, or any error raised while executing
+                ``fleet_spec_version``, a ``merge`` block that does not
+                give its variable, or any error raised while executing
                 a variable — always naming file, dataset, and variable.
             ValueError: When both *only* and *omit* are given, or when
                 *dataset* is required/unknown.
@@ -2333,7 +2569,23 @@ class SharedVerbsMixin:
             if codelists:
                 ns = copy.copy(ns)
                 ns._spec_codelists = codelists
+        # Row steps run after the variable they are anchored on (ADR-0034).
+        all_names: list[str] = []
+        row_steps: list[dict[str, Any]] = []
+        if spec.datasets is not None:
+            ds_entry = spec.select(dataset)
+            all_names = [v.name for v in ds_entry.variables]
+            row_steps = list(ds_entry.row_steps)
+            _check_row_steps(row_steps, all_names, f"{path} → dataset {ds_name}")
+        position = {n: i for i, n in enumerate(all_names)}
+
+        def _flush(ns: Any, before: int) -> Any:
+            while row_steps and position.get(row_steps[0].get("after"), -1) < before:
+                ns = _run_row_step(ns, row_steps.pop(0), f"{path} → dataset {ds_name}")
+            return ns
+
         for var_name, drv, codelist in raw_vars:
+            ns = _flush(ns, position.get(var_name, len(all_names)))
             if only is not None and var_name not in only:
                 continue
             if omit is not None and var_name in omit:
@@ -2400,7 +2652,16 @@ class SharedVerbsMixin:
                 raise
             except Exception as err:
                 raise SpecError(f"{context}: {type(err).__name__}: {err}") from err
+            if algo.name == "merge" and var_name not in ns._lazy.collect_schema().names():
+                raise SpecError(
+                    f"{context}: the merge block does not give the column '{var_name}'. "
+                    f"Add it to keep:, or check that dataset '{drv.get('dataset')}' has it."
+                )
 
+        ns = _flush(ns, len(all_names) + 1)
+        if spec.datasets is not None:
+            ns = copy.copy(ns)
+            ns._spec_source = (spec, ds_name)
         return ns
 
     # ------------------------------------------------------------------ #
@@ -2427,8 +2688,17 @@ class SharedVerbsMixin:
         not spec-expressible (or whose arguments cannot be serialised,
         e.g. inline Polars expressions) emit an ``algorithm: derivation``
         stub with a ``callable:`` placeholder and a ``# TODO`` comment carrying the verb name and
-        sources.  Auto-generated by-product columns (e.g. ``--DTF``
-        imputation flags) are listed without a derivation.
+        sources, and a warning names them.  A column that a verb added
+        with no lineage node (``merge``) also gets a stub.  Auto-generated
+        by-product columns (e.g. ``--DTF`` imputation flags) are listed
+        without a derivation.
+
+        A verb that removes or adds rows (``whereclauses``, ``nodup`` with
+        ``keep=``, ``derive_param``) goes to the dataset key
+        ``row_steps:``, in pipeline order, each step anchored ``after:``
+        the variable it follows (ADR-0034).  A step a define.yaml cannot
+        hold is written as ``algorithm: TODO`` and ``from_spec`` refuses
+        it until it is edited.
 
         The output validates against Fleet's define-spec JSON schema;
         study-level fields are placeholders to review before use.
@@ -2447,9 +2717,9 @@ class SharedVerbsMixin:
                 ``predecessor: '<DATASET>.<SOURCE>'``.  The emitted YAML
                 stays the explicit, reviewable source of truth; Fleet
                 never infers Predecessor at Define-XML generation time.
-                Columns brought in by ``merge()`` leave no lineage and
-                are labeled like carry-throughs — when the pipeline
-                contains a join, a review note is added to the header.
+                Only a column present at the start of the chain can be a
+                Predecessor: a column a verb added with no lineage (for
+                example ``merge()``) gets a TODO stub and the warning.
                 ADaM pipelines only.
 
         Returns:
@@ -2494,6 +2764,10 @@ class SharedVerbsMixin:
         schema = self._lazy.collect_schema()
         derived = {n.name: n for n in latest_lineage_of(self)}
         name_pattern = re.compile(r"^[A-Z_][A-Z0-9_]{0,7}$")
+        # The columns at the start of the chain: only they can be a carry-through
+        # or a Predecessor; a column a verb added with no lineage node is a stub.
+        root_lazy = getattr(self, "_root_lazy", None)
+        root_cols = set(root_lazy.collect_schema().names()) if root_lazy is not None else None
 
         entries: list[tuple[dict[str, Any], str | None]] = []
         for col in schema.names():
@@ -2506,7 +2780,14 @@ class SharedVerbsMixin:
                 "type": _dtype_to_spec_type(schema.get(col)),
             }
             comment: str | None = None
-            if node is not None:
+            if node is None and root_cols is not None and col not in root_cols:
+                comment = (
+                    f"TODO: column {col} was added by a verb that records no lineage "
+                    "(for example merge) — replace this stub with a registered "
+                    "derivation (algorithm: derivation, callable: <name>)."
+                )
+                entry["derivation"] = {"algorithm": "derivation", "callable": f"TODO_{col}"}
+            elif node is not None:
                 status, block, meta = spec_registry.derivation_from_lineage(standard, node)
                 if meta.get("label"):
                     entry["label"] = str(meta["label"])[:40]
@@ -2525,6 +2806,7 @@ class SharedVerbsMixin:
                         and block.get("value") is None
                         and not block.get("ct")
                         and name_pattern.match(source)
+                        and (root_cols is None or source in root_cols)
                     ):
                         entry["origin"] = "Predecessor"
                         entry["predecessor"] = f"{pred_ds}.{source}"
@@ -2556,14 +2838,24 @@ class SharedVerbsMixin:
         stubs = [entry["name"] for entry, comment in entries if comment]
         if stubs:
             warnings.warn(
-                f"to_spec_yaml: {len(stubs)} variable(s) have no reviewer-facing "
-                f"derivation text for Define-XML ({', '.join(stubs)}) — add a "
-                "`comment:` in the spec or wrap the logic in a @derivation callable.",
+                f"to_spec_yaml: {len(stubs)} variable(s) are TODO stubs "
+                f"({', '.join(stubs)}): from_spec fails on them until you replace each "
+                "callable: TODO_<name> with a registered @derivation, and Define-XML has "
+                "no method text for them.",
                 stacklevel=2,
             )
 
         var_names = [e["name"] for e, _ in entries]
         keys = [k for k in ("STUDYID", "USUBJID") if k in var_names] or var_names[:1]
+        row_steps = _freeze_row_steps(self, var_names)
+        todo_steps = [st["verb"] for st in row_steps if st["algorithm"] == "TODO"]
+        if todo_steps:
+            warnings.warn(
+                f"to_spec_yaml: {len(todo_steps)} row step(s) cannot be written "
+                f"({', '.join(todo_steps)}): from_spec fails on algorithm: TODO in "
+                "row_steps until you replace each one (ADR-0034).",
+                stacklevel=2,
+            )
 
         study = {
             "id": "STUDY",
@@ -2577,25 +2869,23 @@ class SharedVerbsMixin:
             "standard_version": DEFAULT_IG_VERSIONS[standard],
         }
         head = {"fleet_spec_version": SUPPORTED_SPEC_VERSION, "study": study}
-        ds_head = {
+        ds_head: dict[str, Any] = {
             "name": ds_name,
             "label": ds_name,
             "structure": "One record per observation (review)",
             "keys": keys,
         }
+        if row_steps:
+            ds_head["row_steps"] = row_steps
 
         lines: list[str] = [
             "# Generated by Fleet to_spec_yaml() — review study fields, labels, keys,",
             "# and TODO stubs before use.",
         ]
-        if pred_ds and "JOIN" in self._lazy.explain().upper():
+        if todo_steps:
             lines.append(
-                f"# predecessor={pred_ds!r}: this pipeline merges other datasets, and "
-                "merged-in columns"
-            )
-            lines.append(
-                f"# are indistinguishable from {pred_ds} carry-throughs — review each "
-                "predecessor: entry."
+                "# TODO: row_steps holds algorithm: TODO for "
+                f"{', '.join(todo_steps)} — write each step before from_spec runs."
             )
         lines += [
             yaml.safe_dump(head, sort_keys=False, allow_unicode=True).rstrip(),
@@ -2670,6 +2960,11 @@ class SharedVerbsMixin:
                 ``"first"``, ``"last"``, or ``None`` (report only, no removal).
             descending: Sort direction(s) for *sort_by*.  A single ``bool``
                 applies to all columns; a list must match *sort_by* length.
+                A missing value is the lowest value, as SAS: it sorts
+                first when ascending and last when descending.  Records
+                that tie on *sort_by* keep their input order, as PROC SORT
+                EQUALS, so ``keep="last"`` takes the last input record of a
+                tie.
 
         Returns:
             Self: A fresh namespace wrapping the (optionally deduplicated)
@@ -2679,6 +2974,10 @@ class SharedVerbsMixin:
         Raises:
             DerivationError: If ``keep`` is set but ``sort_by`` is not
                 provided, or ``keep`` is not one of the accepted values.
+
+        References:
+            SAS PROC SORT with EQUALS and NODUPKEY; ADR-0023 for the place
+            of a missing value.
 
         Examples:
             Report-only mode (audit duplicates without removing)::
@@ -2697,7 +2996,7 @@ class SharedVerbsMixin:
                     .nodup(
                         subset=["USUBJID", "AEDECOD"],
                         sort_by=["ASTDT", "ASEQ"],
-                        keep="last",
+                        keep="first",
                         descending=True,
                     )
                     .to_frame()
@@ -2720,7 +3019,7 @@ class SharedVerbsMixin:
             logger.info("[NODUP] No duplicates found (subset: %s)", ", ".join(subset))
             new = self._materialise_then(df)
             new._nodup_report = dup_rows
-            return new
+            return self._record_nodup(new, subset, sort_by, keep, descending)
 
         # Summarise duplicate groups
         dup_groups = (
@@ -2751,8 +3050,9 @@ class SharedVerbsMixin:
             new._nodup_report = dup_rows
             return new
 
-        # Sort then deduplicate
-        df = df.sort(sort_by, descending=descending)
+        # Sort then deduplicate: a missing value is lowest, as SAS (ADR-0023); ties keep input order.
+        flags = list(descending) if isinstance(descending, list) else [descending] * len(sort_by)
+        df = df.sort(sort_by, descending=flags, nulls_last=flags, maintain_order=True)
         df = df.unique(subset=subset, keep=keep, maintain_order=True)
 
         logger.info(
@@ -2764,4 +3064,22 @@ class SharedVerbsMixin:
         logger.info("[NODUP] Result: %d rows (removed %d)", len(df), n_dup - n_groups)
         new = self._materialise_then(df)
         new._nodup_report = dup_rows
-        return new
+        return self._record_nodup(new, subset, sort_by, keep, descending)
+
+    @staticmethod
+    def _record_nodup(
+        new: Any,
+        subset: list[str],
+        sort_by: list[str] | None,
+        keep: str | None,
+        descending: bool | list[bool],
+    ) -> Any:
+        """Record a removing ``nodup`` call as a row step (ADR-0034)."""
+        if keep is None:
+            return new
+        from fleet.core.lineage import record_row_step
+
+        params: dict[str, Any] = {"subset": subset, "sort_by": sort_by, "keep": keep}
+        if descending:
+            params["descending"] = descending
+        return record_row_step(new, "nodup", params)

@@ -40,16 +40,19 @@ datasets:
     inputs:
       - name: DM
         type: dataset
+      - name: EX
+        type: dataset
     variables:
       - name: STUDYID
         label: Study Identifier
         type: text
         length: 12
         mandatory: true
-        origin: Assigned
+        origin: Predecessor
+        predecessor: DM.STUDYID
         derivation:
           algorithm: assign
-          value: "CDISCPILOT01"
+          source: STUDYID
 
       - name: USUBJID
         label: Unique Subject Identifier
@@ -204,8 +207,9 @@ datasets:
         mandatory: false
         origin: Derived
         derivation:
-          algorithm: derivation
-          expression: RFSTDTC
+          algorithm: first_date
+          from_dataset: EX
+          date_col: EXSTDTC
 
       - name: TRTEDT
         label: Date of Last Exposure to Treatment
@@ -213,8 +217,9 @@ datasets:
         mandatory: false
         origin: Derived
         derivation:
-          algorithm: derivation
-          expression: RFENDTC
+          algorithm: last_date
+          from_dataset: EX
+          date_col: EXENDTC
 
       - name: RFSTDTC
         label: Subject Reference Start Date/Time
@@ -292,10 +297,11 @@ datasets:
         type: text
         length: 40
         mandatory: true
-        origin: Derived
+        origin: Predecessor
+        predecessor: VS.USUBJID
         derivation:
           algorithm: assign
-          source: patient_number
+          source: USUBJID
 
       - name: PARAMCD
         label: Parameter Code
@@ -431,35 +437,40 @@ datasets:
         type: text
         length: 20
         mandatory: true
-        origin: Collected
+        origin: Predecessor
+        predecessor: ADSL.SUBJID
 
       - name: SITEID
         label: Study Site Identifier
         type: text
         length: 20
         mandatory: true
-        origin: Collected
+        origin: Predecessor
+        predecessor: ADSL.SITEID
 
       - name: AGE
         label: Age
         type: integer
         length: 2
         mandatory: true
-        origin: Collected
+        origin: Predecessor
+        predecessor: ADSL.AGE
 
       - name: AGEU
         label: Age Units
         type: text
         length: 10
         mandatory: true
-        origin: Assigned
+        origin: Predecessor
+        predecessor: ADSL.AGEU
 
       - name: SEX
         label: Sex
         type: text
         length: 2
         mandatory: true
-        origin: Collected
+        origin: Predecessor
+        predecessor: ADSL.SEX
         codelist: C66731
 
       - name: RACE
@@ -467,56 +478,64 @@ datasets:
         type: text
         length: 60
         mandatory: false
-        origin: Collected
+        origin: Predecessor
+        predecessor: ADSL.RACE
 
       - name: ETHNIC
         label: Ethnicity
         type: text
         length: 60
         mandatory: false
-        origin: Collected
+        origin: Predecessor
+        predecessor: ADSL.ETHNIC
 
       - name: ARMCD
         label: Planned Arm Code
         type: text
         length: 20
         mandatory: true
-        origin: Protocol
+        origin: Predecessor
+        predecessor: ADSL.ARMCD
 
       - name: ARM
         label: Description of Planned Arm
         type: text
         length: 200
         mandatory: true
-        origin: Protocol
+        origin: Predecessor
+        predecessor: ADSL.ARM
 
       - name: ACTARMCD
         label: Actual Arm Code
         type: text
         length: 20
         mandatory: true
-        origin: Assigned
+        origin: Predecessor
+        predecessor: ADSL.ACTARMCD
 
       - name: ACTARM
         label: Description of Actual Arm
         type: text
         length: 200
         mandatory: true
-        origin: Assigned
+        origin: Predecessor
+        predecessor: ADSL.ACTARM
 
       - name: TRT01P
         label: Planned Treatment for Period 01
         type: text
         length: 200
         mandatory: false
-        origin: Protocol
+        origin: Predecessor
+        predecessor: ADSL.TRT01P
 
       - name: TRT01A
         label: Actual Treatment for Period 01
         type: text
         length: 200
         mandatory: false
-        origin: Assigned
+        origin: Predecessor
+        predecessor: ADSL.TRT01A
 
       - name: TRTSDT
         label: Date of First Exposure to Treatment
@@ -536,19 +555,22 @@ datasets:
         label: Subject Reference Start Date/Time
         type: datetime
         mandatory: false
-        origin: Collected
+        origin: Predecessor
+        predecessor: ADSL.RFSTDTC
 
       - name: RFENDTC
         label: Subject Reference End Date/Time
         type: datetime
         mandatory: false
-        origin: Collected
+        origin: Predecessor
+        predecessor: ADSL.RFENDTC
 
       - name: RFICDTC
         label: Date/Time of Informed Consent
         type: datetime
         mandatory: false
-        origin: Collected
+        origin: Predecessor
+        predecessor: ADSL.RFICDTC
 
       - name: SAFFL
         label: Safety Population Flag
@@ -594,7 +616,8 @@ datasets:
         type: text
         length: 40
         mandatory: true
-        origin: Derived
+        origin: Predecessor
+        predecessor: AE.USUBJID
         derivation:
           algorithm: assign
           source: USUBJID
@@ -715,7 +738,7 @@ datasets:
           start: TRTSDT
           depends_on: [ASTDT]
 
-      # TRTEMFL, ANL01FL, ASEQ use OCCDS verbs not expressible in from_spec;
+      # ANL01FL and ASEQ use OCCDS verbs not expressible in from_spec;
       # derived inline in the pipeline after the spec phase.
       - name: TRTEMFL
         label: Treatment Emergent Analysis Flag
@@ -723,9 +746,14 @@ datasets:
         length: 2
         mandatory: false
         origin: Derived
-        comment: >-
-          Y if AESTDTC is on or after TRTSDT and on or before TRTEDT. An AE with
-          no start date is Y unless AEENDTC is before TRTSDT (end window 0 days).
+        derivation:
+          algorithm: occds.treatment_emergent
+          start_date: ASTDT
+          end_date: AENDT
+          trtsdt: TRTSDT
+          trtedt: TRTEDT
+          end_window: 0
+          depends_on: [ASTDT, AENDT]
 
       - name: ANL01FL
         label: Analysis Flag 01 (worst severity)
@@ -765,21 +793,24 @@ datasets:
         type: text
         length: 200
         mandatory: false
-        origin: Protocol
+        origin: Predecessor
+        predecessor: ADSL.TRT01P
 
       - name: AGE
         label: Age
         type: integer
         length: 2
         mandatory: true
-        origin: Collected
+        origin: Predecessor
+        predecessor: ADSL.AGE
 
       - name: SEX
         label: Sex
         type: text
         length: 2
         mandatory: true
-        origin: Collected
+        origin: Predecessor
+        predecessor: ADSL.SEX
 
       - name: SAFFL
         label: Safety Population Flag
@@ -911,14 +942,16 @@ datasets:
         type: text
         length: 200
         mandatory: false
-        origin: Protocol
+        origin: Predecessor
+        predecessor: ADSL.TRT01P
 
       - name: AGE
         label: Age
         type: integer
         length: 2
         mandatory: true
-        origin: Collected
+        origin: Predecessor
+        predecessor: ADSL.AGE
 
       - name: SAFFL
         label: Safety Population Flag

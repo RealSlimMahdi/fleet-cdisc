@@ -9,7 +9,7 @@ ADDV) data.  Covers the standard disposition table family:
 * ``t_enrollment``   → ENT01  (enrollment by site / region / investigator)
 * ``t_deviations``   → PDT01  (major protocol deviations by DVDECOD)
 
-All tables emit a long-format {cards}-compatible ARD.
+All tables emit an ARD in the {cards} long layout.
 """
 
 from __future__ import annotations
@@ -22,6 +22,8 @@ from pydantic import Field
 from ._ard import prepare_frame, restrict_to_population, summarize_ard, summarize_spec
 from ._builder import BuilderVerbsMixin
 from ._specs import (
+    ADSL_ARM_FALLBACK,
+    MissingLevel,
     OverallStat,
     Row,
     SummarySpecBase,
@@ -29,41 +31,83 @@ from ._specs import (
 )
 
 
-class DSDispositionSpec(SummarySpecBase):
-    """Spec for subject disposition (DST01: EOSSTT → DCSREAS)."""
+class _ADSLArmSpec(SummarySpecBase):
+    """A subject-level DS table: the default arm is the ADSL arm.
 
-    context: ClassVar[str] = "t_ds_disposition"
+    ``TRT01A``, else ``TRT01P`` when ADSL has no ``TRT01A``.
 
-    rows: list[Row] = Field(default_factory=lambda: [Row(field="EOSSTT"), Row(field="DCSREAS")])
-    required_columns: list[str] = Field(
-        default_factory=lambda: ["USUBJID", "TRTA", "EOSSTT", "DCSREAS"]
+    References:
+        ADaMIG 1.3, section 3.1.4: ADSL carries the arm as TRTxxP and
+        TRTxxA; TRTA and TRTP are BDS and OCCDS variables.  ADR-0046.
+    """
+
+    arm_fallback: ClassVar[tuple[str, ...]] = ADSL_ARM_FALLBACK
+
+    columns: list[str] = Field(
+        default_factory=lambda: ["TRT01A"],
+        description=(
+            "Column-grouping variable: the ADSL arm.  When not set, ``TRT01A``, else ``TRT01P``."
+        ),
     )
 
 
-class DSDeathsSpec(SummarySpecBase):
-    """Spec for deaths and primary cause of death (DTHT01)."""
+class DSDispositionSpec(_ADSLArmSpec):
+    """Spec for subject disposition (DST01: EOSSTT → DCSREAS).
+
+    A null ``EOSSTT`` counts in a ``"Missing"`` row.  A null
+    ``DCSREAS`` (a completer) makes no row.  The default arm is
+    ``TRT01A``, else ``TRT01P`` (ADR-0046).
+    """
+
+    context: ClassVar[str] = "t_ds_disposition"
+
+    missing: MissingLevel | None = Field(
+        default_factory=lambda: MissingLevel(columns=["EOSSTT"]),
+    )
+    rows: list[Row] = Field(default_factory=lambda: [Row(field="EOSSTT"), Row(field="DCSREAS")])
+    required_columns: list[str] = Field(
+        default_factory=lambda: ["USUBJID", "TRT01A", "EOSSTT", "DCSREAS"]
+    )
+
+
+class DSDeathsSpec(_ADSLArmSpec):
+    """Spec for deaths and primary cause of death (DTHT01).
+
+    The default arm is ``TRT01A``, else ``TRT01P`` (ADR-0046).
+    """
 
     context: ClassVar[str] = "t_ds_deaths"
 
     rows: list[Row] = Field(default_factory=lambda: [Row(field="DTHCAT")])
     required_columns: list[str] = Field(
-        default_factory=lambda: ["USUBJID", "TRTA", "DTHFL", "DTHCAT"]
+        default_factory=lambda: ["USUBJID", "TRT01A", "DTHFL", "DTHCAT"]
     )
 
 
-class DSEnrollmentSpec(SummarySpecBase):
-    """Spec for enrollment by site (ENT01: REGION1 → COUNTRY → SITEID)."""
+class DSEnrollmentSpec(_ADSLArmSpec):
+    """Spec for enrollment by site (ENT01: REGION1 → COUNTRY → SITEID).
+
+    The default arm is ``TRT01A``, else ``TRT01P`` (ADR-0046).
+    """
 
     context: ClassVar[str] = "t_ds_enrollment"
 
+    missing: MissingLevel | None = Field(
+        default_factory=lambda: MissingLevel(columns=["SITEID"]),
+    )
+
     rows: list[Row] = Field(default_factory=lambda: [Row(field="SITEID")])
-    required_columns: list[str] = Field(default_factory=lambda: ["USUBJID", "TRTA", "SITEID"])
+    required_columns: list[str] = Field(default_factory=lambda: ["USUBJID", "TRT01A", "SITEID"])
 
 
 class DSDeviationsSpec(SummarySpecBase):
     """Spec for major protocol deviations (PDT01: DVDECOD)."""
 
     context: ClassVar[str] = "t_ds_deviations"
+
+    missing: MissingLevel | None = Field(
+        default_factory=lambda: MissingLevel(columns=["DVDECOD"]),
+    )
 
     rows: list[Row] = Field(default_factory=lambda: [Row(field="DVDECOD")])
     required_columns: list[str] = Field(default_factory=lambda: ["USUBJID", "TRTA", "DVDECOD"])
@@ -74,8 +118,8 @@ class DSTLGNamespace(BuilderVerbsMixin):
 
     Accessed as ``df.tlg.ds``.  Covers the four disposition
     tables — disposition (DST01), deaths (DTHT01), enrollment (ENT01),
-    and protocol deviations (PDT01).  Every method emits a long-format
-    {cards}-compatible ARD and accepts an inline spec override.
+    and protocol deviations (PDT01).  Every method emits an ARD in the
+    {cards} long layout and accepts an inline spec override.
 
     Args:
         df: A Polars DataFrame containing ADaM ADSL (or ADDV for
@@ -115,12 +159,12 @@ class DSTLGNamespace(BuilderVerbsMixin):
             spec: Optional ``DSDispositionSpec`` override.
 
         Returns:
-            pl.DataFrame: A {cards}-compatible disposition ARD.
+            pl.DataFrame: A disposition ARD in the {cards} long layout.
 
         Examples:
-            Zero-config disposition table::
+            Zero-config disposition table, by TRT01A::
 
-                ard = adsl.tlg.ds.t_summary(groupby="TRTA", adsl=adsl)
+                ard = adsl.tlg.ds.t_summary()
         """
         return summarize_spec(
             self._df,
@@ -158,15 +202,15 @@ class DSTLGNamespace(BuilderVerbsMixin):
             spec: Optional ``DSDeathsSpec`` override.
 
         Returns:
-            pl.DataFrame: A {cards}-compatible deaths ARD.
+            pl.DataFrame: A deaths ARD in the {cards} long layout.
 
         Examples:
-            Death counts and causes::
+            Death counts and causes, by TRT01A::
 
-                ard = adsl.tlg.ds.t_deaths(groupby="TRTA", adsl=adsl)
+                ard = adsl.tlg.ds.t_deaths()
         """
         spec = spec or DSDeathsSpec()
-        group_col = groupby or (spec.columns[0] if getattr(spec, "columns", None) else "TRTA")
+        group_col = groupby or spec.default_group_col(self._df.columns)
         spec.validate_dataframe(self._df, group_col=group_col)
         population = adsl if adsl is not None else self._df
         # The dataset filter must bite before deaths are identified, so the
@@ -193,6 +237,8 @@ class DSTLGNamespace(BuilderVerbsMixin):
             value_col=spec.value_col,
             label_col=spec.label_col,
             decimals=spec.decimals,
+            missing=spec.missing,
+            adsl_group_col=spec.adsl_group_col,
         )
 
         death_ids = deaths["USUBJID"].unique().to_list()
@@ -224,6 +270,8 @@ class DSTLGNamespace(BuilderVerbsMixin):
             value_col=spec.value_col,
             label_col=spec.label_col,
             decimals=spec.decimals,
+            missing=spec.missing,
+            adsl_group_col=spec.adsl_group_col,
         )
         # The headline block already carries the population N rows; drop
         # the cause block's deaths-denominator N rows to avoid two
@@ -254,12 +302,12 @@ class DSTLGNamespace(BuilderVerbsMixin):
             spec: Optional ``DSEnrollmentSpec`` override.
 
         Returns:
-            pl.DataFrame: A {cards}-compatible enrollment ARD.
+            pl.DataFrame: An enrollment ARD in the {cards} long layout.
 
         Examples:
-            Enrollment counts per site::
+            Enrollment counts per site, by TRT01A::
 
-                ard = adsl.tlg.ds.t_enrollment(groupby="TRTA", adsl=adsl)
+                ard = adsl.tlg.ds.t_enrollment()
         """
         return summarize_spec(
             self._df,
@@ -293,12 +341,13 @@ class DSTLGNamespace(BuilderVerbsMixin):
             spec: Optional ``DSDeviationsSpec`` override.
 
         Returns:
-            pl.DataFrame: A {cards}-compatible deviations ARD.
+            pl.DataFrame: A deviations ARD in the {cards} long layout.
 
         Examples:
             Deviation counts over ADDV::
 
-                ard = addv.tlg.ds.t_deviations(groupby="TRTA", adsl=adsl)
+                spec = DSDeviationsSpec(adsl_group_col="TRT01A")
+                ard = addv.tlg.ds.t_deviations(spec=spec, adsl=adsl)
         """
         return summarize_spec(self._df, spec or DSDeviationsSpec(), groupby=groupby, adsl=adsl)
 
@@ -309,11 +358,14 @@ class DSTLGNamespace(BuilderVerbsMixin):
     def check(
         self,
         *,
+        groupby: str | None = None,
         spec: TLGSpec | None = None,
     ) -> list[str]:
         """Run pre-validation diagnostics without computing.
 
         Args:
+            groupby: Treatment arm column.  ``None`` checks the arm that
+                the table takes without ``groupby``.
             spec: Optional spec to check against.  Defaults to
                 ``DSDispositionSpec``.
 
@@ -326,4 +378,4 @@ class DSTLGNamespace(BuilderVerbsMixin):
                 report = adsl.tlg.ds.check()
         """
         spec = spec or DSDispositionSpec()
-        return spec.check(self._df)
+        return spec.check(self._df, group_col=groupby)

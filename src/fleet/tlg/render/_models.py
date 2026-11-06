@@ -18,10 +18,10 @@ Display contract (derived from NEST AET01 / pharma conventions)
     │ Subjects with any AE │  xx (xx.x%)  │  xx (xx.x%)  │  ...    │  ← header row
     │ ≥1 SAE               │  xx (xx.x%)  │  ... ...     │  ...    │  ← header row
     ├──────────────────────┼──────────────┼──────────────┼─────────┤
-    │ SOC Label            │              │              │         │  ← group2 stub
+    │ SOC Label            │  xx (xx.x%)  │  xx (xx.x%)  │  ...    │  ← group2 stub
     │   PT Label           │  xx (xx.x%)  │  xx (xx.x%)  │  ...    │  ← data row
     │   PT Label           │  xx (xx.x%)  │  ...         │  ...    │
-    │ SOC Label            │              │              │         │
+    │ SOC Label            │  xx (xx.x%)  │  ...         │  ...    │
     │   PT Label           │  xx (xx.x%)  │  ...         │  ...    │
     ├──────────────────────┴──────────────┴──────────────┴─────────┤
     │  Footnote 1                                                  │
@@ -56,7 +56,9 @@ Display contract (derived from NEST AET01 / pharma conventions)
 **Row types and indentation:**
 
   - ``header``:  ``variable == ""`` — no indent, bold, optional separator above hierarchy
-  - ``group``:   parent stub row — level-0 indent, bold (SOC or PARAMCD)
+  - ``group``:   parent stub row — level-0 indent, bold (SOC or PARAMCD);
+    a count parent (SOC) carries its own n (%) cells, a parent of
+    continuous rows (PARAMCD) stays blank
   - ``section``: variable-label heading above a flat block — level-0 indent, bold
   - ``data``:    level row under a group/section — level-1 indent
   - ``flat``:    level row without a section — level-0 indent, not bold
@@ -66,6 +68,10 @@ Display contract (derived from NEST AET01 / pharma conventions)
 
   - Count cells: ``n`` and ``pct`` merge into ``"n (xx.x%)"``; a nonzero
     percentage that would display as zero renders ``"n (<0.1%)"``.
+    With ``n_events`` the cell is ``"n (xx.x%) E"`` and a footnote
+    explains the form.  With a per-cell denominator (``N`` on a level
+    row, as LBT04) the cell is ``"n/N (xx.x%)"``, and ``"n/N"`` when
+    n or N is 0.
   - Continuous cells (any stat beyond N/n/pct/n_events): the level
     becomes a stub row and every statistic gets its own display row
     (label from ``stat_label``, order following the ARD) — the
@@ -74,7 +80,8 @@ Display contract (derived from NEST AET01 / pharma conventions)
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from collections.abc import Callable
+from dataclasses import dataclass, field, replace
 
 import polars as pl
 
@@ -248,6 +255,9 @@ def _pct_display(pct_str: str, pct_raw: float | None) -> str:
 #: Count-type stat names — everything else is a continuous statistic.
 _COUNT_STAT_NAMES = frozenset({"N", "n", "pct", "n_events"})
 
+#: Footnote added when count cells carry an event count.
+EVENTS_FOOTNOTE = "n (%) E: n = number of subjects, E = number of events."
+
 #: Display-row identity: (group2, group2_level, variable, variable_level).
 _RowKey = tuple[str, str, str, str]
 
@@ -281,6 +291,24 @@ def _collect_cell_stats(
     return stat_order, stat_labels, per_arm
 
 
+def _count_cell(stats: dict[str, tuple[str, float | None]]) -> str:
+    """One count cell: ``n (%)``, ``n/N (%)``, plus the event count."""
+    n_str = stats.get("n", ("", None))[0].strip()
+    pct_str = stats.get("pct", ("", None))[0]
+    if "N" in stats:
+        # Per-cell denominator (LBT04): the reader must see N.
+        den_str = stats["N"][0].strip()
+        if n_str in ("", "0") or den_str in ("", "0"):
+            return f"{n_str or '0'}/{den_str or '0'}"
+        merged = _merge_n_pct(den_str, pct_str)
+        return f"{n_str}/{merged}"
+    cell = _merge_n_pct(n_str, pct_str) if "pct" in stats else n_str
+    events = stats.get("n_events", ("", None))[0].strip()
+    if events and cell and cell != "0":
+        cell = f"{cell} {events}"
+    return cell
+
+
 def _merged_cells(
     arm_order: list[str],
     per_arm: dict[str, dict[str, tuple[str, float | None]]],
@@ -291,10 +319,8 @@ def _merged_cells(
         stats = per_arm.get(arm, {})
         if not stats:
             cells[arm] = ""
-        elif "n" in stats and "pct" in stats:
-            cells[arm] = _merge_n_pct(stats["n"][0], stats["pct"][0])
         elif "n" in stats:
-            cells[arm] = stats["n"][0]
+            cells[arm] = _count_cell(stats)
         elif "pct" in stats:
             cells[arm] = _pct_display(*stats["pct"])
         else:
@@ -404,17 +430,21 @@ def ard_to_table_model(
        under the level stub (the universal pharma layout).
 
     Args:
-        ard: A {cards}-compatible ARD DataFrame.
+        ard: An ARD DataFrame in the {cards} long layout.
         metadata: Optional render metadata.  If ``None``, a blank
             ``RenderMetadata`` is used.
 
     Returns:
         TableModel: A display-ready table model suitable for any renderer.
 
+    References:
+        ADR-0039 (SOC row count, ``n (%) E`` and ``n/N (%)`` cells).
+
     Examples:
         Shape an ARD for rendering::
 
-            ard = adae.tlg.ae.t_summary(groupby="TRTA", adsl=adsl)
+            spec = AESummarySpec(adsl_group_col="TRT01A")
+            ard = adae.tlg.ae.t_summary(spec=spec, adsl=adsl)
             model = ard_to_table_model(ard, RenderMetadata(title="Table 14.3.1.1"))
     """
     meta = metadata or RenderMetadata()
@@ -466,6 +496,16 @@ def ard_to_table_model(
     variable_set = {k[2] for k in row_keys}
     parent_vars = {k[0] for k in row_keys if k[0]}
     explicit_parents = parent_vars & variable_set
+    # A parent of continuous rows (PARAMCD) keeps a blank stub; a count
+    # parent (SOC) prints its own subject count.
+    continuous_parents = set(
+        data_rows.filter(~pl.col("stat_name").is_in(list(_COUNT_STAT_NAMES)))
+        .select(pl.col("group2").fill_null(""), pl.col("group2_level").fill_null(""))
+        .iter_rows()
+    )
+    stat_names = set(data_rows["stat_name"].unique().to_list())
+    if {"n", "n_events"} <= stat_names and EVENTS_FOOTNOTE not in meta.footnotes:
+        meta = replace(meta, footnotes=[*meta.footnotes, EVENTS_FOOTNOTE])
 
     # Stub column heading: one line per hierarchy level, top level first
     # and each child indented ("System Organ Class" / "  Preferred Term").
@@ -504,7 +544,7 @@ def ard_to_table_model(
             current_synth_parent = None
             row_type, indent, bold = "header", 0, False
         elif variable in explicit_parents and not g2:
-            # Parent stub row (SOC / PARAMCD): label only, no cells.
+            # Parent stub row: SOC prints its count, PARAMCD stays blank.
             current_section = None
             current_synth_parent = None
             table_rows.append(
@@ -512,7 +552,9 @@ def ard_to_table_model(
                     label=variable_level,
                     row_type="group",
                     indent=0,
-                    cells=dict(empty_cells),
+                    cells=dict(empty_cells)
+                    if (variable, variable_level) in continuous_parents
+                    else _merged_cells(arm_order, per_arm),
                     bold=True,
                     variable=variable,
                 )
@@ -602,67 +644,135 @@ def ard_to_table_model(
 
 
 def _is_stub_only(row: TableRow) -> bool:
-    """Whether a row carries no cell values (pure stub / heading row)."""
-    return all(v == "" for v in row.cells.values())
+    """Whether a row is a stub or heading that must not end a page.
+
+    A group or section row is a stub even when it carries a SOC count.
+    """
+    return row.row_type in ("group", "section") or all(v == "" for v in row.cells.values())
 
 
-def _chunk_rows(rows: list[TableRow], rows_per_page: int) -> list[list[TableRow]]:
-    """Split *rows* into chunks, never orphaning a stub row at a page end."""
-    chunks: list[list[TableRow]] = []
-    chunk: list[TableRow] = []
-    for row in rows:
-        chunk.append(row)
-        if len(chunk) >= rows_per_page:
-            carried: list[TableRow] = []
-            while chunk and _is_stub_only(chunk[-1]):
-                carried.append(chunk.pop())
-            if not chunk:
-                # A page of nothing but stubs — keep it whole rather
-                # than looping forever.
-                chunk = list(reversed(carried))
-                carried = []
-            chunks.append(chunk)
-            chunk = list(reversed(carried))
-    if chunk:
-        chunks.append(chunk)
-    return chunks
+def _is_heading(row: TableRow) -> bool:
+    """Whether a row is a heading that must not end a page."""
+    return row.row_type != "stat" and _is_stub_only(row)
 
 
-def paginate(
+def _ancestors(rows: list[TableRow], idx: int) -> list[TableRow]:
+    """The rows that ``rows[idx]`` belongs to (by indent), top level first."""
+    found: list[TableRow] = []
+    level = rows[idx].indent
+    for row in reversed(rows[:idx]):
+        if level == 0:
+            break
+        if row.indent < level:
+            found.append(row)
+            level = row.indent
+    return found[::-1]
+
+
+def _continued(row: TableRow) -> TableRow:
+    """An empty-cell copy of a parent row, repeated at the top of a page."""
+    return TableRow(
+        label=f"{row.label} (continued)",
+        row_type=row.row_type,
+        indent=row.indent,
+        cells=dict.fromkeys(row.cells, ""),
+        bold=row.bold,
+        variable=row.variable,
+    )
+
+
+def _units(rows: list[TableRow]) -> list[list[int]]:
+    """Row indices grouped into units to keep on one page.
+
+    A run of statistic rows is one unit, and stub-only rows join the
+    unit that follows them, so a heading never ends a page.
+    """
+    units: list[list[int]] = []
+    pending: list[int] = []
+    i = 0
+    while i < len(rows):
+        if _is_heading(rows[i]):
+            pending.append(i)
+            i += 1
+            continue
+        j = i + 1
+        if rows[i].row_type == "stat":
+            while j < len(rows) and rows[j].row_type == "stat" and rows[j].indent == rows[i].indent:
+                j += 1
+        units.append(pending + list(range(i, j)))
+        pending = []
+        i = j
+    if pending:
+        units.append(pending)
+    return units
+
+
+def _chunk_rows(
+    rows: list[TableRow],
+    rows_per_page: int | None,
+    *,
+    row_cost: Callable[[TableRow], float] | None = None,
+    budget: float | None = None,
+) -> list[list[TableRow]]:
+    """Split *rows* into pages by row count and, optionally, by a cost budget.
+
+    A page that starts inside a block repeats the open parent rows as
+    empty-cell ``(continued)`` rows, counted in the page.  A statistic
+    block stays on one page when it fits, and a heading never ends a
+    page.  A unit larger than a page is split row by row.
+    """
+    cost = row_cost or (lambda _row: 0.0)
+    pages: list[list[TableRow]] = []
+    page: list[TableRow] = []
+    used = 0.0
+    real = False  # the page holds at least one row of its own
+
+    def fits(extra_cost: float, extra_rows: int) -> bool:
+        within_rows = rows_per_page is None or len(page) + extra_rows <= rows_per_page
+        within_budget = budget is None or used + extra_cost <= budget
+        return within_rows and within_budget
+
+    def new_page(first: int) -> None:
+        nonlocal page, used, real
+        pages.append(page)
+        page = [_continued(a) for a in _ancestors(rows, first)]
+        used = sum(cost(r) for r in page)
+        real = False
+
+    def add(i: int) -> None:
+        nonlocal used, real
+        page.append(rows[i])
+        used += cost(rows[i])
+        real = True
+
+    for unit in _units(rows):
+        unit_cost = sum(cost(rows[i]) for i in unit)
+        if real and not fits(unit_cost, len(unit)):
+            new_page(unit[0])
+        if fits(unit_cost, len(unit)):
+            for i in unit:
+                add(i)
+            continue
+        for i in unit:
+            if real and not _is_heading(page[-1]) and not fits(cost(rows[i]), 1):
+                new_page(i)
+            add(i)
+    if page:
+        pages.append(page)
+    return pages
+
+
+def _paginate(
     model: TableModel,
     *,
     rows_per_page: int | None = None,
     page_by: str | None = None,
+    row_cost: Callable[[TableRow], float] | None = None,
+    budget: float | None = None,
 ) -> list[TableModel]:
-    """Split a ``TableModel`` into display pages.
-
-    Pagination lives in the model layer so every renderer (HTML, PDF,
-    RTF, PPTX) inherits identical page composition: each page repeats
-    the title, subtitle, column headers, and footnote blocks.
-
-    Args:
-        model: The display-ready table model.
-        rows_per_page: Maximum body rows per page.  A stub-only row
-            (group/section heading) is never left orphaned at the bottom
-            of a page.  ``None`` means no row-count splitting.
-        page_by: ARD variable whose stub rows force a page break (e.g.
-            ``"PARAMCD"`` → one page per parameter).  Defaults to
-            ``model.metadata.page_by``.
-
-    Returns:
-        list[TableModel]: One model per page (a single-element list when
-        no pagination applies).
-
-    Examples:
-        One page per lab parameter, at most 20 rows each::
-
-            from fleet.tlg.render import ard_to_table_model, paginate
-
-            model = ard_to_table_model(ard)
-            pages = paginate(model, rows_per_page=20, page_by="PARAMCD")
-    """
+    """Body of :func:`paginate`, with an optional per-row cost budget (RTF)."""
     effective_page_by = page_by or model.metadata.page_by
-    if rows_per_page is None and not effective_page_by:
+    if rows_per_page is None and budget is None and not effective_page_by:
         return [model]
 
     # ── 1. Split into blocks at page_by stub boundaries ──
@@ -677,15 +787,15 @@ def paginate(
             blocks.append([])
         blocks[-1].append(row)
 
-    # ── 2. Split blocks by row count ──
+    # ── 2. Split blocks by row count and budget ──
     pages_rows: list[list[TableRow]] = []
     for block in blocks:
         if not block:
             continue
-        if rows_per_page is None:
+        if rows_per_page is None and budget is None:
             pages_rows.append(block)
         else:
-            pages_rows.extend(_chunk_rows(block, rows_per_page))
+            pages_rows.extend(_chunk_rows(block, rows_per_page, row_cost=row_cost, budget=budget))
 
     if not pages_rows:
         return [model]
@@ -698,6 +808,51 @@ def paginate(
         )
         for rows in pages_rows
     ]
+
+
+def paginate(
+    model: TableModel,
+    *,
+    rows_per_page: int | None = None,
+    page_by: str | None = None,
+) -> list[TableModel]:
+    """Split a ``TableModel`` into display pages.
+
+    Pagination lives in the model layer so every renderer (HTML, PDF,
+    RTF, PPTX) inherits identical page composition: each page repeats
+    the title, subtitle, column headers, and footnote blocks.  A page
+    that starts inside a block repeats its parent rows (parameter,
+    visit, SOC) with the label suffix ``(continued)`` and empty cells;
+    these rows count in *rows_per_page*.  The statistic rows of one
+    level stay on one page when they fit.
+
+    Args:
+        model: The display-ready table model.
+        rows_per_page: Maximum body rows per page.  A stub-only row
+            (group/section heading) is never left orphaned at the bottom
+            of a page.  ``None`` means no row-count splitting.
+        page_by: ARD variable whose stub rows force a page break (e.g.
+            ``"PARAMCD"`` → one page per parameter).  Defaults to
+            ``model.metadata.page_by``.  The first page of each block
+            has no ``(continued)`` row.
+
+    Returns:
+        list[TableModel]: One model per page (a single-element list when
+        no pagination applies).
+
+    References:
+        ADR-0040 (continued parent rows).  SAS PROC REPORT keeps a block
+        together or repeats its parent on the next page.
+
+    Examples:
+        One page per lab parameter, at most 20 rows each::
+
+            from fleet.tlg.render import ard_to_table_model, paginate
+
+            model = ard_to_table_model(ard)
+            pages = paginate(model, rows_per_page=20, page_by="PARAMCD")
+    """
+    return _paginate(model, rows_per_page=rows_per_page, page_by=page_by)
 
 
 def paginate_listing(
@@ -729,6 +884,37 @@ def paginate_listing(
             data=model.data[i : i + rows_per_page],
         )
         for i in range(0, len(model.data), rows_per_page)
+    ]
+
+
+def _paginate_listing(
+    model: ListingModel,
+    *,
+    rows_per_page: int | None,
+    row_cost: Callable[[dict[str, str]], float],
+    budget: float,
+) -> list[ListingModel]:
+    """Split a listing by row count and a per-row cost budget (RTF).
+
+    Each page holds at least one row, so a row taller than the budget
+    still gets a page.
+    """
+    pages: list[list[dict[str, str]]] = []
+    page: list[dict[str, str]] = []
+    used = 0.0
+    for row in model.data:
+        cost = row_cost(row)
+        full = rows_per_page is not None and len(page) >= rows_per_page
+        if page and (full or used + cost > budget):
+            pages.append(page)
+            page, used = [], 0.0
+        page.append(row)
+        used += cost
+    if page or not pages:
+        pages.append(page)
+    return [
+        ListingModel(metadata=model.metadata, column_labels=model.column_labels, data=data)
+        for data in pages
     ]
 
 

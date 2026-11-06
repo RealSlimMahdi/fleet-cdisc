@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
 # SDTMCHK-MI-001: MISPEC missing
-# Source: sdtmchecks::check_mi_mispec
+# Based on: sdtmchecks::check_mi_mispec. Conditions follow the R function; a difference is stated in Description.
 
 Core:
   Id: SDTMCHK-MI-001
@@ -28,6 +28,7 @@ Outcome:
 
 Description: >-
   MISPEC must be populated for all MI records.
+  Based on sdtmchecks::check_mi_mispec. Same conditions as the R function.
 
 Sensitivity: Record
 Executability: Fully Executable

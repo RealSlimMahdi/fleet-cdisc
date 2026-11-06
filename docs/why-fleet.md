@@ -48,11 +48,10 @@ adbd = (
 
 Fleet doesn't just wrap Polars; it deeply integrates with its lazy evaluation engine. When you chain Fleet verbs (e.g., `.assign()`, `.study_day()`), most accumulate business logic into a single optimized set of Polars expressions rather than computing immediately.
 
-When you call `.to_frame()`, Polars executes the pipeline in one pass, leveraging multithreading and query optimization. A few window/cross-domain verbs (`baseline`, pinned `study_day`) checkpoint internally — but they re-wrap the collected frame and keep the chain going, so `flag → baseline → chg` stays a single pipeline. The namespaces are also registered on `pl.LazyFrame`, so `pl.scan_parquet(...).sdtm` keeps the whole pipeline lazy with predicate pushdown.
+When you call `.to_frame()`, Polars executes the plan, with multithreading and query optimization. Most verbs append to one lazy plan. Some verbs read data before the chain continues: checks (`baseline`, `date` to a DTC variable) and verbs that build or filter records (`whereclauses`, `pick`, `derive_*`, `nodup`). The chain does not break at these verbs, so `flag → baseline → chg` stays one pipeline. The [laziness table in the guide](https://github.com/RealSlimMahdi/fleet-cdisc/blob/main/GUIDE.md#what-is-lazy-and-what-checkpoints) lists every verb that reads data. The namespaces are also registered on `pl.LazyFrame`, so `pl.scan_parquet(...).sdtm` starts a lazy plan.
 
-- **No intermediate DataFrames:** Saves memory.
-- **Blazing fast:** Processes millions of records in milliseconds.
-- **Zero overhead:** Fleet verbs compile down to native Polars `pl.Expr` objects.
+- **Native expressions:** most Fleet verbs compile down to native Polars `pl.Expr` objects.
+- **Multithreaded:** Polars runs the plan on all CPU cores.
 
 ### 3. Clarity: Specification-Driven Development
 

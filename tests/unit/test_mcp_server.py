@@ -59,7 +59,7 @@ class TestDagTools:
         build_dag(*SPECS).generate(dag_json)
         node = fleet_lineage(str(dag_json), "ADSL")
         assert node["node_type"] == "adam"
-        assert node["inputs"] == ["DM"]
+        assert node["inputs"] == ["DM", "EX"]
 
     def test_lineage_unknown_dataset_names_known_ones(self, tmp_path):
         dag_json = tmp_path / "pipeline_dag.json"

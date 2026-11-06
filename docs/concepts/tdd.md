@@ -4,7 +4,8 @@ Fleet provides first-class support for all nine CDISC Trial Design Model (TDD)
 domains through two complementary paths:
 
 1. **`fleet.StudyDesign`** — a typed aggregate: define the design once,
-   derive every domain, audit it, and round-trip through YAML / Mermaid / USDM.
+   derive every domain, audit it, round-trip it through YAML, import it from
+   USDM, and draw it as a Mermaid review diagram.
 2. **Row-level pipeline** — a fixed-sequence verb chain with rich Pydantic
    models and collection-level validators, for full row control.
 
@@ -77,14 +78,45 @@ frames = design.domains()  # or every populated domain: {"TE": df, "TA": df, ...
 
 Referential integrity is validated at construction: arm paths must reference
 defined elements, visit `armcd` values must reference defined arms, and
-element codes must be unique.
+element codes must be unique. A key that the model does not read raises, in
+Python and in `trial_design.yaml`, and so does a repeated YAML key.
+
+### Arm paths: steps, branches and epochs
+
+A path entry is an ETCD, or a step that gives the TA values of one position
+([ADR 0036](../adr/0036-an-arm-path-entry-is-an-element-or-a-step.md)):
+
+```python
+design = fleet.StudyDesign(
+    study_id="S1",
+    elements=[...],
+    arms={
+        "AB": ["SCRN", "A", "WO", "B"],
+        "BA": [
+            "SCRN",
+            {"etcd": "B", "epoch": "TREATMENT 1"},  # crossover: epoch by position
+            "WO",
+            {"etcd": "A", "epoch": "TREATMENT 2"},
+        ],
+    },
+    randomized_at="SCRN",  # TABRANCH "Randomized to <arm>" on SCRN
+)
+```
+
+TABRANCH defaults to `Randomized to <arm>` on the last element that every
+arm shares, or on the `randomized_at` element. When the branch is not a
+randomization (a responder extension, a cohort assignment), give the real
+rule on the step: `{"etcd": "CORE", "tabranch": "Responder at end of Core"}`.
+`tatrans` gives TATRANS the same way. `design.audit()` warns when two arms
+have the same path (FLEETTD04) and when an element repeats in an arm with no
+per-position epoch (FLEETTD05).
 
 ### Interchange formats
 
 | Method | Direction | Use case |
 | ------ | --------- | -------- |
 | `StudyDesign.from_yaml(path)` / `design.to_yaml(path)` | YAML ⇄ | `trial_design.yaml` spec, versioned next to `define.yaml` |
-| `StudyDesign.from_mermaid(text, study_id=...)` / `design.to_mermaid()` | Mermaid ⇄ | Diagram-as-code; protocol review decks |
+| `StudyDesign.from_mermaid(text, study_id=...)` / `design.to_mermaid()` | Mermaid ⇄ | Review diagram: arm paths, ETCD, ELEMENT, TEDUR, epochs. Not ARM, rules, TABRANCH or a crossover; YAML is the lossless path |
 | `StudyDesign.from_usdm(json_dict)` | USDM → | Import a CDISC USDM / DDF export (e.g. from OpenStudyBuilder): arms, epochs, elements, study cells, encounters, eligibility criteria |
 | `TrialParameters.from_ctgov("NCT...")` | ctgov → | Seed TS from the ClinicalTrials.gov v2 API |
 
@@ -221,6 +253,7 @@ sv = (
     raw_visits.sdtm.assign("DOMAIN", value="SV")
     .assign("USUBJID", source="subject_id")
     .date("SVSTDTC", source="visit_date")
+    .pin("DM", dm)  # RFSTDTC comes from DM
     .visit_map(
         "VISITNUM",
         "VISIT",
@@ -229,10 +262,27 @@ sv = (
         ref_date="RFSTDTC",
         tolerance={"before": 3, "after": 3},
     )
-    .study_day("SVSTDY", date_col="SVSTDTC", ref_date_col="RFSTDTC")
+    .study_day("SVSTDY", date_col="SVSTDTC")
     .to_frame()
 )
 ```
+
+`visit_map()` is a nearest-day window. Use it only when the CRF does not
+collect the visit, and never to replace a collected VISITNUM. Its rules:
+
+- The distance is the difference of study-day numbers, as
+  `abs(SVSTDY - VISITDY)`: across the missing Day 0, Day -1 is 2 days from
+  VISITDY 1. `TrialVisits.from_schedule()` writes its TVSTRL window in the
+  same study days.
+- When TV has ARMCD values, a subject takes only the visits of its arm and
+  the visits with a blank ARMCD.
+- A dated record outside every window is an unscheduled visit: it gets the
+  VISITNUM of the last planned visit before it plus .1, .2, ... and the
+  VISIT `UNSCHEDULED 5.1`. This numbering is a sponsor convention: check it
+  against the SDRG ([ADR 0035](../adr/0035-visit-map-numbers-an-unscheduled-visit.md)).
+- A record with no study day keeps a null VISITNUM. One warning gives the
+  counts, and a second warning gives the USUBJID + VISITNUM keys that repeat
+  in SV.
 
 For SE, derive boundaries with `element_boundaries()` and the sequence
 number with the standard `seq()` verb:
@@ -319,9 +369,14 @@ TrialParameter(
 )
 ```
 
+A TSVAL over 200 characters is split at a word boundary into TSVAL,
+TSVAL1, ..., TSVALn (SDTMIG 3.4 TS assumption 8). TSPARM holds 40
+characters at most.
+
 `TrialParameters.from_ctgov("NCT00048217")` seeds the registry-derivable
 parameters (REGID, TITLE, TPHASE, STYPE, INTMODEL, RANDOM, TBLIND, NARMS,
-PLANSUB, AGEMIN/AGEMAX, SEXPOP, HLTSUBJI, SSTDTC/SENDTC, SPONSOR, OUTMSPRI,
+PLANSUB (estimated enrollment) or ACTSUB (actual enrollment), AGEMIN/AGEMAX,
+SEXPOP, HLTSUBJI, SSTDTC/SENDTC, SPONSOR, OUTMSPRI,
 FCNTRY) from the ClinicalTrials.gov v2 API. It is a starting point —
 dictionary-bound parameters are deliberately not guessed.
 
@@ -374,5 +429,13 @@ design = fleet.StudyDesign.from_mermaid(
     study_id="CDISCPILOT01",
 )
 
-print(design.to_mermaid())  # and back out — protocol-vs-datasets QC
+print(design.to_mermaid())  # a review view; YAML is the lossless round trip
 ```
+
+The parser reads the drawn structure or raises. Every line must be a
+header, a `subgraph`, an `end`, a node, an edge or a `%%` comment. A fork
+must label each edge with its ARMCD. A cycle (a crossover or an element
+that repeats in an arm), a node with no edge, a node outside a subgraph,
+more than one start node and an empty diagram raise a `ValueError`. A
+subgraph title that is not a C99079 term is kept as a sponsor epoch, with a
+warning.

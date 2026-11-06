@@ -51,9 +51,13 @@ Outside a study (or to override), pass paths explicitly:
 
 ```bash
 uv run fleet tlg run examples/tlg_specs/aet01.yaml \
-  --data ADAE=adae.parquet --adsl adsl.parquet \
+  --data ADAE=adae.parquet --adsl adsl.parquet --adsl-groupby TRT01A \
   -o out/ --format rtf --rows-per-page 40
 ```
+
+ADAE holds the arm as `TRTA` and a conformant ADSL holds it as `TRT01A`:
+`--adsl-groupby TRT01A` names the ADSL arm for the big N. Without it the
+CLI stops and names the flag.
 
 `--format` selects the display format — `html`, `rtf`, `pdf`, or `pptx`
 (PDF/PPTX need the `tlg-pdf` / `tlg-pptx` extras).

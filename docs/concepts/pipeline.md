@@ -52,7 +52,7 @@ Every Fleet namespace (`sdtm`, `adam`, `adsl`, `occds`) follows the same pattern
 
 1. **Access** the namespace on a Polars DataFrame: `df.sdtm`
 2. **Chain** verb calls — each returns a new namespace object accumulating `pl.Expr` objects
-3. **Materialise** with `.to_frame()` — executes a single `df.with_columns(...)` pass
+3. **Materialise** with `.to_frame()` — Polars runs the lazy plan
 
 ```python
 result = (
@@ -64,9 +64,11 @@ result = (
 ```
 
 `assign` is the one canonical assignment verb (`source=` copies, `value=`
-hardcodes, `ct=`/`ct_map=` add CT). Most verbs only build an internal expression
-list at step 2; a few window/cross-domain verbs checkpoint internally but keep
-the chain going.
+hardcodes, `ct=`/`ct_map=` add CT). Most verbs append to one lazy plan. Some
+verbs read data before the chain continues: checks (`baseline`, `date` to a DTC
+variable) and verbs that
+build or filter records (`whereclauses`, `pick`, `derive_*`, `nodup`). The chain
+does not break at these verbs.
 
 To inspect intermediate state or the query plan during development, use the
 chainable debug verbs `.inspect()` (hard checkpoint with diagnostic output)
@@ -84,10 +86,12 @@ df.sdtm
   ├─ .assign("SEX", ct=...)          →  [..., Expr(when/then.alias("SEX"))]
   └─ .to_frame()
        │
-       └─ df.with_columns(*exprs)   ← single Polars pass
+       └─ df.with_columns(*exprs)   ← one Polars plan for these verbs
 ```
 
 This means you pay no cost for columns you don't chain. Expression ordering mirrors declaration order.
+The verbs that read data before the chain continues are listed in the GUIDE
+laziness table ("What is lazy, and what checkpoints").
 
 ---
 
@@ -126,8 +130,8 @@ This means you pay no cost for columns you don't chain. Expression ordering mirr
 | `bsa(target, weight, height, method)`       | Body Surface Area (4 methods)             |
 | `map(target, systolic, diastolic)`          | Mean Arterial Pressure                    |
 | `qtc(target, qt, rr, method, rr_unit)`      | Corrected QT (QT in ms, RR in ms by default) |
-| `derive_summary_records(by_vars, ...)`      | Aggregate by group, append summary rows   |
-| `derive_locf_records(by_vars, ...)`         | Forward-fill (LOCF) within patient groups |
+| `derive_summary_records(by, ...)`           | Aggregate by group, append summary rows   |
+| `derive_locf_records(dataset_ref, by, order_by, ...)` | Add LOCF records for the expected visits |
 | `derive_param(by_vars, ...)`                | Derive a new parameter and append as rows |
 | `to_frame()`                                | Materialise                               |
 
@@ -184,7 +188,8 @@ tree and writes `study_config.yaml`. Define specs and codelists are produced by
 the subsequent pipeline steps (`fleet init define`, `fleet init ct`).
 
 ```python
-from fleet import StudyContext, SDTMConfig, ADAMConfig, load_study_context
+from fleet import StudyContext, load_study_context
+from fleet.core.study_context import ADAMConfig, SDTMConfig
 from pathlib import Path
 
 # ── Once, when starting a new study ──────────────────────────────────────

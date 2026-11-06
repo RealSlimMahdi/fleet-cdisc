@@ -38,6 +38,34 @@ def _blank_to_null(expr: pl.Expr) -> pl.Expr:
     return pl.when(text == "").then(None).otherwise(text)
 
 
+def to_char(expr: pl.Expr, dtype: pl.DataType) -> pl.Expr:
+    """Write a value as SDTM character text, with no float noise.
+
+    A float keeps 15 significant digits and loses a ``.0`` end, so ``1.0``
+    gives ``"1"`` and ``0.1 + 0.2`` gives ``"0.3"``.  A Date or Datetime
+    gives ISO 8601 text.  Any other type is cast to ``pl.String``.
+
+    Args:
+        expr: The value expression.
+        dtype: The Polars type of *expr*.
+
+    Returns:
+        pl.Expr: A ``pl.String`` expression.
+
+    Examples:
+        IDVARVAL from a Float64 AESEQ read from XPT::
+
+            supp = ae.with_columns(to_char(pl.col("AESEQ"), pl.Float64).alias("IDVARVAL"))
+    """
+    if dtype.is_float():
+        return expr.round_sig_figs(15).cast(pl.String).str.replace(r"\.0$", "")
+    if dtype == pl.Date:
+        return expr.dt.strftime("%Y-%m-%d")
+    if isinstance(dtype, pl.Datetime):
+        return expr.dt.strftime("%Y-%m-%dT%H:%M:%S")
+    return expr.cast(pl.String)
+
+
 def dtc_text(raw: pl.Expr, *, input_format: str | None = None) -> pl.Expr:
     """Convert raw text to ``--DTC`` text, or null; never guess a layout.
 
@@ -253,8 +281,6 @@ _ALLOWED_AST_NODES: frozenset[type] = frozenset(
         ast.LtE,
         ast.Gt,
         ast.GtE,
-        ast.Is,
-        ast.IsNot,
         ast.In,
         ast.NotIn,
         ast.And,
@@ -283,6 +309,14 @@ def _validate_ast(expr_str: str) -> ast.Expression:
         ) from exc
 
     for node in ast.walk(tree):
+        if isinstance(node, ast.Compare) and any(
+            isinstance(side, ast.Constant) and side.value is None
+            for side in (node.left, *node.comparators)
+        ):
+            raise DerivationError(
+                f"A compare with None is always null in {expr_str!r}: use "
+                "COL.is_null() or COL.is_not_null()."
+            )
         if type(node) not in _ALLOWED_AST_NODES:
             raise DerivationError(
                 f"Disallowed construct {type(node).__name__!r} in expression {expr_str!r}"
@@ -415,7 +449,42 @@ class _BareNameToColumn(ast.NodeTransformer):
         )
 
 
-def parse_expression(expr_str: str) -> pl.Expr:
+def _column_name(node: ast.AST) -> str | None:
+    """Return ``X`` for a ``pl.col("X")`` call node, else ``None``."""
+    if (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "col"
+        and isinstance(node.func.value, ast.Name)
+        and node.func.value.id == "pl"
+        and len(node.args) == 1
+        and isinstance(node.args[0], ast.Constant)
+        and isinstance(node.args[0].value, str)
+    ):
+        return node.args[0].value
+    return None
+
+
+def _check_date_differences(tree: ast.AST, expr_str: str, schema: pl.Schema) -> None:
+    """Refuse ``DATE2 - DATE1`` outside ``.dt``: Polars gives a Duration, not days."""
+    temporal = {name for name, dtype in schema.items() if dtype in (pl.Date, pl.Datetime)}
+    in_dt: set[int] = {
+        id(node.value)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Attribute) and node.attr == "dt"
+    }
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.BinOp) and isinstance(node.op, ast.Sub)):
+            continue
+        left, right = _column_name(node.left), _column_name(node.right)
+        if left in temporal and right in temporal and id(node) not in in_dt:
+            raise DerivationError(
+                f"In {expr_str!r}, {left} - {right} is a duration, not a number of days. "
+                f"Write ({left} - {right}).dt.total_days() for days."
+            )
+
+
+def parse_expression(expr_str: str, schema: pl.Schema | None = None) -> pl.Expr:
     """Evaluate a simple Polars expression string.
 
     Supports column references — ``pl.col("NAME")`` or plain ``NAME`` —
@@ -431,14 +500,18 @@ def parse_expression(expr_str: str) -> pl.Expr:
 
     Args:
         expr_str: The expression string to parse.
+        schema: The frame schema.  When given, a difference of two Date
+            or Datetime columns outside ``.dt`` (``TRTEDT - TRTSDT > 10``)
+            is refused: Polars gives a Duration, so ``> 10`` would compare
+            with 10 microseconds, not 10 days as in SAS.
 
     Returns:
         pl.Expr: The parsed Polars expression.
 
     Raises:
-        DerivationError: On syntax errors, disallowed constructs, or
-            input that does not produce a ``pl.Expr``.  Also catchable
-            as ``ValueError``.
+        DerivationError: On syntax errors, disallowed constructs, a date
+            difference outside ``.dt`` (with *schema*), or input that does
+            not produce a ``pl.Expr``.  Also catchable as ``ValueError``.
 
     Examples:
         Parse a derived-value expression inside a pipeline::
@@ -456,6 +529,8 @@ def parse_expression(expr_str: str) -> pl.Expr:
     tree = _validate_ast(expr_str)
     tree = ast.fix_missing_locations(_BareNameToColumn().visit(tree))
     _check_names(tree, expr_str)
+    if schema is not None:
+        _check_date_differences(tree, expr_str, schema)
     code = compile(tree, "<fleet-expression>", "eval")
 
     local_ns: dict[str, Any] = {"pl": pl}

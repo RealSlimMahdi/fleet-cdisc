@@ -105,6 +105,38 @@ result = svc.validate_sdtm(ae, domain="AE", version="3.4", custom_rules="metadat
 result.print_report()
 ```
 
+A relative rules path is relative to the working directory, as the dataset
+path is. Fleet resolves it before the engine starts in its own folder.
+
+### 5. Read the rule counts
+
+The custom rules run in their own engine run. The report counts what that
+run did with the rules, apart from the data findings:
+
+```text
+Rules (engine run, custom): 1 executed, 1 skipped, 1 could not run, 1 not loaded
+```
+
+`fleet validate` and the HTML report also name the rules:
+
+```text
+Rule problems in the sdtmig engine run (not data findings; exit code kept):
+  Could not run (custom): FLEET-AE-002 (Rule contains invalid operator)
+  Not loaded (custom): broken.yaml
+```
+
+- **Could not run**: the engine reports `EXECUTION_ERROR` for the rule, for
+  example an unknown operator. The reason comes from the engine.
+- **Not loaded**: a YAML file that does not parse, or a rule ID that is
+  absent from the engine report.
+- **Skipped**: the engine skips a rule when no dataset is in its scope, or
+  when a variable the rule names is absent from the dataset. This is correct
+  for a permissive variable that was not collected, so a skip is counted,
+  never listed. Check the variable names of a rule that you expect to run.
+
+Rule problems do not change the status or the exit code. A true finding is
+always kept, whatever its message says.
+
 ---
 
 ## Rule anatomy
@@ -121,7 +153,7 @@ Rule Type: Record Data       # Record-level check
 
 Scope:
   Classes:
-    Include: [EVENTS]
+    Include: [ALL]           # Every class; Domains below sets the scope
   Domains:
     Include: [AE]            # Restrict to the AE domain
 

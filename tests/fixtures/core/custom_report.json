@@ -1,0 +1,121 @@
+{
+  "Conformance_Details": {
+    "Report_Generation": "2026-11-05T00:07:53",
+    "Total_Runtime": "1.59 seconds",
+    "CORE_Engine_Version": "0.15.0",
+    "Issue_Limit_Per_Rule": "None",
+    "Issue_Limit_Per_Dataset": "None",
+    "Issue_Limit_Per_Sheet": null,
+    "Standard": "SDTMIG",
+    "Version": "V3.4",
+    "CT_Version": "",
+    "Define_XML_Version": null
+  },
+  "Dataset_Details": [
+    {
+      "filename": "AE",
+      "label": "AE dataset",
+      "path": "/tmp/hp-io-core/data_custom",
+      "modification_date": "2026-11-04T23:07:49",
+      "size_kb": 0.953,
+      "length": 2
+    }
+  ],
+  "Issue_Summary": [
+    {
+      "dataset": "AE.json",
+      "core_id": "FLEET-AE-001",
+      "message": "AESEV is empty",
+      "issues": 1
+    },
+    {
+      "dataset": "AE.json",
+      "core_id": "FLEET-AE-002",
+      "message": "rule execution error",
+      "issues": 1
+    },
+    {
+      "dataset": "AE.json",
+      "core_id": "FLEET-AE-004",
+      "message": "AESEV is empty: the corrective operation failed",
+      "issues": 1
+    }
+  ],
+  "Issue_Details": [
+    {
+      "core_id": "FLEET-AE-001",
+      "message": "AESEV is empty",
+      "executability": "fully executable",
+      "dataset": "AE.json",
+      "USUBJID": "S-2",
+      "row": 2,
+      "SEQ": 1,
+      "variables": [
+        "USUBJID"
+      ],
+      "values": [
+        "S-2"
+      ]
+    },
+    {
+      "core_id": "FLEET-AE-002",
+      "message": "rule execution error - Rule format error",
+      "executability": "fully executable",
+      "dataset": "AE.json",
+      "USUBJID": "",
+      "row": "",
+      "SEQ": "",
+      "variables": "",
+      "values": "Rule contains invalid operator"
+    },
+    {
+      "core_id": "FLEET-AE-004",
+      "message": "AESEV is empty: the corrective operation failed",
+      "executability": "fully executable",
+      "dataset": "AE.json",
+      "USUBJID": "S-2",
+      "row": 2,
+      "SEQ": 1,
+      "variables": [
+        "USUBJID"
+      ],
+      "values": [
+        "S-2"
+      ]
+    }
+  ],
+  "Rules_Report": [
+    {
+      "core_id": "FLEET-AE-001",
+      "version": "1",
+      "cdisc_rule_id": "",
+      "fda_rule_id": "",
+      "message": "AESEV is empty",
+      "status": "ISSUE_REPORTED"
+    },
+    {
+      "core_id": "FLEET-AE-002",
+      "version": "1",
+      "cdisc_rule_id": "",
+      "fda_rule_id": "",
+      "message": "bad operator",
+      "status": "EXECUTION_ERROR"
+    },
+    {
+      "core_id": "FLEET-AE-003",
+      "version": "1",
+      "cdisc_rule_id": "",
+      "fda_rule_id": "",
+      "message": "AESERR is empty",
+      "status": "SKIPPED"
+    },
+    {
+      "core_id": "FLEET-AE-004",
+      "version": "1",
+      "cdisc_rule_id": "",
+      "fda_rule_id": "",
+      "message": "AESEV is empty: the corrective operation failed",
+      "status": "ISSUE_REPORTED"
+    }
+  ]
+}

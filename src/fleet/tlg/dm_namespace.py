@@ -27,7 +27,10 @@ from ._ard import (
 )
 from ._builder import BuilderVerbsMixin
 from ._specs import (
+    ADSL_ARM_FALLBACK,
+    MissingLevel,
     Row,
+    SchemaError,
     Statistic,
     SummarySpecBase,
 )
@@ -47,13 +50,25 @@ class DMSummarySpec(SummarySpecBase):
 
     Defaults provide zero-config convenience for a standard ADSL
     demographics table mixing continuous age statistics with categorical
-    breakdowns of sex, race, ethnicity and age group.  Each field's
+    breakdowns of sex, race, ethnicity and age group.  A subject with a
+    null category value counts in a ``"Missing"`` row, last in the
+    block (``missing``).  The default arm is the ADSL arm: ``TRT01A``,
+    else ``TRT01P`` when ADSL has no ``TRT01A``.  Each field's
     ``description`` documents it (rendered by mkdocstrings) — a docstring
     ``Args:`` section would duplicate them and confuse griffe, since
     Pydantic fields are not ``__init__`` parameters.
+
+    References:
+        ADaMIG 1.3, section 3.1.4: ADSL carries the arm as TRTxxP and
+        TRTxxA; TRTA and TRTP are BDS and OCCDS variables.  ADR-0046.
     """
 
     context: ClassVar[str] = "t_dm_summary"
+    arm_fallback: ClassVar[tuple[str, ...]] = ADSL_ARM_FALLBACK
+
+    missing: MissingLevel | None = Field(
+        default_factory=lambda: MissingLevel(columns=["SEX", "AGEGR1", "RACE", "ETHNIC"]),
+    )
 
     age_var: str = Field(
         default="AGE",
@@ -72,8 +87,14 @@ class DMSummarySpec(SummarySpecBase):
         },
         description="Display labels for categorical variables.",
     )
+    columns: list[str] = Field(
+        default_factory=lambda: ["TRT01A"],
+        description=(
+            "Column-grouping variable: the ADSL arm.  When not set, ``TRT01A``, else ``TRT01P``."
+        ),
+    )
     required_columns: list[str] = Field(
-        default_factory=lambda: ["USUBJID", "TRTA", "AGE", "SEX"],
+        default_factory=lambda: ["USUBJID", "TRT01A", "AGE", "SEX"],
         description="Columns required in the analysis dataset for this spec.",
     )
 
@@ -113,22 +134,23 @@ class DMTLGNamespace(BuilderVerbsMixin):
 
         Args:
             groupby: Treatment arm column name.  Overrides
-                ``spec.columns[0]`` when given.
+                ``spec.columns[0]`` when given.  Default: ``TRT01A``,
+                else ``TRT01P`` (ADR-0046).
             adsl: ADSL DataFrame for big-N denominators.  Defaults to the
                 namespace DataFrame when ``None``.
             spec: Optional ``DMSummarySpec`` override.  If ``None``, the
                 default spec is used.
 
         Returns:
-            pl.DataFrame: Long-format {cards}-compatible ARD.
+            pl.DataFrame: ARD in the {cards} long layout.
 
         Examples:
-            Zero-config demographics summary::
+            Zero-config demographics summary, by TRT01A::
 
-                ard = adsl.tlg.dm.t_summary(groupby="TRTA", adsl=adsl)
+                ard = adsl.tlg.dm.t_summary()
         """
         spec = spec or DMSummarySpec()
-        group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
+        group_col = groupby or spec.default_group_col(self._df.columns)
         denom_src = adsl if adsl is not None else self._df
 
         # --- Validation ---
@@ -143,8 +165,13 @@ class DMTLGNamespace(BuilderVerbsMixin):
 
         # --- Categorical breakdowns (big-N + n / %) via shared engine ---
         # Each categorical variable carries its display label so the
-        # renderer can head its block ("Sex", "Race", …).
-        cat_rows = [Row(field=f, label=spec.category_labels.get(f)) for f in spec.categorical_vars]
+        # renderer can head its block ("Sex", "Race", …).  A default
+        # variable that ADSL lacks is left out; a variable the user named
+        # must exist (the engine raises).
+        cat_vars = spec.categorical_vars
+        if spec.uses_default("categorical_vars"):
+            cat_vars = [f for f in cat_vars if f in analysis_df.columns]
+        cat_rows = [Row(field=f, label=spec.category_labels.get(f)) for f in cat_vars]
         cat_ard = summarize_ard(
             analysis_df,
             rows=cat_rows,
@@ -159,6 +186,8 @@ class DMTLGNamespace(BuilderVerbsMixin):
             value_col=spec.value_col,
             label_col=spec.label_col,
             decimals=spec.decimals,
+            missing=spec.missing,
+            adsl_group_col=spec.adsl_group_col,
         )
 
         # --- Continuous age statistics ---
@@ -170,7 +199,17 @@ class DMTLGNamespace(BuilderVerbsMixin):
 
         age_var = spec.age_var if spec.age_var in df.columns else None
         if age_var is None:
+            if not spec.uses_default("age_var"):
+                raise SchemaError(
+                    f"age_var '{spec.age_var}' is not in the analysis dataset. "
+                    f"Available: {sorted(df.columns)}"
+                )
             return cat_ard
+        if not df[age_var].dtype.is_numeric():
+            raise SchemaError(
+                f"Age statistics need a numeric {age_var}; {age_var} is "
+                f"{df[age_var].dtype}. Cast it: pl.col('{age_var}').cast(pl.Float64)"
+            )
 
         fmt = spec.decimals or {}
         age_rows: list[dict[str, Any]] = []
@@ -201,11 +240,14 @@ class DMTLGNamespace(BuilderVerbsMixin):
     def check(
         self,
         *,
+        groupby: str | None = None,
         spec: DMSummarySpec | None = None,
     ) -> list[str]:
         """Run pre-validation diagnostics without computing.
 
         Args:
+            groupby: Treatment arm column.  ``None`` checks the arm that
+                ``t_summary()`` takes without ``groupby``.
             spec: Optional spec to check against.
 
         Returns:
@@ -217,7 +259,7 @@ class DMTLGNamespace(BuilderVerbsMixin):
                 report = adsl.tlg.dm.check()
         """
         spec = spec or DMSummarySpec()
-        diagnostics = spec.check(self._df)
+        diagnostics = spec.check(self._df, group_col=groupby)
 
         available = set(self._df.columns)
         if spec.age_var not in available:

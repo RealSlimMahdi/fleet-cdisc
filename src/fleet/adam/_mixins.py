@@ -86,9 +86,13 @@ from fleet.core._flag_mixin import (
 from fleet.core._pin_mixin import PinMixin
 from fleet.core._verb_mixin import SharedVerbsMixin
 from fleet.core.exceptions import DerivationError
+from fleet.core.joins import refuse_repeated_keys, refuse_shared_columns, require_columns
 
 if TYPE_CHECKING:
     pass
+
+#: What to do when an aggregation target is already a pipeline column.
+_CLASH_HINT = "Drop the column from the pipeline first, or choose another target name."
 
 
 def _value_kind(value: Any) -> str:
@@ -134,6 +138,7 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
 
     def __init__(self, df: pl.DataFrame | pl.LazyFrame) -> None:
         self._lazy = df.lazy()
+        self._root_lazy = self._lazy  # the start of the chain, for to_spec_yaml()
         self._domain: str | None = None
         self._pinned: dict[str, tuple[pl.DataFrame, list[str]]] = {}
         self._pin_lineage: list = []
@@ -184,6 +189,13 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
 
         Raises:
             LookupError: If ADSL is not pinned.
+            DerivationError: If a column is not in ADSL (with a
+                did-you-mean suggestion), is already in the pipeline, or
+                ADSL has two different rows for one subject.
+
+        References:
+            ADR-0032 (docs/adr/0032-merge-reads-as-sas-merge-and-stops-on-a-clash.md).
+            ADaMIG 1.3: ADSL holds one record per subject.
 
         Examples:
             Carry TRTSDT and SAFFL from ADSL into an ADAE pipeline::
@@ -198,12 +210,22 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
         """
         from fleet.core.lineage import record_pin_lineage
 
-        ref_df = self._require_pin("ADSL", "join_adsl", columns=list(cols))
+        adsl = self._require_pin("ADSL", "join_adsl")
         join_key = self._pin_join_key("ADSL")
-
-        ref_slim = ref_df.select(
-            [c for c in dict.fromkeys(join_key + list(cols)) if c in ref_df.columns]
-        ).unique(subset=join_key)
+        require_columns("join_adsl()", cols, adsl.columns, where="the pinned ADSL")
+        refuse_shared_columns(
+            "join_adsl()",
+            self._lazy.collect_schema().names(),
+            cols,
+            join_key,
+            hint="Drop the column from the pipeline first, or leave it out of join_adsl().",
+        )
+        ref_slim = refuse_repeated_keys(
+            "join_adsl()",
+            adsl.select(list(dict.fromkeys(join_key + list(cols)))),
+            join_key,
+            source="ADSL",
+        )
 
         df = self._lazy.collect().join(ref_slim, on=join_key, how="left", nulls_equal=True)
         new = self._materialise_then(df)
@@ -395,7 +417,13 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
                 with no top-level *order*, decides the winner.
             by: Grouping columns (default ``["USUBJID"]``).
             order: Sort column(s).  Within an event they select the record;
-                at top level they also select the event (see above).
+                at top level they also select the event (see above).  An
+                event with more than one matching record in a group needs
+                an order (its own or the top-level one).  A missing order
+                value loses in both modes.  Records that tie on the order
+                keep their input order, so ``"last"`` takes the last tied
+                record, as SAS ``LAST.``; a warning names a tie whose
+                records set different values.
             mode: ``"first"`` or ``"last"`` — which record to select
                 after sorting by *order* (default ``"first"``).
 
@@ -405,9 +433,14 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
 
         Raises:
             DerivationError: If *events* is empty, a required key is
-                missing, or an event contains an unknown key (with a
-                did-you-mean suggestion).  Also catchable as
-                ``ValueError``.
+                missing, an event contains an unknown key (with a
+                did-you-mean suggestion), or an event with no order has
+                more than one matching record in a group.  Also catchable
+                as ``ValueError``.
+
+        References:
+            admiral ``derive_vars_extreme_event`` (``order`` is required)
+            and SAS ``FIRST.``/``LAST.`` after PROC SORT EQUALS; ADR-0024.
 
         Examples:
             Derive last date known alive from death, AE, and treatment::
@@ -444,10 +477,10 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
                         events=[
                             {"when": 'pl.col("AEOUT") == "FATAL"',
                              "set": {"DTHCAUS": "AEDECOD"},
-                             "source": ae},
+                             "source": ae, "order": ["AESTDTC", "AESEQ"]},
                             {"when": 'pl.col("DSDECOD") == "DEATH"',
                              "set": {"DTHCAUS": "DSTERM"},
-                             "source": ds},
+                             "source": ds, "order": ["DSSTDTC", "DSSEQ"]},
                         ],
                         by=["USUBJID"],
                     )
@@ -547,14 +580,32 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
 
             # Within-event selection: pick one record per group
             if evt_order:
-                descending = evt_mode == "last"
+                # A missing order value loses in both modes; a tie keeps input order,
+                # so "last" takes the last tied record (SAS LAST., admiral filter_extreme).
                 candidates = candidates.sort(
-                    evt_order,
-                    descending=[descending] * len(evt_order),
-                    nulls_last=True,
-                    maintain_order=True,
+                    evt_order, nulls_last=evt_mode == "first", maintain_order=True
                 )
-            candidates = candidates.group_by(by_vars, maintain_order=True).first()
+                self._warn_pick_ties(
+                    candidates, event_nr, by_vars, evt_order, evt_mode, target_list
+                )
+                grouped = candidates.group_by(by_vars, maintain_order=True)
+                candidates = grouped.first() if evt_mode == "first" else grouped.last()
+            else:
+                multi = (
+                    candidates.group_by(by_vars, maintain_order=True)
+                    .len()
+                    .filter(pl.col("len") > 1)
+                )
+                if not multi.is_empty():
+                    first = multi.row(0, named=True)
+                    key = ", ".join(f"{c}={first[c]!r}" for c in by_vars)
+                    raise DerivationError(
+                        f"pick() event #{event_nr} has no order and {multi.height} group(s) "
+                        f"with more than one matching record (first: {key}, "
+                        f"{first['len']} records). Give 'order' in the event or at top "
+                        "level, so the record does not depend on row order."
+                    )
+                candidates = candidates.group_by(by_vars, maintain_order=True).first()
 
             # Keep only by_vars + targets + the cross-event order + event_nr
             keep = by_vars + target_list + (global_order or []) + ["__pick_event_nr__"]
@@ -592,6 +643,38 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
         result = df.join(winners, on=by_vars, how="left", nulls_equal=True)
         return self._materialise_then(result)
 
+    @staticmethod
+    def _warn_pick_ties(
+        candidates: pl.DataFrame,
+        event_nr: int,
+        by_vars: list[str],
+        order: list[str],
+        mode: str,
+        targets: list[str],
+    ) -> None:
+        """Warn when records tie with the selected one on *order* but set other values."""
+        pick_one = (lambda e: e.first()) if mode == "first" else (lambda e: e.last())
+        tied = candidates.filter(
+            pl.all_horizontal(
+                pl.col(c).eq_missing(pick_one(pl.col(c)).over(by_vars)) for c in order
+            )
+        )
+        differ = (
+            tied.group_by(by_vars, maintain_order=True)
+            .agg(pl.struct(targets).n_unique().alias("__n__"))
+            .filter(pl.col("__n__") > 1)
+        )
+        if differ.is_empty():
+            return
+        first = differ.row(0, named=True)
+        key = ", ".join(f"{c}={first[c]!r}" for c in by_vars)
+        warnings.warn(
+            f"pick() event #{event_nr}: {differ.height} group(s) have records that tie on "
+            f"{order} and set different values (first: {key}). mode={mode!r} takes the "
+            f"{mode} input record of the tie. Add a key to 'order' to break the tie.",
+            stacklevel=3,
+        )
+
     def whereclauses(self, *, where: str | pl.Expr) -> Self:
         """Filter records by a *where* expression.
 
@@ -617,7 +700,11 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
 
         df = self.to_frame()
         filter_expr = where if isinstance(where, pl.Expr) else parse_expression(str(where))
-        return self._materialise_then(df.filter(filter_expr))
+        from fleet.core.lineage import record_row_step
+
+        return record_row_step(
+            self._materialise_then(df.filter(filter_expr)), "whereclauses", {"where": where}
+        )
 
     def merge_adsl(
         self,
@@ -630,6 +717,9 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
 
         Materialises the pipeline, left-joins *adsl* (optionally restricted to
         *keep* plus the *by* key columns), and returns a fresh namespace.
+        Each *by* key must name one ADSL row, and a non-key column may be
+        on one side only: give *keep*, or add a shared column such as
+        STUDYID to *by*, as admiral ``derive_vars_merged`` asks.
 
         Args:
             adsl: The ADSL ``pl.DataFrame`` to merge in.
@@ -640,6 +730,15 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
 
         Returns:
             Self: A fresh namespace wrapping the joined frame.
+
+        Raises:
+            DerivationError: When a *keep* column is not in *adsl*, a
+                non-key column is on both sides, or *adsl* has two
+                different rows for one key.
+
+        References:
+            ADR-0032 (docs/adr/0032-merge-reads-as-sas-merge-and-stops-on-a-clash.md).
+            ADaMIG 1.3: ADSL holds one record per subject.
 
         Examples:
             Merge treatment date columns from ADSL::
@@ -652,9 +751,17 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
         """
         join_keys = by if by is not None else ["USUBJID"]
         if keep is not None:
-            extra = [c for c in join_keys if c not in keep]
-            adsl = adsl.select(keep + extra)
+            require_columns("merge_adsl(keep=...)", keep, adsl.columns, where="ADSL")
+            adsl = adsl.select(list(dict.fromkeys(keep + join_keys)))
         df = self.to_frame()
+        refuse_shared_columns(
+            "merge_adsl()",
+            df.columns,
+            adsl.columns,
+            join_keys,
+            hint="Pass keep= to choose the ADSL columns, or add the shared column to by=.",
+        )
+        adsl = refuse_repeated_keys("merge_adsl()", adsl, join_keys, source="ADSL")
         joined = df.join(adsl, on=join_keys, how="left", nulls_equal=True)
         return self._materialise_then(joined)
 
@@ -705,7 +812,9 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
                     .to_frame()
                 )
         """
-        return self._date_agg(
+        from fleet.core.lineage import append_verb_node
+
+        ns = self._date_agg(
             target,
             from_dataset=from_dataset,
             date_col=date_col,
@@ -714,6 +823,9 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
             agg_fn="min",
             impute=impute,
         )
+        params = {"target": target, "from_dataset": from_dataset, "date_col": date_col}
+        params.update(where=where, by=by, impute=impute)
+        return append_verb_node(ns, target, "first_date", [date_col], params)
 
     def last_date(
         self,
@@ -752,7 +864,9 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
                     .to_frame()
                 )
         """
-        return self._date_agg(
+        from fleet.core.lineage import append_verb_node
+
+        ns = self._date_agg(
             target,
             from_dataset=from_dataset,
             date_col=date_col,
@@ -761,6 +875,9 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
             agg_fn="max",
             impute=impute,
         )
+        params = {"target": target, "from_dataset": from_dataset, "date_col": date_col}
+        params.update(where=where, by=by, impute=impute)
+        return append_verb_node(ns, target, "last_date", [date_col], params)
 
     def _date_agg(
         self,
@@ -808,7 +925,9 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
             agg_df = src.group_by(grps).agg(
                 (col.min() if agg_fn == "min" else col.max()).alias(target)
             )
-            df = self.to_frame().join(agg_df, on=grps, how="left", nulls_equal=True)
+            df = self.to_frame()
+            refuse_shared_columns(f"{verb}()", df.columns, agg_df.columns, grps, hint=_CLASH_HINT)
+            df = df.join(agg_df, on=grps, how="left", nulls_equal=True)
             return self._materialise_then(df)
 
         raw = pl.col(date_col)
@@ -863,7 +982,9 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
                     f"values (impute='{impute}'); {flag} records it.",
                     stacklevel=3,
                 )
-        df = self.to_frame().join(winners, on=grps, how="left", nulls_equal=True)
+        df = self.to_frame()
+        refuse_shared_columns(f"{verb}()", df.columns, winners.columns, grps, hint=_CLASH_HINT)
+        df = df.join(winners, on=grps, how="left", nulls_equal=True)
         return self._materialise_then(df)
 
     def count_events(
@@ -876,7 +997,8 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
     ) -> Self:
         """Derive *target* as the count of matching records in *from_dataset*.
 
-        Returns 0 for subjects with no matching records (never null).
+        Returns 0 for subjects with no matching records (never null).  The
+        count is Int64, so a later subtraction can go below zero.
 
         Args:
             target: Name of the output count column.
@@ -903,10 +1025,15 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
         if where is not None:
             where_expr = where if isinstance(where, pl.Expr) else parse_expression(str(where))
             src = src.filter(where_expr)
-        agg_df = src.group_by(grps).agg(pl.len().alias(target))
-        df = self.to_frame().join(agg_df, on=grps, how="left", nulls_equal=True)
+        agg_df = src.group_by(grps).agg(pl.len().cast(pl.Int64).alias(target))
+        df = self.to_frame()
+        refuse_shared_columns("count_events()", df.columns, agg_df.columns, grps, hint=_CLASH_HINT)
+        df = df.join(agg_df, on=grps, how="left", nulls_equal=True)
         df = df.with_columns(pl.col(target).fill_null(0))
-        return self._materialise_then(df)
+        from fleet.core.lineage import append_verb_node
+
+        params = {"target": target, "from_dataset": from_dataset, "where": where, "by": by}
+        return append_verb_node(self._materialise_then(df), target, "count_events", grps, params)
 
     # ------------------------------------------------------------------ #
     # Date derivation verbs                                                #
@@ -1042,94 +1169,27 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
             )
             return self._chain(*exprs, verb="date")
 
-        # source= path
+        # source= path: one engine for both namespaces; time= first, then imputation
         assert source is not None
+        from fleet.adam.utils import dtm_source_text, source_text
 
-        if output_type == "dt":
-            exprs = impute_and_flag(
-                source,
-                target,
-                output_type="dt",
-                impute=impute,
-                highest=highest,
-                min_date=min_date,
-                max_date=max_date,
-                flag=flag,
-            )
-            return self._chain(*exprs, verb="date")
-
-        # output_type == "dtm"
-        # DTM with partial dates requires materialisation (same as derive_dtm)
-        from fleet.adam.utils import (
-            _resolve_flag_names,
-            _resolve_time,
-            dtf_expr,
-            impute_dtc_to_date,
-            impute_dtc_to_datetime,
-            refuse_dtm_bounds,
-            tmf_expr,
-            warn_unread,
-        )
-        from fleet.core.dtc import date_part
-
-        refuse_dtm_bounds(target, min_date, max_date)
-        dtf_name, tmf_name = _resolve_flag_names(target, flag, output_type)
-        effective_time_impute = impute_time or impute
-
-        col = pl.col(source)
-
-        # Materialise for partial date handling
-        date_expr = impute_dtc_to_date(
-            source,
-            "__dtm_date_tmp__",
-            day_imputation=impute,
-            month_imputation=impute,
-        )
-        df = self._lazy.with_columns(date_expr).collect()
-
-        # Build datetime expression
-        dtm_expr = impute_dtc_to_datetime(
-            source,
-            target,
-            day_imputation=impute,
-            month_imputation=impute,
-            time_imputation=effective_time_impute,
-        )
-
-        time_suffix = _resolve_time(effective_time_impute)
-        if effective_time_impute == "none":
-            partial_dtm = pl.lit(None, dtype=pl.Datetime("us"))
-        elif isinstance(time_suffix, str) and time_suffix.startswith("T"):
-            partial_dtm = (
-                pl.col("__dtm_date_tmp__").dt.to_string("%Y-%m-%d") + pl.lit(time_suffix)
-            ).str.to_datetime("%Y-%m-%dT%H:%M:%S", strict=False)
+        schema = self._lazy.collect_schema()
+        if time is not None:
+            src = dtm_source_text(schema, source=source, target=target, time=time)
         else:
-            partial_dtm = (
-                pl.col("__dtm_date_tmp__").dt.to_string("%Y-%m-%d")
-                + pl.lit("T")
-                + pl.col(time_suffix).cast(pl.Time).cast(pl.String)
-            ).str.to_datetime("%Y-%m-%dT%H:%M:%S", strict=False)
-
-        dtm_full = (
-            pl.when(col.is_null() | (col.str.strip_chars() == ""))
-            .then(pl.lit(None, dtype=pl.Datetime("us")))
-            .when(date_part(col).is_not_null())
-            .then(dtm_expr)
-            .otherwise(partial_dtm)
+            src = source_text(source, schema.get(source), verb=f"date('{target}')")
+        exprs = impute_and_flag(
+            src,
+            target,
+            output_type=output_type,
+            impute=impute,
+            impute_time=impute_time,
+            highest=highest,
+            min_date=min_date,
+            max_date=max_date,
+            flag=flag,
         )
-
-        exprs_list: list[pl.Expr] = [
-            warn_unread(source, target, dtm_full, pl.Datetime("us")).alias(target)
-        ]
-        if dtf_name is not None:
-            exprs_list.append(dtf_expr(source, dtf_name))
-        if tmf_name is not None:
-            exprs_list.append(tmf_expr(source, tmf_name))
-
-        result = df.with_columns(exprs_list)
-        if "__dtm_date_tmp__" in result.columns:
-            result = result.drop("__dtm_date_tmp__")
-        return self._materialise_then(result)
+        return self._chain(*exprs, verb="date")
 
 
 class MultiRowMixin:

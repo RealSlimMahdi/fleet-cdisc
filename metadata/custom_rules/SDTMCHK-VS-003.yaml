@@ -1,59 +1,55 @@
 # yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
 # SDTMCHK-VS-003: Height measurement missing
-# Source: sdtmchecks::check_vs_height
+# Based on: sdtmchecks::check_vs_height. Conditions follow the R function; a difference is stated in Description.
 
 Core:
   Id: SDTMCHK-VS-003
   Status: Draft
-  Version: "1"
-
+  Version: '1'
 Rule Type: Record Data
-
 Scope:
   Classes:
-    Include: [SPECIAL PURPOSE]
+    Include:
+    - SPECIAL PURPOSE
   Domains:
-    Include: [DM]
-
+    Include:
+    - DM
 Check:
   all:
-    - name: USUBJID
-      operator: is_not_contained_by
-      value: $vs_height_subjects
-
+  - name: USUBJID
+    operator: is_not_contained_by
+    value: $vs_height_subjects
 Operations:
-  - operator: distinct
-    domain: VS
-    name: USUBJID
-    id: $vs_height_subjects
-    filter:
-      VSTESTCD: HEIGHT
-
+- operator: distinct
+  domain: VS
+  name: USUBJID
+  id: $vs_height_subjects
+  filter:
+    VSTESTCD: HEIGHT
 Outcome:
-  Message: >-
-    Subject in DM has no height measurement (VSTESTCD='HEIGHT') in VS.
-    All subjects should have at least one height record.
-  Output Variables: [USUBJID, ARM, ARMCD]
-
-Description: >-
-  Every subject should have at least one HEIGHT record in VS.
-  Missing height data indicates incomplete vital signs collection.
-
+  Message: Subject in DM has no height measurement (VSTESTCD='HEIGHT') in VS. All subjects should have
+    at least one height record.
+  Output Variables:
+  - USUBJID
+  - ARM
+  - ARMCD
+Description: 'Every subject should have at least one HEIGHT record in VS. Missing height data indicates
+  incomplete vital signs collection. Based on sdtmchecks::check_vs_height. Difference from the R function:
+  A HEIGHT record with no VSSTRESN counts as a height. R needs a non-missing VSSTRESN.'
 Sensitivity: Record
 Executability: Fully Executable
-
 Authorities:
-  - Organization: sdtmchecks
-    Standards:
-      - Name: SDTMIG
-        Version: "3.4"
-        References:
-          - Origin: sdtmchecks R package
-            Rule Identifier:
-              Id: SDTMCHK-VS-003
-              Version: "1"
-            Version: "1"
-            Citations:
-              - Cited Guidance: check_vs_height
-                Document: pharmaverse sdtmchecks
-                Section: VS Domain
+- Organization: sdtmchecks
+  Standards:
+  - Name: SDTMIG
+    Version: '3.4'
+    References:
+    - Origin: sdtmchecks R package
+      Rule Identifier:
+        Id: SDTMCHK-VS-003
+        Version: '1'
+      Version: '1'
+      Citations:
+      - Cited Guidance: check_vs_height
+        Document: pharmaverse sdtmchecks
+        Section: VS Domain

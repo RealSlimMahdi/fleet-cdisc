@@ -202,12 +202,20 @@ class TestArdToTableModel:
         assert len(group_rows) > 0, "Should have group (SOC) rows"
         assert len(data_rows) > 0, "Should have data (PT) rows"
 
-    def test_group_rows_have_empty_cells(self, rich_ard: pl.DataFrame) -> None:
+    def test_soc_group_rows_print_the_ard_count(self, rich_ard: pl.DataFrame) -> None:
+        # c1-451: the SOC row carries its subject count, as the ARD holds it.
         model = ard_to_table_model(rich_ard)
         group_rows = [r for r in model.rows if r.row_type == "group"]
-        for gr in group_rows:
-            for val in gr.cells.values():
-                assert val == "", f"Group row should have empty cells, got '{val}'"
+        assert group_rows
+        soc = rich_ard.filter(
+            (pl.col("variable") == "AEBODSYS")
+            & (pl.col("variable_level") == group_rows[0].label)
+            & (pl.col("group1_level") == "Placebo")
+        )
+        n = soc.filter(pl.col("stat_name") == "n")["stat_fmt"].item()
+        pct = soc.filter(pl.col("stat_name") == "pct")["stat_fmt"].item()
+        expected = "0" if n == "0" else f"{n} ({pct}%)"
+        assert group_rows[0].cells["Placebo"] == expected
 
     def test_data_rows_have_merged_n_pct(self, rich_ard: pl.DataFrame) -> None:
         model = ard_to_table_model(rich_ard)

@@ -55,7 +55,7 @@ print("━━ Layer 0 · Inputs ━━━━━━━━━━━━━━━━
 adsl = fleet.frame(
     pl.from_repr("""\
 ┌─────────────┬─────┬─────┬───────────────────────────┬──────────────────────┬────────────┬────────────┬───────┐
-│ USUBJID     ┆ AGE ┆ SEX ┆ RACE                      ┆ TRT01P               ┆ TRTSDT     ┆ TRTEDT     ┆ SAFFL │
+│ USUBJID     ┆ AGE ┆ SEX ┆ RACE                      ┆ TRT01A               ┆ TRTSDT     ┆ TRTEDT     ┆ SAFFL │
 │ ---         ┆ --- ┆ --- ┆ ---                       ┆ ---                  ┆ ---        ┆ ---        ┆ ---   │
 │ str         ┆ i64 ┆ str ┆ str                       ┆ str                  ┆ str        ┆ str        ┆ str   │
 ╞═════════════╪═════╪═════╪═══════════════════════════╪══════════════════════╪════════════╪════════════╪═══════╡
@@ -67,9 +67,8 @@ adsl = fleet.frame(
 └─────────────┴─────┴─────┴───────────────────────────┴──────────────────────┴────────────┴────────────┴───────┘
 """)
 )
-adsl = adsl.with_columns(pl.col("TRT01P").alias("TRTA"))
 print(f"  ADSL (inline)    : {adsl.shape[0]} subjects × {adsl.shape[1]} variables")
-print(f"         Arms: {sorted(adsl['TRTA'].unique().to_list())}")
+print(f"         Arms: {sorted(adsl['TRT01A'].unique().to_list())}")
 
 # Raw AE extract — the only raw data this script owns
 ae_raw = fleet.frame(
@@ -91,7 +90,7 @@ print(f"  ae_raw           : {ae_raw.shape[0]:>3} rows × {ae_raw.shape[1]} cols
 
 
 # ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-# ┃  LAYER 1 — SDTM AE: standardise raw AE into submission-ready domain   ┃
+# ┃  LAYER 1 — SDTM AE: standardise raw AE into an SDTM-shaped domain     ┃
 # ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 print("\n━━ Layer 1 · SDTM AE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
@@ -108,6 +107,21 @@ ae = (
     .assign("AEACN", source="ae_action_taken")
     .assign("AEREL", source="ae_relationship")
     .seq("AESEQ", order_by=["AESTDTC"])
+    # Only AE variables, in SDTMIG order: the raw columns are not written to ae.json.
+    .keep(
+        "STUDYID",
+        "DOMAIN",
+        "USUBJID",
+        "AESEQ",
+        "AETERM",
+        "AESEV",
+        "AESER",
+        "AEACN",
+        "AEREL",
+        "AEOUT",
+        "AESTDTC",
+        "AEENDTC",
+    )
     .to_frame()
 )
 
@@ -123,7 +137,7 @@ print(f"  AE : {ae.shape[0]} records × {ae.shape[1]} variables")
 print("\n━━ Layer 2 · ADaM ADAE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
 # Merge ADSL treatment dates & population flags into SDTM AE
-_adsl_trt = adsl.select(["USUBJID", "TRTSDT", "TRTEDT", "TRT01P", "TRTA", "SAFFL"])
+_adsl_trt = adsl.select(["USUBJID", "TRTSDT", "TRTEDT", "TRT01A", "SAFFL"])
 ae_with_trt = fleet.frame(ae.join(_adsl_trt, on="USUBJID", how="left"))
 
 _adae_base_ns = (
@@ -138,10 +152,13 @@ _adae_base_ns = (
     .source("AEREL")
     .source("AEOUT")
     .source("AEACN")
-    .source("TRTA")
+    # Parallel design: the actual arm of the record is the ADSL actual arm.
+    .assign("TRTA", source="TRT01A")
     .source("SAFFL")
-    .date("ASTDT", source="AESTDTC")
-    .date("AENDT", source="AEENDTC")
+    # admiral ad_adae.R: partial start to the first day but not before TRTSDT,
+    # partial end to the last day. The SAP decides the rule.
+    .date("ASTDT", source="AESTDTC", min_date="TRTSDT")
+    .date("AENDT", source="AEENDTC", impute="last")
     .duration("ADY", start="TRTSDT", end="ASTDT")
 )
 
@@ -291,6 +308,8 @@ ae_spec = AESummarySpec(
         OverallStat(label="Subjects with at least one serious AE", filter='pl.col("AESER") == "Y"'),
     ],
     columns=["TRTA"],
+    # ADAE holds the arm as TRTA, ADSL as TRT01A: the big N reads TRT01A.
+    adsl_group_col="TRT01A",
     statistics=[Statistic.N_SUBJECTS, Statistic.N_PCT, Statistic.N_EVENTS],
     pools=[
         GroupPool(label="All Xanomeline", arms=["Xanomeline Low Dose", "Xanomeline High Dose"]),
@@ -336,7 +355,7 @@ ard = adae.tlg.ae.t_summary(spec=ae_spec, adsl=adsl)
 
 # Also generate via the inline builder (header rows variant)
 ard_builder = (
-    adae.tlg.ae.population(adsl, adsl_filter=pl.col("SAFFL") == "Y")
+    adae.tlg.ae.population(adsl, adsl_filter=pl.col("SAFFL") == "Y", group_col="TRT01A")
     .by("TRTA")
     .header_rows(
         [

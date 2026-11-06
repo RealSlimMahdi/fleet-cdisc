@@ -19,10 +19,12 @@ from typing import TYPE_CHECKING, Any
 import polars as pl
 
 from ._specs import (
+    MISSING_LABEL,
     NO_CODING_LABEL,
     Column,
     GroupPool,
     InteractiveBlock,
+    MissingLevel,
     OverallStat,
     Row,
     SchemaError,
@@ -78,6 +80,7 @@ class TLGBuilder:
         self._method = "t_summary"
         self._adsl: pl.DataFrame | None = None
         self._adsl_filter: pl.Expr | str | None = None
+        self._adsl_group_col: str | None = None
         self._dataset_filter: pl.Expr | str | None = None
         self._group_col: str | None = None
         self._header_rows_list: list[OverallStat] = []
@@ -89,6 +92,7 @@ class TLGBuilder:
         self._label_col: str | None = None
         self._decimals: dict[str, str] | None = None
         self._uncoded: Uncoded | None = _UNSET
+        self._missing: MissingLevel | None = _UNSET
         self._prefilter: pl.Expr | str | None = _UNSET
         self._listing_columns: list[str | Column] | None = None
         self._sort_by: list[str] | None = None
@@ -116,6 +120,7 @@ class TLGBuilder:
             or self._label_col is not None
             or self._decimals is not None
             or self._uncoded is not _UNSET
+            or self._missing is not _UNSET
             or self._prefilter is not _UNSET
             or self._listing_columns is not None
             or self._sort_by is not None
@@ -148,6 +153,7 @@ class TLGBuilder:
         adsl: pl.DataFrame,
         *,
         adsl_filter: pl.Expr | str | None = None,
+        group_col: str | None = None,
     ) -> TLGBuilder:
         """Set the ADSL population and optional denominator filter.
 
@@ -157,6 +163,9 @@ class TLGBuilder:
                 ``pl.Expr`` or a string expression (the
                 YAML-serializable form).  Only the analysis records of
                 the selected subjects are counted.
+            group_col: Arm column of ADSL when it differs from the
+                analysis arm (``TRT01A`` for an ADAE grouped by
+                ``TRTA``).  Maps to the spec's ``adsl_group_col``.
 
         Returns:
             TLGBuilder: Builder with population set.
@@ -170,10 +179,21 @@ class TLGBuilder:
                     .by("TRTA")
                     .to_ard()
                 )
+
+            ADAE grouped by TRTA, ADSL with TRT01A only::
+
+                ard = (
+                    adae.tlg.ae
+                    .population(adsl, group_col="TRT01A")
+                    .by("TRTA")
+                    .template("aet02")
+                    .to_ard()
+                )
         """
         new = self._clone()
         new._adsl = adsl
         new._adsl_filter = adsl_filter
+        new._adsl_group_col = group_col
         return new
 
     def filter(self, expr: pl.Expr | str) -> TLGBuilder:
@@ -490,6 +510,38 @@ class TLGBuilder:
         new._uncoded = None if columns is None else Uncoded(columns=list(columns), label=label)
         return new
 
+    def missing(
+        self, columns: list[str] | None, *, label: str | None = MISSING_LABEL
+    ) -> TLGBuilder:
+        """Set the missing-level rule: the category columns whose nulls get a row.
+
+        Maps to the spec's ``missing``.  Each template has its own
+        default (DM: SEX, AGEGR1, RACE, ETHNIC; AET03: the intensity).
+        ``label=None`` adds no row and writes the count to the ARD
+        warning column; ``missing(None)`` switches the rule off.
+
+        Args:
+            columns: Category columns, or ``None`` to switch the rule off.
+            label: Row label of the missing level, or ``None``.
+
+        Returns:
+            TLGBuilder: Builder with the missing-level rule set.
+
+        Examples:
+            Count a null RACE under "Not reported"::
+
+                ard = (
+                    adsl.tlg.dm
+                    .population(adsl)
+                    .by("TRT01A")
+                    .missing(["RACE"], label="Not reported")
+                    .to_ard()
+                )
+        """
+        new = self._clone()
+        new._missing = None if columns is None else MissingLevel(columns=list(columns), label=label)
+        return new
+
     def prefilter(self, expr: pl.Expr | str | None) -> TLGBuilder:
         """Set the template's own record filter, applied after ``filter()``.
 
@@ -750,6 +802,9 @@ class TLGBuilder:
         if self._adsl_filter is not None:
             self._require_consumed_field("adsl_filter", "population(adsl_filter=...)")
             kwargs["adsl_filter"] = self._adsl_filter
+        if self._adsl_group_col is not None:
+            self._require_consumed_field("adsl_group_col", "population(group_col=...)")
+            kwargs["adsl_group_col"] = self._adsl_group_col
         if self._dataset_filter is not None:
             self._require_consumed_field("dataset_filter", "filter()")
             kwargs["dataset_filter"] = self._dataset_filter
@@ -788,6 +843,9 @@ class TLGBuilder:
         if self._uncoded is not _UNSET:
             self._require_consumed_field("uncoded", "uncoded()")
             kwargs["uncoded"] = self._uncoded
+        if self._missing is not _UNSET:
+            self._require_consumed_field("missing", "missing()")
+            kwargs["missing"] = self._missing
         if self._prefilter is not _UNSET:
             self._require_consumed_field("prefilter", "prefilter()")
             kwargs["prefilter"] = self._prefilter
@@ -847,7 +905,7 @@ class TLGBuilder:
         user template.
 
         Returns:
-            pl.DataFrame: Long-format {cards}-compatible ARD.
+            pl.DataFrame: ARD in the {cards} long layout.
 
         Raises:
             SchemaError: If the target template is a listing — call
@@ -1140,6 +1198,7 @@ class BuilderVerbsMixin:
         adsl: pl.DataFrame,
         *,
         adsl_filter: pl.Expr | str | None = None,
+        group_col: str | None = None,
     ) -> TLGBuilder:
         """Start the inline builder with an ADSL population.
 
@@ -1148,6 +1207,8 @@ class BuilderVerbsMixin:
             adsl_filter: Optional population filter on ADSL — a
                 ``pl.Expr`` or a string expression.  Only the analysis
                 records of the selected subjects are counted.
+            group_col: Arm column of ADSL when it differs from the
+                analysis arm (``TRT01A`` for an ADAE grouped by ``TRTA``).
 
         Returns:
             TLGBuilder: A new builder with population set.
@@ -1155,7 +1216,7 @@ class BuilderVerbsMixin:
         Examples:
             ``df.tlg.ae.population(adsl).by("TRTA").to_ard()``
         """
-        return self._builder().population(adsl, adsl_filter=adsl_filter)
+        return self._builder().population(adsl, adsl_filter=adsl_filter, group_col=group_col)
 
     def filter(self, expr: pl.Expr | str) -> TLGBuilder:
         """Start the inline builder with a dataset filter.

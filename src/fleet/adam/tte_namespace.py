@@ -1,15 +1,15 @@
 """ADTTE namespace (``df.adam.tte``) — time-to-event parameter derivation.
 
-One ``.param()`` call per parameter, sources described by typed
-:class:`~fleet.adam.tte.EventSource` / :class:`~fleet.adam.tte.CensorSource`
-objects, source frames resolved through the **pin** system::
+One ``.param()`` call per parameter. Each event or censor source is a plain
+Polars frame with ``USUBJID`` and ``ADT``::
 
     adtte = (
-        adsl.adam.tte.pin("ADSL", adsl).pin("ADAE", adae)
-        .param("OS", "Overall Survival", start_date="TRTSDT",
-               events=[DEATH_EVENT], censors=[LASTALIVE_CENSOR])
-        .param("TTAE", "Time to First AE", start_date="TRTSDT",
-               events=[AE_EVENT], censors=[EOS_CENSOR])
+        adsl.adam.tte
+        .param("OS", "Overall Survival", start="TRTSDT",
+               events={"DEATH": adsl.filter(pl.col("DTHFL") == "Y")
+                                    .select("USUBJID", ADT="DTHDT")},
+               censors={1: adsl.select("USUBJID", ADT="LSTALVDT",
+                                       EVNTDESC=pl.lit("ALIVE"))})
         .aval(unit="days")
         .seq("ASEQ", order_by=["PARAMCD"])
         .to_frame()
@@ -24,7 +24,8 @@ from typing import Any, Literal
 import polars as pl
 
 from fleet.adam._mixins import SharedADaMVerbsMixin
-from fleet.adam.tte import CensorSource, EventSource, select_tte
+from fleet.adam.tte import param_label, select_tte
+from fleet.core.dtc import to_day
 from fleet.core.exceptions import DerivationError
 
 logger = logging.getLogger("fleet")
@@ -55,13 +56,12 @@ class TTENamespace(SharedADaMVerbsMixin):
     def param(
         self,
         paramcd: str,
-        param: str,
+        param: str | None = None,
         *,
-        start_date: str,
-        events: list[EventSource],
-        censors: list[CensorSource] | None = None,
-        end_dates: list[CensorSource] | None = None,
-        event_type: Literal["negative", "positive"] = "negative",
+        start: str,
+        events: dict[str, pl.DataFrame | pl.LazyFrame],
+        censors: dict[int, pl.DataFrame | pl.LazyFrame] | None = None,
+        stop_at: list[str] | None = None,
         by: list[str] | None = None,
         set_values_to: dict[str, Any] | None = None,
         subject_keys: list[str] | None = None,
@@ -71,94 +71,118 @@ class TTENamespace(SharedADaMVerbsMixin):
     ) -> TTENamespace:
         """Derive one time-to-event parameter and append its rows.
 
-        Per subject: the EARLIEST record pooled from *events* wins
-        (``CNSR=0``); otherwise the LATEST record pooled from *censors*
-        (``CNSR`` = the source's censor value).  ``STARTDT`` comes from the
-        pinned ADSL (or the base frame when ADSL is not pinned); dates before
-        it are floored to it.  ``SRCDOM``/``SRCVAR``/``SRCSEQ`` are stamped
-        automatically from each source's declaration (override via the
-        source's ``set=``).  AVAL is derived separately by :meth:`aval`.
+        Each source is a plain frame with the subject keys and ``ADT``.
+        The stop date of a subject is the earliest non-null *stop_at* date
+        in ADSL; event and censor records after it are dropped. The first
+        event left wins: ``CNSR = 0`` and ``EVNTDESC`` = its key. A subject
+        without an event is censored at the last censor record left:
+        ``CNSR`` = its key (on a date tie, the frame given last wins). A
+        subject with no record left is dropped with a warning. ``STARTDT``
+        comes from ADSL (the pinned ADSL, else the base frame). An event or
+        censor date before it is set to it (admiral: ADT = max(ADT,
+        STARTDT)); the CNSR does not change. AVAL comes from :meth:`aval`.
+
+        A source frame may also carry ``EVNTDESC`` (censors only),
+        ``CNSDTDSC``, ``SRCDOM``, ``SRCVAR`` and ``SRCSEQ``; they go onto the
+        selected row, and ``SRCSEQ`` breaks a tie on one date. A censor
+        frame without an ``EVNTDESC`` column gives a null ``EVNTDESC`` and a
+        warning that names the frame: the reason of the censoring is study
+        text, so Fleet does not invent it.
+
+        Without *param* (and without PARAM in *set_values_to*), PARAM is
+        the decode of *paramcd* in the study CT: the codelist of the
+        ``PARAMCD`` variable in the ADaM ``define.yaml`` of the first
+        ``study_config.yaml`` in the working directory or above it (ADTTE
+        first). CDISC ADaM CT has no time-to-event PARAMCD codelist. If no
+        decode is found, ``param()`` raises and names the places searched.
+
+        For a favorable event (admiral ``event_type = "positive"``), censor
+        at the stop date: add ``{1: adsl.select("USUBJID",
+        ADT=pl.min_horizontal("EOSDT", "NACTDT"))}`` to *censors*.
 
         The first ``param()`` call replaces the pipeline frame with the
-        derived rows (the base frame is the subject universe, not output
-        rows); subsequent calls append, so one chain builds the whole ADTTE.
+        derived rows; later calls append, so one chain builds the whole
+        ADTTE. STUDYID is carried from ADSL as the first column. Other ADSL
+        variables come from ``join_adsl()`` after the last ``param()``.
 
         Args:
-            paramcd: PARAMCD for the new parameter (may be an expression
-                string when *by* is used, e.g. ``'"TTAE" + pl.col("AEDECOD")'``
-                is not needed — pass a pl.Expr in *set_values_to* instead).
-            param: PARAM label.
-            start_date: Time-origin column in ADSL (→ ``STARTDT``).
-            events: Ordered event sources (highest priority first).
-            censors: Ordered censoring sources.
-            end_dates: Censor sources whose EARLIEST date closes the
-                observation window (events after it do not count; it takes
-                precedence over ordinary censoring).
-            event_type: ``"positive"`` for favorable events — requires
-                *end_dates*; subjects without the event censor at the window
-                end.
-            by: Stratification columns (must exist in every source frame) —
-                one parameter row per subject per stratum; use expressions in
-                *set_values_to* for per-stratum PARAMCD/PARAM.
-            set_values_to: Extra constant/expression columns on the new rows
-                (PARAMN, PARCAT1, ...). Expressions may reference *by*
-                columns; a static PARAMCD with several strata raises (1:1
-                guard).
+            paramcd: PARAMCD of the new parameter.
+            param: PARAM label (or give PARAM in *set_values_to*). When
+                neither is given, the study CT gives it (see above).
+            start: Date column in ADSL that starts the clock (``STARTDT``).
+            events: ``EVNTDESC -> frame`` of event records.
+            censors: ``CNSR -> frame`` of censor records (CNSR >= 1).
+            stop_at: Date columns in ADSL. The earliest non-null one ends
+                the observation: records after it are dropped.
+            by: Stratum columns, present in every source frame. Give a
+                per-stratum PARAMCD as an expression in *set_values_to*.
+            set_values_to: Extra constant or expression columns on the new
+                rows (PARAMN, PARCAT1, ...). A static PARAMCD with several
+                strata raises (1:1 guard).
             subject_keys: Subject identifiers (default: the ADSL pin's join
                 key, usually ``["USUBJID"]``).
-            create_datetime: Emit ``ADTM``/``STARTDTM`` instead of dates.
-            retain: ``"drop"`` (admiral parity, warns) or
-                ``"censor_at_start"`` for subjects with no event and no
-                censor record.
-            explain: Log the per-subject decision trace (every candidate,
-                the winner, and the reason) through the fleet logger.
+            create_datetime: Give ``ADTM``/``STARTDTM`` instead of dates.
+            retain: ``"drop"`` (admiral, warns) or ``"censor_at_start"``
+                for a subject with no record.
+            explain: Log the decision trace per subject (every candidate,
+                the selected one and the reason) through the fleet logger.
 
         Returns:
             TTENamespace: A fresh namespace whose frame contains the
                 accumulated ADTTE rows; call ``.to_frame()`` to materialise.
 
         Raises:
-            DerivationError: On unknown columns (with did-you-mean), string
-                date columns, PARAMCD collisions, or by-group 1:1 violations.
+            DerivationError: On unknown columns (with did-you-mean), date
+                columns that are not Date/Datetime, bad dict keys, PARAMCD
+                collisions, by-group 1:1 violations, or no PARAM label.
+
+        References:
+            admiral 1.5 ``derive_param_tte`` (``end_dates``,
+            ``event_type = "negative"``: records after the first end date
+            are not used; ADT = max(ADT, STARTDT); ``censor_source`` has no
+            default EVNTDESC). ADaM BDS-TTE v1.0: EVNTDESC is permissible
+            free text with no codelist. ADaMIG v1.3: PARAM and PARAMCD map
+            one to one. ADR-0043
+            (docs/adr/0043-tte-censors-at-the-last-record-before-the-stop-date.md).
 
         Examples:
-            Overall survival from prebuilt sources::
+            PFS censored at the last assessment before new therapy::
 
-                from fleet.adam.tte import DEATH_EVENT, LASTALIVE_CENSOR
-
+                last_assessment = adrs.select(
+                    "USUBJID", "ADT", EVNTDESC=pl.lit("NO PROGRESSION"),
+                    CNSDTDSC=pl.lit("LAST ASSESSMENT"),
+                )
                 adtte = (
-                    adsl.adam.tte.pin("ADSL", adsl)
-                    .param("OS", "Overall Survival", start_date="TRTSDT",
-                           events=[DEATH_EVENT], censors=[LASTALIVE_CENSOR])
+                    adsl.adam.tte
+                    .param(
+                        "PFS",
+                        "Progression-Free Survival",
+                        start="TRTSDT",
+                        events={"PD": adrs.filter(pl.col("AVALC") == "PD")},
+                        censors={2: last_assessment, 3: adsl.select("USUBJID", ADT="TRTSDT")},
+                        stop_at=["EOSDT", "NACTDT"],
+                    )
                     .aval(unit="days")
                     .to_frame()
                 )
         """
         base = self.to_frame()
-        universe = self._pinned["ADSL"][0] if "ADSL" in getattr(self, "_pinned", {}) else base
-        keys = subject_keys or (
-            self._pin_join_key("ADSL") if "ADSL" in getattr(self, "_pinned", {}) else ["USUBJID"]
-        )
-
-        def resolve(name: str) -> pl.DataFrame:
-            pinned = getattr(self, "_pinned", {})
-            if name.upper() in pinned:
-                return pinned[name.upper()][0]
-            if name.upper() == "ADSL":
-                return universe
-            raise DerivationError(
-                f"TTE source dataset '{name}' is not pinned. Pinned: "
-                f"{sorted(pinned) or 'none'}. Attach it with .pin({name!r}, df)."
-            )
+        pinned = getattr(self, "_pinned", {})
+        universe = pinned["ADSL"][0] if "ADSL" in pinned else base
+        keys = subject_keys or (self._pin_join_key("ADSL") if "ADSL" in pinned else ["USUBJID"])
+        if param is None and "PARAM" not in (set_values_to or {}):
+            if "PARAMCD" in (set_values_to or {}):
+                raise DerivationError(
+                    "param(): PARAMCD comes from set_values_to, so give PARAM there too."
+                )
+            param = param_label(paramcd, self._domain)
 
         rows, trace = select_tte(
             universe=universe,
-            start_date=start_date,
+            start=start,
             events=events,
-            censors=censors or [],
-            end_dates=end_dates,
-            event_type=event_type,
-            resolve=resolve,
+            censors=censors or {},
+            stop_at=stop_at,
             subject_keys=keys,
             by=by,
             create_datetime=create_datetime,
@@ -166,7 +190,9 @@ class TTENamespace(SharedADaMVerbsMixin):
         )
 
         # Parameter identity + extra metadata.
-        rows = rows.with_columns(pl.lit(paramcd).alias("PARAMCD"), pl.lit(param).alias("PARAM"))
+        rows = rows.with_columns(pl.lit(paramcd).alias("PARAMCD"))
+        if param is not None:
+            rows = rows.with_columns(pl.lit(param).alias("PARAM"))
         for name, value in (set_values_to or {}).items():
             expr = value if isinstance(value, pl.Expr) else pl.lit(value)
             rows = rows.with_columns(expr.alias(name))
@@ -186,7 +212,7 @@ class TTENamespace(SharedADaMVerbsMixin):
             with pl.Config(
                 tbl_hide_dataframe_shape=True, tbl_hide_column_data_types=True, tbl_rows=-1
             ):
-                logger.info("TTE decision trace — %s (%s):\n%s", paramcd, param, trace)
+                logger.info("TTE decision trace — %s (%s):\n%s", paramcd, param or "", trace)
 
         # Accumulate: a base frame that already carries PARAMCD holds prior
         # ADTTE rows → append (with collision guard); otherwise replace.
@@ -207,16 +233,20 @@ class TTENamespace(SharedADaMVerbsMixin):
             combined = rows
 
         new = self._materialise_then(combined)
+        if "ADSL" not in pinned and "PARAMCD" not in base.columns:
+            # The base frame was ADSL: later param(), join_adsl() and km_data() read it.
+            new = new.pin("ADSL", universe, join_on=keys)
         from fleet.core.lineage import record_lineage
 
         record_lineage(
             new,
-            (pl.col(start_date).alias(paramcd),),
+            (pl.col(start).alias(paramcd),),
             verb="param",
             params={
                 "param": param,
-                "events": [e.label for e in events],
-                "censors": [c.label for c in censors or []],
+                "events": list(events),
+                "censors": [f"CNSR {c}" for c in censors or {}],
+                "stop_at": list(stop_at or []),
             },
         )
         return new
@@ -237,7 +267,10 @@ class TTENamespace(SharedADaMVerbsMixin):
         ``AVAL = (ADT − STARTDT [+ 1 day]) / unit`` using the CDISC
         conventions (7, 30.4375, 365.25 days per week/month/year).  The
         ``+ 1`` inclusive convention matches admiral's
-        ``derive_vars_duration(add_one=TRUE)``.
+        ``derive_vars_duration(add_one=TRUE)``.  Each row takes its end as
+        the date of ``ADTM``, else ``ADT``, and its start as the date of
+        ``STARTDTM``, else ``STARTDT``, so one chain can mix date and
+        date-time parameters.
 
         Args:
             unit: Output unit (default ``"days"``).
@@ -253,9 +286,12 @@ class TTENamespace(SharedADaMVerbsMixin):
             Analysis value in months::
 
                 adtte = (
-                    adsl.adam.tte.pin("ADSL", adsl)
-                    .param("OS", "Overall Survival", start_date="TRTSDT",
-                           events=[DEATH_EVENT], censors=[LASTALIVE_CENSOR])
+                    adsl.adam.tte
+                    .param("OS", "Overall Survival", start="TRTSDT",
+                           events={"DEATH": adsl.filter(pl.col("DTHFL") == "Y")
+                                                .select("USUBJID", ADT="DTHDT")},
+                           censors={1: adsl.select("USUBJID", ADT="LSTALVDT",
+                                                   EVNTDESC=pl.lit("ALIVE"))})
                     .aval(unit="months")
                     .to_frame()
                 )
@@ -265,8 +301,16 @@ class TTENamespace(SharedADaMVerbsMixin):
                 f"aval() unit={unit!r} is not supported. Choose one of {sorted(_UNIT_DAYS)}."
             )
         schema = self._lazy.collect_schema()
-        start, end = ("STARTDTM", "ADTM") if "ADTM" in schema.names() else ("STARTDT", "ADT")
-        days = (pl.col(end).cast(pl.Date) - pl.col(start).cast(pl.Date)).dt.total_days()
+
+        def day(*names: str) -> pl.Expr:
+            present = [
+                to_day(pl.col(n), schema.get(n), verb="aval").cast(pl.Date)
+                for n in names
+                if n in schema.names()
+            ]
+            return pl.coalesce(present) if present else pl.lit(None, dtype=pl.Date)
+
+        days = (day("ADTM", "ADT") - day("STARTDTM", "STARTDT")).dt.total_days()
         if add_one:
             days = pl.when(days >= 0).then(days + 1).otherwise(days)
         exprs = [(days / _UNIT_DAYS[unit]).alias("AVAL")]

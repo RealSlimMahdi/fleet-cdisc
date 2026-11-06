@@ -67,13 +67,13 @@ Each link is a versioned, reviewable artefact stored alongside the study specifi
 
 ### Pillar 2 — Cross-Language Benchmark: `{admiral}` Parity
 
-`{admiral}`[^4] is the Roche/Atorus R package for ADaM derivations; it is the de-facto gold standard in R-based clinical programming and is documented in multiple regulatory submissions. Fleet's test suite contains `tests/unit/test_admiral_parity.py` — 400+ lines of tests that benchmark Fleet's Python outputs against documented `{admiral}` algorithm specifications.
+`{admiral}`[^4] is the Roche/Atorus R package for ADaM derivations; it is the de-facto gold standard in R-based clinical programming and is documented in multiple regulatory submissions. Fleet's test suite contains `tests/unit/test_admiral_parity.py`: 39 tests that check selected `{admiral}` formulas and patterns, adapted to Polars, against expected values written into the tests. They do not cover every ADaM verb. The known differences are listed below.
 
 **Coverage as of v0.1.0:**
 
 | Test class                 | Algorithms verified                                                                |
 | -------------------------- | ---------------------------------------------------------------------------------- |
-| `TestBSA`                  | Dubois-DuBois, Mosteller, Haycock, Gehan-George (4 methods)                        |
+| `TestBSA`                  | DuBois, Mosteller, Haycock, Gehan-George (4 methods)                               |
 | `TestMeanArterialPressure` | Standard MAP formula                                                               |
 | `TestQTc`                  | Bazett, Fridericia (2 methods)                                                     |
 | `TestAgeInYears`           | Day-accurate age in years, months, weeks                                           |
@@ -86,10 +86,20 @@ Each link is a versioned, reviewable artefact stored alongside the study specifi
 
 **No R runtime is required.** The parity tests work in two ways:
 
-- **Formula transcription** — mathematical formulas (BSA, QTc, MAP, age conversion) are transcribed directly from `{admiral}`'s published R source code. The tests then assert that Fleet's Polars implementation produces numerically identical results for the same inputs, using analytically-derived expected values computed in pure Python from the same formula.
+- **Formula transcription**: selected formulas (BSA, QTc, MAP, age conversion) are written from the `{admiral}` R source. The tests compare the Fleet result with an expected value that pure Python computes from the same formula, at the number of decimals that the verb keeps. This is the same formula, not a run of `{admiral}`.
 - **Behavioural specification** — for higher-level patterns such as ANL01FL flagging, the expected output rows and flag values are transcribed verbatim from `{admiral}`'s documented examples (the test comments quote the equivalent R code). Fleet's Python implementation is then verified to reproduce that exact output.
 
-This approach means the validation does not depend on an R installation, a specific R version, or `rpy2`. The published `{admiral}` specification is the invariant; Fleet's implementation is validated against it.
+This approach means the validation does not depend on an R installation, a specific R version, or `rpy2`. It covers only the formulas and patterns in the tests. The weekly admiral oracle job (`scripts/admiral_oracle.py`) runs `{admiral}` itself on study day, duration, TRTEMFL and ANL01FL.
+
+**Known differences from `{admiral}`:**
+
+| Class              | Fleet                                                                     | `{admiral}`                                                    |
+| ------------------ | ------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| Sign               | `pchg`: `(AVAL - BASE) / BASE * 100`. AVAL -5, BASE -10 gives PCHG -50.   | `derive_var_pchg` divides by `abs(BASE)`: the same row gives 50. |
+| Rounding           | `bsa` keeps 4 decimals, `map` and `qtc` keep 2, `bmi` keeps 1.            | `compute_bsa`, `compute_map`, `compute_qtc` do not round.      |
+| Record structure   | `derive_locf_records` fills the null values in place and adds no DTYPE.   | `derive_locf_records` adds new records with `DTYPE = "LOCF"`.  |
+| Missing values     | `pchg` gives null when BASE is 0.                                         | Same: `NA` when BASE is 0.                                     |
+| Units              | `qtc` reads RR in ms (ADR-0013).                                          | Same: RR in ms.                                                |
 
 ```python
 # Example: ANL01FL last-valid-row parity test
@@ -198,11 +208,10 @@ Fleet's `fleet init rules` command caches the exact CDISC conformance rules for 
 uv run fleet init rules
 ```
 
-Each YAML file records the rule's CORE ID, description, check logic, scope, severity, and regulatory citations. When committed to VCS, these files provide:
+Each YAML file records the rule's CORE ID, description, check logic, scope, and regulatory citations. The files are a reference copy. Validation does not read them: the CORE engine runs the rules bundled in its own release, so the engine version fixes the rules that a study is validated against. Pin the engine with `fleet install-engine --version <tag>` or with `validation.engine_path` in `study_config.yaml`. When committed to VCS, the files provide:
 
-- **Version lock:** The exact rule definitions in effect when the study was validated, immune to upstream CDISC updates.
-- **Audit trail:** Reviewers (including regulators) can inspect which rules were applied without re-querying the CDISC Library.
-- **Diff visibility:** Any change in the rule set between study milestones is visible in version control history.
+- **Reference:** Reviewers can read the rule text for the IG version without re-querying the CDISC Library.
+- **Diff visibility:** Any change in the CDISC Library rule text between study milestones is visible in version control history.
 
 #### Custom rules
 
@@ -252,13 +261,13 @@ Applying the R Validation Hub risk-based framework to Fleet:
 | ---------------------------------- | ----------------------------------------------- | --------------------------------------------------------- | --------------------------- |
 | Standards metadata sourcing        | `fleet init define` → `define.yaml`             | SDTM IG + ADaM IG variable metadata from CDISC Library    | Automated at study setup    |
 | Controlled terminology generation  | `fleet init ct` → `codelists.py`                | NCI concept IDs for all study domains                     | Automated at study setup    |
-| Conformance rule snapshot          | `fleet init rules` → `metadata/*/rules/*.yaml`  | All CDISC CORE rules for IG version, version-locked       | Automated at study setup    |
+| Conformance rule snapshot          | `fleet init rules` → `metadata/*/rules/*.yaml`  | All CDISC CORE rules for IG version, reference copy       | Automated at study setup    |
 | Custom rule scaffolding            | `fleet add-rule` → `metadata/custom_rules/`     | Sponsor SOP / TCG gap rules, schema-validated             | On demand                   |
 | Custom rule schema check           | `fleet check-rule <file>`                       | YAML syntax + structure + JSON Schema validation          | On demand / CI gate         |
 | Cross-language algorithm benchmark | `tests/unit/test_admiral_parity.py`             | BSA, MAP, QTc, LOCF, BMI, ANL01FL, age/period (frozen admiral values) | Runs in CI on every commit  |
 | admiral oracle                     | `scripts/admiral_oracle.py`                     | Study day, duration, TRTEMFL, ANL01FL on real ADAE shapes, run by admiral 1.4.1 | Runs in CI weekly           |
 | SDTM conformance                   | `ValidationService.validate_sdtm()`             | All SDTM domains, SDTMIG 3.4                              | Run at study delivery       |
-| ADaM conformance                   | `ValidationService.validate_adam()`             | ADSL, BDS, OCCDS datasets, ADaMIG 1.3                     | Run at study delivery       |
+| ADaM conformance                   | `ValidationService.validate_adam()`             | ADSL, BDS, OCCDS datasets, ADaMIG 1.3                     | Gives NOT ASSESSED until CORE ships ADaM rules, so it is not a qualification activity today |
 | Unit and integration tests         | `pytest` (2,900+ tests)                         | Namespace verbs, CT validation, Define-XML, TDD workflows | Runs in CI on every commit, Python 3.12 to 3.14 |
 | Static analysis                    | `ruff check` + `ruff format`                    | Full source tree                                          | Runs in CI on every commit  |
 | End-to-end smoke tests             | `examples/*.py` (8 scripts, CDISCPILOT01 study) | Full SDTM + ADaM pipelines and TLGs                       | Runs in CI on every commit  |

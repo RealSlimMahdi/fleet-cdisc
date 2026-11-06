@@ -18,9 +18,13 @@
 #                      "arrow", "jsonlite"))
 #
 # Usage:
-#   Rscript benchmark/admiral_adae_benchmark.R [max_rows]
+#   Rscript benchmark/admiral_adae_benchmark.R [max_rows] [--reps=N] [--input=NAME] [--tag=TAG]
 #   Rscript benchmark/admiral_adae_benchmark.R           # default: all rows
 #   Rscript benchmark/admiral_adae_benchmark.R 500000    # cap at 500K rows
+#
+# --input=NAME reads ae_NAME.parquet and adsl_NAME.parquet (default: inflated).
+# Each scale runs --reps times (default 3); the output of the last run at each
+# scale goes to admiral_adae_check[_TAG]_<rows>.parquet for run_benchmark.py.
 # ─────────────────────────────────────────────────────────────────────────────
 
 suppressPackageStartupMessages({
@@ -37,7 +41,16 @@ options(scipen = 999)
 
 # ── Parse CLI args ───────────────────────────────────────────────────────────
 args <- commandArgs(trailingOnly = TRUE)
-max_rows <- if (length(args) >= 1) as.integer(args[1]) else NULL
+opt <- function(name, default) {
+  hit <- grep(paste0("^--", name, "="), args, value = TRUE)
+  if (length(hit)) sub(paste0("^--", name, "="), "", hit[1]) else default
+}
+positional <- grep("^--", args, value = TRUE, invert = TRUE)
+max_rows <- if (length(positional) >= 1) as.integer(positional[1]) else NULL
+reps <- as.integer(opt("reps", "3"))
+input <- opt("input", "inflated")
+tag <- opt("tag", "")
+suffix <- if (nzchar(tag)) paste0("_", tag) else ""
 
 # ── Resolve data directory ───────────────────────────────────────────────────
 script_dir <- tryCatch(
@@ -49,14 +62,15 @@ if (!dir.exists(DATA)) DATA <- "benchmark/data"
 
 # ── Read full data once ──────────────────────────────────────────────────────
 cat("Reading data...\n")
-ae_full  <- arrow::read_parquet(file.path(DATA, "ae_inflated.parquet"))
-adsl_full <- arrow::read_parquet(file.path(DATA, "adsl_inflated.parquet"))
+ae_full  <- arrow::read_parquet(file.path(DATA, paste0("ae_", input, ".parquet")))
+adsl_full <- arrow::read_parquet(file.path(DATA, paste0("adsl_", input, ".parquet")))
 cat(sprintf("  Full AE  : %s rows\n", format(nrow(ae_full), big.mark = ",")))
 cat(sprintf("  Full ADSL: %s rows\n", format(nrow(adsl_full), big.mark = ",")))
 
 # ── Scale factors ────────────────────────────────────────────────────────────
 full_n <- nrow(ae_full)
-scale_factors <- c(100000, 500000, 1000000, 2000000, 5000000, full_n)
+scale_factors <- c(100000, 500000, 1000000, 2000000, 5000000)
+scale_factors <- c(scale_factors[scale_factors < full_n], full_n)
 if (!is.null(max_rows)) {
   scale_factors <- scale_factors[scale_factors <= max_rows]
   if (length(scale_factors) == 0) scale_factors <- max_rows
@@ -168,12 +182,12 @@ run_pipeline <- function(ae_raw, adsl, n_label) {
     ) %>%
     derive_var_extreme_flag(
       by_vars = exprs(USUBJID, AETERM),
-      order   = exprs(AESEVN),
+      order   = exprs(AESEVN, AESEQ),
       new_var = ANL01FL,
       mode    = "last"
     ) %>%
     derive_var_obs_number(
-      by_vars = exprs(USUBJID),
+      by_vars = exprs(USUBJID), order = exprs(AESEQ),
       new_var = ASEQ
     )
   adam_sec <- (proc.time() - t_adam)["elapsed"]
@@ -181,7 +195,7 @@ run_pipeline <- function(ae_raw, adsl, n_label) {
 
   invisible(gc())
   gc_info <- gc()
-  peak_mem_mb <- sum(gc_info[, 6])
+  peak_mem_mb <- sum(gc_info[, ncol(gc_info)])  # "max used (Mb)"
 
   list(
     n_rows    = n_ae_rows,
@@ -213,14 +227,43 @@ for (n in scale_factors) {
   ae_subj <- unique(ae_sub$subject_id)
   adsl_sub <- adsl_full[adsl_full$USUBJID %in% ae_subj, ]
 
-  res <- run_pipeline(ae_sub, adsl_sub, n)
-  cat(sprintf("  SDTM: %.1fs  ADaM: %.1fs  Total: %.1fs  Mem: %.0f MB  Out: %d×%d\n",
-              res$sdtm_sec, res$adam_sec, res$total_sec, res$peak_mb, res$out_rows, res$out_cols))
-
-  results[[as.character(n)]] <- res
+  runs <- list()
+  res <- NULL
+  for (i in seq_len(reps)) {
+    # Free the previous run's output first: two 11.5M-row ADAEs do not fit in 64 GB
+    res <- NULL
+    invisible(gc())
+    res <- run_pipeline(ae_sub, adsl_sub, n)
+    cat(sprintf("  SDTM: %.2fs  ADaM: %.2fs  Total: %.2fs  Mem: %.0f MB  Out: %d×%d\n",
+                res$sdtm_sec, res$adam_sec, res$total_sec, res$peak_mb, res$out_rows, res$out_cols))
+    runs[[i]] <- res[setdiff(names(res), "adae")]
+  }
+  # Output of the last run at each scale, for the row-by-row check in run_benchmark.py
+  check_cols <- c("STUDYID", "USUBJID", "AETERM", "AESTDTC", "AEENDTC", "AESEV",
+                  "AESER", "AEREL", "AEOUT", "AEACN", "AESEQ", "ASTDT", "AENDT",
+                  "TRTEMFL", "AESEVN", "ANL01FL", "ASEQ")
+  arrow::write_parquet(
+    res$adae[, check_cols],
+    file.path(DATA, sprintf("admiral_adae_check%s_%d.parquet", suffix, as.integer(n)))
+  )
+  totals <- vapply(runs, function(r) r$total_sec, numeric(1))
+  results[[as.character(n)]] <- list(
+    n_rows    = res$n_rows,
+    n_adsl    = res$n_adsl,
+    out_rows  = res$out_rows,
+    out_cols  = res$out_cols,
+    peak_mb   = res$peak_mb,
+    columns   = res$columns,
+    sdtm_sec  = median(vapply(runs, function(r) r$sdtm_sec, numeric(1))),
+    adam_sec  = median(vapply(runs, function(r) r$adam_sec, numeric(1))),
+    total_sec = median(totals),
+    total_min_sec = min(totals),
+    total_max_sec = max(totals),
+    total_runs_sec = totals
+  )
 
   # Clean up
-  rm(ae_sub, adsl_sub); invisible(gc())
+  rm(ae_sub, adsl_sub, res, runs); invisible(gc())
 }
 
 # ── Save the last (largest) run as the canonical result ──────────────────────
@@ -236,8 +279,10 @@ all_deps  <- unique(c(
 # Build scaling table
 scaling <- lapply(names(results), function(k) {
   r <- results[[k]]
-  list(rows = r$n_rows, sdtm_sec = r$sdtm_sec, adam_sec = r$adam_sec,
-       total_sec = r$total_sec, peak_mb = r$peak_mb)
+  list(rows = r$n_rows, subjects = r$n_adsl, sdtm_sec = r$sdtm_sec,
+       adam_sec = r$adam_sec, total_sec = r$total_sec,
+       total_min_sec = r$total_min_sec, total_max_sec = r$total_max_sec,
+       total_runs_sec = r$total_runs_sec, peak_mb = r$peak_mb)
 })
 
 metrics <- list(
@@ -245,6 +290,8 @@ metrics <- list(
   oak_version           = as.character(packageVersion("sdtm.oak")),
   admiral_version       = as.character(packageVersion("admiral")),
   r_version             = R.version.string,
+  repetitions           = reps,
+  input                 = input,
   input_rows_ae         = last$n_rows,
   input_rows_adsl       = last$n_adsl,
   output_rows           = last$out_rows,
@@ -253,9 +300,10 @@ metrics <- list(
   time_adam_sec          = last$adam_sec,
   time_total_sec        = last$total_sec,
   peak_memory_gc_mb     = last$peak_mb,
-  pipeline_loc_sdtm     = 26,
-  pipeline_loc_adam      = 28,
-  pipeline_loc_total    = 54,
+  # Non-blank, non-comment lines between the timers of run_pipeline
+  pipeline_loc_sdtm     = 58,
+  pipeline_loc_adam      = 31,
+  pipeline_loc_total    = 89,
   n_total_dependencies  = length(all_deps),
   dependency_names      = sort(all_deps),
   output_columns        = last$columns,
@@ -265,9 +313,6 @@ metrics <- list(
 json_out <- toJSON(metrics, auto_unbox = TRUE, pretty = TRUE)
 cat("\n", json_out, "\n")
 
-write(json_out, file.path(DATA, "admiral_metrics.json"))
-
-# Save sample for equivalence check
-arrow::write_parquet(head(last$adae, 100), file.path(DATA, "admiral_adae_sample.parquet"))
+write(json_out, file.path(DATA, paste0("admiral_metrics", suffix, ".json")))
 
 cat("\n✓ Admiral benchmark complete\n")

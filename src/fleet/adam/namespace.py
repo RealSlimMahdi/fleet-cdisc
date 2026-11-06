@@ -38,6 +38,7 @@ Discover every available verb programmatically with ``df.adam.verbs()``.
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Literal, TypeVar
 
@@ -270,16 +271,26 @@ class AdamNamespace(SharedADaMVerbsMixin):
         *,
         weight: str,
         height: str,
+        round_digits: int | None = None,
     ) -> AdamNamespace:
         """Derive Body Mass Index: ``weight_kg / (height_cm / 100) ** 2``.
+
+        The value keeps full precision.  A height of 0 gives null, as SAS
+        gives a missing value for a division by zero.
 
         Args:
             target: Name of the output column.
             weight: Column containing weight in kg.
             height: Column containing height in cm.
+            round_digits: Decimal places, rounded as SAS ``ROUND`` (half away
+                from zero).  Default ``None``: no rounding.
 
         Returns:
             AdamNamespace: The namespace with *target* appended.
+
+        References:
+            admiral ``compute_bmi`` (pharmaverse): full precision, NA for height 0.
+            ADR-0025: a derived value is rounded only when the call says so.
 
         Examples:
             Compute BMI from weight and height::
@@ -290,7 +301,10 @@ class AdamNamespace(SharedADaMVerbsMixin):
                     .to_frame()
                 )
         """
-        return self._chain(_bmi_expr(weight=weight, height=height, target=target), verb="bmi")
+        return self._chain(
+            _bmi_expr(weight=weight, height=height, target=target, round_digits=round_digits),
+            verb="bmi",
+        )
 
     # ------------------------------------------------------------------ #
     # 14. nrind — normal range indicator                                   #
@@ -303,17 +317,28 @@ class AdamNamespace(SharedADaMVerbsMixin):
         value: str,
         low: str,
         high: str,
+        signif_dig: int = 15,
     ) -> AdamNamespace:
         """Categorise *value* relative to normal range: LOW / NORMAL / HIGH.
+
+        The value and the limits are compared at *signif_dig* significant
+        digits, so float noise (1.3 x 88.4 = 114.92000000000002) does not
+        move a value at the limit out of the range.  A null or NaN value gives
+        null.
 
         Args:
             target: Name of the output column (e.g. ``"NRIND"``).
             value: Column containing the numeric result.
             low: Column containing the lower limit of normal.
             high: Column containing the upper limit of normal.
+            signif_dig: Significant digits for the comparison (default 15).
 
         Returns:
             AdamNamespace: The namespace with *target* appended.
+
+        References:
+            admiral ``derive_var_anrind`` (pharmaverse): ``signif(x, 15)`` on AVAL,
+            ANRLO and ANRHI before the comparison.
 
         Examples:
             Derive normal range indicator for lab results::
@@ -326,7 +351,8 @@ class AdamNamespace(SharedADaMVerbsMixin):
                 )
         """
         return self._chain(
-            _nrind_expr(value=value, low=low, high=high, target=target), verb="nrind"
+            _nrind_expr(value=value, low=low, high=high, target=target, signif_dig=signif_dig),
+            verb="nrind",
         )
 
     # ------------------------------------------------------------------ #
@@ -346,6 +372,11 @@ class AdamNamespace(SharedADaMVerbsMixin):
 
         When *open_ended* is ``True`` (default) and *trtedt* is null, the
         interval is treated as ongoing (``adt >= trtsdt`` suffices).
+        ``--DTC`` text is read by its date portion (a partial or blank
+        value gives null); a number raises.  When *adt* and *trtsdt* are
+        both ``pl.Datetime``, the start comparison keeps the time, so a
+        pre-dose record on the first dose day is not on treatment; the end
+        comparison is at date level.
 
         Args:
             target: Name of the output column (default ``"ONTRTFL"``).
@@ -356,6 +387,10 @@ class AdamNamespace(SharedADaMVerbsMixin):
 
         Returns:
             AdamNamespace: The namespace with *target* appended.
+
+        References:
+            admiral ``derive_var_ontrtfl`` (start compared with time when
+            both are date-times); ADR-0011 and ADR-0022.
 
         Examples:
             Derive on-treatment flag::
@@ -374,6 +409,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
                 trtedt=trtedt,
                 target=target,
                 open_ended=open_ended,
+                dtypes=self._lazy.collect_schema(),
             ),
             verb="on_treatment",
         )
@@ -427,8 +463,9 @@ class AdamNamespace(SharedADaMVerbsMixin):
         weight: str,
         height: str,
         method: str = "Mosteller",
+        round_digits: int | None = None,
     ) -> AdamNamespace:
-        """Derive Body Surface Area in m².
+        """Derive Body Surface Area in m², at full precision.
 
         Args:
             target: Name of the output column.
@@ -436,9 +473,15 @@ class AdamNamespace(SharedADaMVerbsMixin):
             height: Column containing height in cm.
             method: Formula to use — ``"Mosteller"`` (default), ``"DuBois"``,
                 ``"Haycock"``, or ``"Gehan-George"``.
+            round_digits: Decimal places, rounded as SAS ``ROUND`` (half away
+                from zero).  Default ``None``: no rounding.
 
         Returns:
             AdamNamespace: The namespace with *target* appended.
+
+        References:
+            admiral ``compute_bsa`` (pharmaverse): full precision.
+            ADR-0025: a derived value is rounded only when the call says so.
 
         Examples:
             Compute BSA using the Mosteller formula::
@@ -450,7 +493,14 @@ class AdamNamespace(SharedADaMVerbsMixin):
                 )
         """
         return self._chain(
-            _bsa_expr(weight=weight, height=height, method=method, target=target), verb="bsa"
+            _bsa_expr(
+                weight=weight,
+                height=height,
+                method=method,
+                target=target,
+                round_digits=round_digits,
+            ),
+            verb="bsa",
         )
 
     # ------------------------------------------------------------------ #
@@ -463,16 +513,23 @@ class AdamNamespace(SharedADaMVerbsMixin):
         *,
         systolic: str = "SYSBP",
         diastolic: str = "DIABP",
+        round_digits: int | None = None,
     ) -> AdamNamespace:
-        """Derive Mean Arterial Pressure: ``DBP + (SBP - DBP) / 3``.
+        """Derive Mean Arterial Pressure: ``DBP + (SBP - DBP) / 3``, at full precision.
 
         Args:
             target: Name of the output column (default ``"MAP"``).
             systolic: Systolic blood pressure column.
             diastolic: Diastolic blood pressure column.
+            round_digits: Decimal places, rounded as SAS ``ROUND`` (half away
+                from zero).  Default ``None``: no rounding.
 
         Returns:
             AdamNamespace: The namespace with *target* appended.
+
+        References:
+            admiral ``compute_map`` (pharmaverse): full precision.
+            ADR-0025: a derived value is rounded only when the call says so.
 
         Examples:
             Compute MAP from blood pressure columns::
@@ -484,7 +541,10 @@ class AdamNamespace(SharedADaMVerbsMixin):
                 )
         """
         return self._chain(
-            _map_expr(systolic=systolic, diastolic=diastolic, target=target), verb="map"
+            _map_expr(
+                systolic=systolic, diastolic=diastolic, target=target, round_digits=round_digits
+            ),
+            verb="map",
         )
 
     # ------------------------------------------------------------------ #
@@ -499,8 +559,9 @@ class AdamNamespace(SharedADaMVerbsMixin):
         rr: str = "RR",
         method: str = "Fridericia",
         rr_unit: str = "ms",
+        round_digits: int | None = None,
     ) -> AdamNamespace:
-        """Derive corrected QT interval, as admiral ``compute_qtc``.
+        """Derive corrected QT interval, as admiral ``compute_qtc``, at full precision.
 
         Args:
             target: Name of the output column (default ``"QTC"``).
@@ -510,6 +571,8 @@ class AdamNamespace(SharedADaMVerbsMixin):
                 ``"Bazett"``.
             rr_unit: Unit of *rr*: ``"ms"`` (default) or ``"msec"``, or
                 ``"s"`` or ``"sec"``.
+            round_digits: Decimal places, rounded as SAS ``ROUND`` (half away
+                from zero).  Default ``None``: no rounding.
 
         Returns:
             AdamNamespace: The namespace with *target* appended.
@@ -520,7 +583,8 @@ class AdamNamespace(SharedADaMVerbsMixin):
                 seconds, or a QT under 10 ms.
 
         References:
-            admiral ``compute_qtc`` (pharmaverse): RR in ms, QT in ms.
+            admiral ``compute_qtc`` (pharmaverse): RR in ms, QT in ms, full precision.
+            ADR-0025: a derived value is rounded only when the call says so.
 
         Examples:
             Derive QTcF from QT and RR, both in ms::
@@ -531,7 +595,9 @@ class AdamNamespace(SharedADaMVerbsMixin):
                     .to_frame()
                 )
         """
-        expr = _qtc_expr(qt=qt, rr=rr, method=method, target=target, rr_unit=rr_unit)
+        expr = _qtc_expr(
+            qt=qt, rr=rr, method=method, target=target, rr_unit=rr_unit, round_digits=round_digits
+        )
         schema_names = self._lazy.collect_schema().names()
         if qt in schema_names and rr in schema_names:
             seconds = rr_unit.lower() in ("s", "sec")
@@ -568,6 +634,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
         analysis_var: str = "AVAL",
         set_values_to: dict[str, Any],
         stat: Literal["mean", "sum", "min", "max", "median", "count"] = "mean",
+        where: str | pl.Expr | None = None,
     ) -> AdamNamespace:
         """
         Compute a summary statistic per group and append the results as new records.
@@ -576,7 +643,14 @@ class AdamNamespace(SharedADaMVerbsMixin):
         (e.g. ``{"PARAMCD": "AVGBP", "DTYPE": "AVERAGE"}``).
 
         *stat*: ``"mean"`` (default), ``"sum"``, ``"min"``, ``"max"``, ``"median"``,
-        ``"count"``.
+        ``"count"``. A group with only null values gives null for every stat
+        except ``"count"``, which gives 0, as SAS ``SUM()`` and PROC MEANS.
+
+        *where*: filter on the source records of the summary. The rows of the
+        dataset are all kept. A second call in one chain reads the rows that
+        the first call added: give ``where=pl.col("DTYPE").is_null()`` to
+        summarise only collected records. When *where* is None and the source
+        holds a non-null DTYPE, the verb warns.
 
         Materialises the current pipeline before concatenation.
 
@@ -597,7 +671,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
         stat_lower = stat.lower()
         agg_map = {
             "mean": pl.col(analysis_var).mean(),
-            "sum": pl.col(analysis_var).sum(),
+            "sum": pl.when(pl.col(analysis_var).count() > 0).then(pl.col(analysis_var).sum()),
             "min": pl.col(analysis_var).min(),
             "max": pl.col(analysis_var).max(),
             "median": pl.col(analysis_var).median(),
@@ -607,7 +681,22 @@ class AdamNamespace(SharedADaMVerbsMixin):
             raise DerivationError(f"Unknown stat '{stat}'. Supported: {', '.join(agg_map)}.")
 
         df = self.to_frame()
-        summary = df.group_by(by).agg(agg_map[stat_lower].alias(analysis_var))
+        source = df
+        if where is not None:
+            from fleet.sdtm.utils import parse_expression
+
+            source = df.filter(where if isinstance(where, pl.Expr) else parse_expression(where))
+        elif "DTYPE" in df.columns and df.get_column("DTYPE").is_not_null().any():
+            warnings.warn(
+                "derive_summary_records(): the source holds records with a non-null DTYPE, "
+                "and they enter the summary. Give where=pl.col('DTYPE').is_null() to "
+                "summarise only collected records.",
+                UserWarning,
+                stacklevel=2,
+            )
+        summary = source.group_by(by, maintain_order=True).agg(
+            agg_map[stat_lower].alias(analysis_var)
+        )
 
         # Apply constant values to the summary rows
         for col_name, col_val in set_values_to.items():
@@ -625,7 +714,9 @@ class AdamNamespace(SharedADaMVerbsMixin):
         summary = summary.select(col_order)
 
         combined = pl.concat([df, summary], how="vertical_relaxed")
-        return self._materialise_then(combined)
+        from fleet.core.lineage import record_row_step
+
+        return record_row_step(self._materialise_then(combined), "derive_summary_records", {})
 
     # ------------------------------------------------------------------ #
     # 21. derive_locf_records — last observation carried forward          #
@@ -634,36 +725,120 @@ class AdamNamespace(SharedADaMVerbsMixin):
     def derive_locf_records(
         self,
         *,
-        by: list[str] | None = None,
+        dataset_ref: pl.DataFrame,
+        by: list[str],
+        order_by: str | list[str],
         analysis_var: str = "AVAL",
-        order_by: str = "ADT",
+        imputation: Literal["add", "update", "update_add"] = "add",
+        keep_vars: list[str] | None = None,
     ) -> AdamNamespace:
-        """
-        Forward-fill *analysis_var* within each group (LOCF).
+        """Add LOCF records for missed visits and for a null *analysis_var*.
 
-        Sorts by *order_by* within each group defined by *by*,
-        then forward-fills null values in *analysis_var*.
+        For each *by* group, every row of *dataset_ref* (the expected visits)
+        that has no record with a non-null *analysis_var* gets a value carried
+        forward from the previous record, sorted by *by* and *order_by*. Each
+        imputed record has DTYPE ``"LOCF"``; an existing DTYPE on the other
+        records is kept. A group with no earlier value keeps a null value.
 
-        Materialises the current pipeline, applies the fill, and returns.
+        Args:
+            dataset_ref: Expected observations, for example AVISIT and AVISITN,
+                or PARAMCD, AVISIT and AVISITN. Add USUBJID for a per-subject
+                list. Each of its columns must be in the dataset.
+            by: Group columns, for example ``["STUDYID", "USUBJID", "PARAMCD"]``.
+            order_by: Sort column(s) within a group. The first one must be in
+                *dataset_ref*, so that a new record has a sort value.
+            analysis_var: Column to carry forward (default ``"AVAL"``).
+            imputation: ``"add"`` (default, as admiral) keeps each record with a
+                null value and adds an imputed record. ``"update"`` puts the
+                value on that record. ``"update_add"`` does both.
+            keep_vars: Other columns to carry forward, for example PARAMN.
+                A new record has values only in *by*, *dataset_ref*,
+                *analysis_var*, *keep_vars* and DTYPE; other columns are null.
+
+        Returns:
+            AdamNamespace: The namespace with the LOCF records; call
+                ``.to_frame()`` to materialise.
+
+        Raises:
+            DerivationError: On an unknown *imputation*, a missing column, a
+                first *order_by* column that is not in *dataset_ref*, or a null
+                *order_by* value on a record to sort.
 
         Examples:
-            Forward-fill AVAL within each subject / parameter::
+            Add WEEK 24 by LOCF for each subject and parameter::
 
-                advs = (
-                    vs_raw.adam
+                visits = pl.DataFrame(
+                    {"AVISIT": ["BASELINE", "WEEK 8", "WEEK 16", "WEEK 24"],
+                     "AVISITN": [0, 8, 16, 24]}
+                )
+                adqs = (
+                    qs_raw.adam
                     .derive_locf_records(
-                        by=["USUBJID", "PARAMCD"],
-                        analysis_var="AVAL",
-                        order_by="ADT",
+                        dataset_ref=visits,
+                        by=["STUDYID", "USUBJID", "PARAMCD"],
+                        order_by=["AVISITN"],
+                        keep_vars=["PARAM"],
                     )
                     .to_frame()
                 )
+
+        References:
+            ADaMIG v1.3 section 4.4 (BDS): DTYPE must be populated on a record
+            whose AVAL is imputed; "LOCF" is in CDISC CT codelist DTYPE (C81224).
+            admiral ``derive_locf_records`` (pharmaverse) defines the three
+            imputation modes. ADR-0029.
         """
-        grps = by or ["USUBJID", "PARAMCD"]
+        order = [order_by] if isinstance(order_by, str) else list(order_by)
+        keep = list(keep_vars or [])
+        if imputation not in ("add", "update", "update_add"):
+            raise DerivationError(
+                f"derive_locf_records(): imputation={imputation!r} is not supported. "
+                "Choose 'add', 'update' or 'update_add'."
+            )
+        if not order:
+            raise DerivationError("derive_locf_records(): order_by needs at least one column.")
+        ref_cols = dataset_ref.columns
+        if order[0] not in ref_cols:
+            raise DerivationError(
+                f"derive_locf_records(): the first order_by column {order[0]!r} is not in "
+                f"dataset_ref (columns {ref_cols}). A new record would have no sort value. "
+                "Sort by a visit column of dataset_ref, for example order_by=['AVISITN']."
+            )
         df = self.to_frame()
-        df = df.sort(grps + [order_by])
-        df = df.with_columns(pl.col(analysis_var).forward_fill().over(grps).alias(analysis_var))
-        return self._materialise_then(df)
+        needed = dict.fromkeys([*by, analysis_var, *order, *keep, *ref_cols])
+        missing = [c for c in needed if c not in df.columns]
+        if missing:
+            raise DerivationError(f"derive_locf_records(): column(s) {missing} not in the dataset.")
+
+        ref = dataset_ref.cast({c: df.schema[c] for c in ref_cols})
+        ids = df.select([c for c in by if c not in ref_cols]).unique(maintain_order=True)
+        expected = ids.join(ref, how="cross") if ids.width else ref
+        exp_by = list(dict.fromkeys([*by, *ref_cols]))
+
+        is_null = pl.col(analysis_var).is_null()
+        fill_base = df.filter(~is_null) if imputation == "add" else df
+        to_add = expected.join(fill_base.select(exp_by), on=exp_by, how="anti", nulls_equal=True)
+        stacked = pl.concat([fill_base, to_add], how="diagonal_relaxed")
+        dtype = pl.when(is_null).then(pl.lit("LOCF"))
+        if "DTYPE" in df.columns:
+            dtype = dtype.otherwise(pl.col("DTYPE"))
+        stacked = stacked.with_columns(dtype.alias("DTYPE"))
+
+        n_null = stacked.select(pl.any_horizontal(pl.col(order).is_null()).sum()).item()
+        if n_null:
+            raise DerivationError(
+                f"derive_locf_records(): {n_null} record(s) have a null value in order_by "
+                f"{order}, so their place in the visit order is unknown."
+            )
+        filled = stacked.sort([*by, *order], maintain_order=True).with_columns(
+            pl.col([analysis_var, *keep]).forward_fill().over(by)
+        )
+        if imputation != "update":
+            filled = pl.concat([filled, df.filter(is_null)], how="diagonal_relaxed")
+        from fleet.core.lineage import record_row_step
+
+        new = self._materialise_then(filled.select(list(dict.fromkeys([*df.columns, "DTYPE"]))))
+        return record_row_step(new, "derive_locf_records", {})
 
     # ------------------------------------------------------------------ #
     # 22. derive_param — append a computed parameter as new records        #
@@ -710,6 +885,10 @@ class AdamNamespace(SharedADaMVerbsMixin):
         *where*: optional filter applied to the source records before the
         pivot (e.g. restrict to ``ANL01FL == "Y"`` or baseline rows) —
         the current dataset's rows are never dropped.
+
+        A new AVAL that is infinite or NaN (for example a division by zero)
+        becomes null, with a warning that gives the count, as SAS gives a
+        missing value.
 
         Materialises the pipeline before appending.
 
@@ -810,6 +989,19 @@ class AdamNamespace(SharedADaMVerbsMixin):
             else parse_expression(str(analysis_value))
         )
         new_rows = joined.with_columns(aval_expr.alias("AVAL")).select(grps + ["AVAL"])
+        if new_rows.schema["AVAL"].is_float():
+            non_finite = new_rows.select((~pl.col("AVAL").is_finite()).sum()).item()
+            if non_finite:
+                import warnings
+
+                warnings.warn(
+                    f"derive_param(): {non_finite} new AVAL value(s) are infinite or NaN "
+                    "(for example a division by zero) and are set to null.",
+                    stacklevel=2,
+                )
+                new_rows = new_rows.with_columns(
+                    pl.when(pl.col("AVAL").is_finite()).then(pl.col("AVAL")).alias("AVAL")
+                )
 
         # Apply set_values_to constants
         for col_name, col_val in set_values_to.items():
@@ -826,7 +1018,9 @@ class AdamNamespace(SharedADaMVerbsMixin):
         new_rows = new_rows.select(df.columns)
 
         combined = pl.concat([df, new_rows], how="vertical_relaxed")
-        return self._materialise_then(combined)
+        from fleet.core.lineage import record_row_step
+
+        return record_row_step(self._materialise_then(combined), "derive_param", {})
 
     # ------------------------------------------------------------------ #
     # Private: YAML spec dispatcher for algorithm: std_function           #
@@ -841,9 +1035,9 @@ class AdamNamespace(SharedADaMVerbsMixin):
         target: str,
         *,
         system: str = "ctcae_v5",
-        direction: str,
+        direction: Literal["L", "H"],
         term_var: str,
-        unit_var: str | None = None,
+        unit_var: str,
         signif_dig: int = 15,
         indicators: dict[str, list[str]] | None = None,
     ) -> AdamNamespace:
@@ -860,14 +1054,20 @@ class AdamNamespace(SharedADaMVerbsMixin):
         criteria or a population no criteria cover gets a null grade.  Every
         row stays, in its order.
 
+        The ``ctcae_*``, ``daids`` systems hold SI cut-offs (hemoglobin in
+        g/L); the ``*_uscv`` systems hold US conventional units (g/dL).  A
+        row whose unit is not a unit of the criteria gets null, with a
+        warning that gives the count.
+
         Args:
             target: Name of the output grade column (e.g. ``"ATOXGRL"``).
             system: Grading system name (e.g. ``"ctcae_v5"``, ``"daids"``)
                 or path to a custom JSON criteria file (schema version 2).
             direction: ``"L"`` (low) or ``"H"`` (high).
             term_var: Column holding the lab-test / term name.
-            unit_var: Column holding the unit of measure.  Required when a
-                term has criteria for more than one unit.
+            unit_var: Column holding the unit of measure (e.g. ``"AVALU"``).
+                Required, as admiral: each row is graded with the cut-offs
+                of its own unit.
             signif_dig: Significant digits for comparison (default 15, as
                 admiral ``signif_digits``).
             indicators: Values of the indicator params of the criteria
@@ -878,14 +1078,14 @@ class AdamNamespace(SharedADaMVerbsMixin):
             AdamNamespace: A fresh namespace wrapping the graded frame.
 
         Raises:
-            DerivationError: When a term has criteria for several units and
-                *unit_var* is not given, or a needed column is missing.
+            DerivationError: When *direction* is not ``"L"`` or ``"H"``, or a
+                needed column is missing.
 
         References:
             admiral ``derive_var_atoxgr_dir`` and the metadata tables
             ``atoxgr_criteria_ctcv4/5/6`` and ``atoxgr_criteria_daids``
-            (SI and USCV), admiral 1.4.1; NCI CTCAE v4.03, v5.0, v6.0;
-            DAIDS grading table v2.1.
+            (SI and USCV), admiral 1.4.1, where ``get_unit_expr`` is required;
+            NCI CTCAE v4.03, v5.0, v6.0; DAIDS grading table v2.1. ADR-0028.
 
         Examples:
             Grade low-direction anemia using CTCAE v5::
@@ -931,39 +1131,60 @@ class AdamNamespace(SharedADaMVerbsMixin):
         *,
         low_var: str = "ATOXGRL",
         high_var: str = "ATOXGRH",
-        low_desc_var: str | None = None,
-        high_desc_var: str | None = None,
+        low_desc_var: str = "ATOXDSCL",
+        high_desc_var: str = "ATOXDSCH",
     ) -> AdamNamespace:
-        """Combine low and high toxicity grades into a signed grade.
+        """Combine low and high toxicity grades into a signed grade, as admiral.
 
         Low grades are prefixed with ``"-"``; high grades are kept as-is.
-        Both null → null.
+        Both null → null.  ``"0"`` only when each side is ``"0"`` or its
+        description is null (no criteria in that direction).  Low ``"0"``
+        with a null high grade and a present high description gives null:
+        the high grade is unknown (for example ANRHI is missing).
 
         Args:
             target: Name of the output column (default ``"ATOXGR"``).
             low_var: Low-direction grade column (default ``"ATOXGRL"``).
             high_var: High-direction grade column (default ``"ATOXGRH"``).
-            low_desc_var: Optional low-grade term description column.
-            high_desc_var: Optional high-grade term description column.
+            low_desc_var: Low-grade term description column (default
+                ``"ATOXDSCL"``).  Required in the data; for a
+                one-direction study, add it as a null column.
+            high_desc_var: High-grade term description column (default
+                ``"ATOXDSCH"``).  Required in the data, as *low_desc_var*.
 
         Returns:
             AdamNamespace: The namespace with *target* appended.
+
+        Raises:
+            DerivationError: When a grade or description column is missing.
+
+        References:
+            admiral ``derive_var_atoxgr`` (admiral 1.4.1): ``lowgrade == "0" |
+            is.na(lowdesc)`` and the same for high give "0". ADR-0028.
 
         Examples:
             Combine low/high grades into ATOXGR::
 
                 adlb = (
                     lb_raw.adam
-                    .atoxgr("ATOXGRL", system="ctcae_v5",
-                            direction="L", term_var="PARAMCD")
-                    .atoxgr("ATOXGRH", system="ctcae_v5",
-                            direction="H", term_var="PARAMCD")
+                    .atoxgr("ATOXGRL", system="ctcae_v5", direction="L",
+                            term_var="ATOXDSCL", unit_var="AVALU")
+                    .atoxgr("ATOXGRH", system="ctcae_v5", direction="H",
+                            term_var="ATOXDSCH", unit_var="AVALU")
                     .combine_grades("ATOXGR")
                     .to_frame()
                 )
         """
         from .grading._compiler import combine_grades_expr
 
+        names = self._lazy.collect_schema().names()
+        missing = [c for c in (low_var, high_var, low_desc_var, high_desc_var) if c not in names]
+        if missing:
+            raise DerivationError(
+                f"combine_grades('{target}'): column(s) {missing} are missing. The "
+                "descriptions tell a direction with no criteria from an unknown grade; "
+                "for a one-direction study add the other description as a null column."
+            )
         return self._chain(
             combine_grades_expr(
                 low_var,
@@ -1067,7 +1288,10 @@ class AdamNamespace(SharedADaMVerbsMixin):
         new._pinned = dict(getattr(self, "_pinned", {}))
         new._pin_lineage = list(getattr(self, "_pin_lineage", []))
         new._lineage = list(getattr(self, "_lineage", []))
+        new._row_steps = list(getattr(self, "_row_steps", []))
+        new._root_lazy = getattr(self, "_root_lazy", self._lazy)
         new._pending_fk_checks = list(getattr(self, "_pending_fk_checks", []))
+        new._pending_join_checks = list(getattr(self, "_pending_join_checks", []))
         fk_severity = getattr(self, "_fk_severity", None)
         if fk_severity is not None:
             new._fk_severity = fk_severity

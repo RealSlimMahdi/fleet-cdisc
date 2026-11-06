@@ -257,7 +257,7 @@ def _define(standard: str, dataset: str, variable: str, codelist: str) -> dict[s
                 "name": dataset,
                 "label": dataset,
                 "structure": "One record per subject",
-                "keys": ["USUBJID"],
+                "keys": [variable],
                 "variables": [
                     {"name": variable, "label": variable, "type": "text", "codelist": codelist}
                 ],
@@ -300,6 +300,17 @@ def test_init_cfg_without_adam_datasets_pins_no_adam_package(tmp_path: Path) -> 
     assert _run(["init", "cfg", "--study-id", "S01", "--root", str(tmp_path)]) == 0
 
     assert _config(tmp_path)["ct"] == {"package": SDTM_CT}
+    assert not (tmp_path / "metadata" / "custom_rules" / "FLEET-ADSL-001.yaml").exists()
+
+
+def test_init_cfg_with_adam_writes_the_population_flag_rule(tmp_path: Path) -> None:
+    """c1-216: fleet validate checks that SAFFL and the other population flags are Y or N."""
+    argv = ["init", "cfg", "--study-id", "S01", "--root", str(tmp_path), "--adam-datasets", "ADSL"]
+
+    assert _run(argv) == 0
+
+    rule = tmp_path / "metadata" / "custom_rules" / "FLEET-ADSL-001.yaml"
+    assert "SAFFL" in rule.read_text(encoding="utf-8")
 
 
 def test_another_sdtm_package_needs_the_adam_package(

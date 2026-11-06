@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
 # SDTMCHK-DS-002: DSTERM contains "DEATH DUE TO" with blank cause
-# Source: sdtmchecks::check_ds_dsterm_death_due_to
+# Based on: sdtmchecks::check_ds_dsterm_death_due_to. Conditions follow the R function; a difference is stated in Description.
 
 Core:
   Id: SDTMCHK-DS-002
@@ -29,6 +29,7 @@ Outcome:
 
 Description: >-
   DSTERM must not be 'DEATH DUE TO' with a blank cause of death.
+  Based on sdtmchecks::check_ds_dsterm_death_due_to. Same conditions as the R function.
 
 Sensitivity: Record
 Executability: Fully Executable

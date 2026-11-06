@@ -59,6 +59,7 @@ class ValidationService:
         version: str,
         custom_rules: Path | str | None = None,
         timeout: float = 300,
+        define_xml: Path | str | None = None,
     ) -> dict[str, ValidationResult]:
         """Validate several datasets of one standard together, in one engine run.
 
@@ -68,6 +69,8 @@ class ValidationService:
             version: IG version, ``"3.4"`` or ``"3-4"``.
             custom_rules: Directory of custom CORE rules.
             timeout: Seconds before the engine run is stopped.
+            define_xml: A Define-XML file CORE checks with the datasets
+                (``-dxp``).  Opt-in: no define is passed by default.
 
         Returns:
             dict[str, ValidationResult]: One result per dataset name.
@@ -81,6 +84,12 @@ class ValidationService:
                 results["AE"].print_report()
         """
         resolved = Path(custom_rules) if custom_rules is not None else None
+        define = Path(define_xml).resolve() if define_xml is not None else None
         return self.provider.validate_datasets(
-            datasets, standard=standard, version=version, custom_rules=resolved, timeout=timeout
+            datasets,
+            standard=standard,
+            version=version,
+            custom_rules=resolved,
+            timeout=timeout,
+            define_xml=define,
         )

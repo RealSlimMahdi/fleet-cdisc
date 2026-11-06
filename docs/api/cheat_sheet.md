@@ -62,8 +62,8 @@ Fleet's documentation is generated directly from Python docstrings via [mkdocstr
 | [`.shift()`][fleet.adam.AdamNamespace.shift]                                   | Categorical shift string (`"NORMAL to HIGH"`).                       | `.shift("SHIFT1", baseline_cat="BNRIND", post_cat="ANRIND")`            |
 | [`.merge()`][fleet.core._verb_mixin.SharedVerbsMixin.merge]                    | Left-join an external dataset on key columns.                        | `.merge(other_df, on="USUBJID")`                                        |
 | [`.transform()`][fleet.adam.AdamNamespace.transform]                           | Apply an arbitrary frame-level transformation.                       | `.transform(lambda df: df.sort("USUBJID"))`                             |
-| [`.derive_summary_records()`][fleet.adam.AdamNamespace.derive_summary_records] | Aggregate by group and append summary rows.                          | `.derive_summary_records(by=["USUBJID"], ...)`                          |
-| [`.derive_locf_records()`][fleet.adam.AdamNamespace.derive_locf_records]       | LOCF forward-fill within patient groups.                             | `.derive_locf_records(by=["USUBJID","PARAMCD"])`                        |
+| [`.derive_summary_records()`][fleet.adam.AdamNamespace.derive_summary_records] | Aggregate by group and append summary rows (`where=` filters the source). | `.derive_summary_records(by=["USUBJID"], ..., where=pl.col("DTYPE").is_null())` |
+| [`.derive_locf_records()`][fleet.adam.AdamNamespace.derive_locf_records]       | Add LOCF records (DTYPE "LOCF") for the expected visits.            | `.derive_locf_records(dataset_ref=visits, by=["USUBJID","PARAMCD"], order_by=["AVISITN"])` |
 | [`.derive_param()`][fleet.adam.AdamNamespace.derive_param]                     | Derive a new parameter and append rows (own frame or `from_dataset=`). | `.derive_param(by=["USUBJID"], parameter_filter={...}, from_dataset=adlb, ...)` |
 | [`.from_spec()`][fleet.adam.AdamNamespace.from_spec]                           | Build the entire pipeline from a `define.yaml` spec.                 | `df.adam.from_spec("define.yaml", dataset="ADVS")`                      |
 | [`.validate()`][fleet.core._verb_mixin.SharedVerbsMixin.validate]                             | Run CDISC Rules Engine on the resulting frame.                       | `.validate("ADVS")`                                                     |
@@ -78,7 +78,7 @@ Fleet's documentation is generated directly from Python docstrings via [mkdocstr
 | [`.flag()`][fleet.adam.FlagCriterionMixin.flag]                | Generalised `"Y"` flag (first/last/max/min/exists/before/after/expression). | `.flag("SAFFL", criteria='pl.col("TRTSDT").is_not_null()', false_value="N")` |
 | [`.count_events()`][fleet.adam.SharedADaMVerbsMixin.count_events] | Tally events for each subject.                                   | `.count_events("NUMAE", from_dataset=ae)`                     |
 | [`.age_years()`][fleet.adam.ADSLNamespace.age_years]           | Unit-aware age conversion (YEARS, MONTHS, WEEKS, DAYS).                     | `.age_years("AAGE", age_col="AGE", age_unit_col="AGEU")`      |
-| [`.age_from_dates()`][fleet.adam.ADSLNamespace.age_from_dates] | Compute age between two dates.                                              | `.age_from_dates("AGE", birth="BRTHDT", reference="RFSTDTC")` |
+| [`.age_from_dates()`][fleet.adam.ADSLNamespace.age_from_dates] | Age in completed years between two dates (`unit="decimal"` for days / 365.25). | `.age_from_dates("AAGE", birth_date="BRTHDT", reference_date="TRTSDT")` |
 | [`.derive_period()`][fleet.adam.ADSLNamespace.derive_period]   | Create APxxSDT / APxxEDT / TRTxxP subperiod variables.                      | `.derive_period(periods=[{"number": 1, ...}])`                |
 
 ## OCCDS namespace (`df.adam.occds`)
@@ -110,13 +110,13 @@ Fleet's documentation is generated directly from Python docstrings via [mkdocstr
 
 ## Time-to-event (`df.adam.tte`)
 
-Typed `EventSource` / `CensorSource` objects describe the candidates; the
-prebuilt library (`DEATH_EVENT`, `AE_EVENT`, ...) is browsable via
-`prebuilt_sources_frame()`. Source frames attach by nickname with `.pin()`.
+Each event or censor source is a plain frame with `USUBJID` and `ADT`. The key of
+`events=` is the EVNTDESC; the key of `censors=` is the CNSR. Records after the
+first `stop_at=` date are dropped (ADR-0043).
 
 | Verb                                                             | Description                                                        | Example                                                              |
 | ---------------------------------------------------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------- |
-| [`.param()`][fleet.adam.TTENamespace.param]                      | Derive one TTE parameter: earliest event wins, else latest censor. | `.param("OS", "Overall Survival", start_date="TRTSDT", events=[...])` |
+| [`.param()`][fleet.adam.TTENamespace.param]                      | Derive one TTE parameter: earliest event wins, else latest censor. | `.param("PFS", start="TRTSDT", events={"PD": pd}, censors={2: last_assessment}, stop_at=["EOSDT", "NACTDT"])` |
 | [`.aval()`][fleet.adam.TTENamespace.aval]                        | AVAL (+AVALU) from STARTDT/ADT with CDISC unit conventions.        | `.aval(unit="months")`                                                |
 | [`.km_data()`][fleet.adam.TTENamespace.km_data]                  | `(duration, event)` frame for lifelines / scikit-survival.         | `.km_data("OS", by=["TRT01P"])`                                       |
 

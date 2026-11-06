@@ -298,8 +298,12 @@ def _namespace_method(standard: str, verb: str) -> Any | None:
         if fget is None:
             return None
         sub = _eval_annotation(inspect.signature(fget).return_annotation, fget)
-        if not isinstance(sub, type):
-            return None
+        if sub is Any or not isinstance(sub, type):
+            # A TYPE_CHECKING-only annotation: ask the property on an empty frame.
+            try:
+                sub = type(fget(cls(pl.DataFrame())))
+            except Exception:
+                return None
         cls = sub
     fn = getattr(cls, name, None)
     return fn if callable(fn) else None
@@ -857,6 +861,13 @@ def derivation_from_lineage(standard: str, node: Any) -> tuple[str, dict | None,
 
     if node.spec:
         return ("ok", dict(node.spec), {})
+    if node.verb == "source":
+        # source() is carry-through sugar: a define.yaml writes it as assign.
+        src = node.sources[0] if node.sources else node.name
+        block: dict[str, Any] = {"algorithm": "assign"}
+        if src != node.name:
+            block["source"] = src
+        return ("ok", block, {})
     params = node.params
     if params is None:
         return ("stub", None, {})
@@ -902,6 +913,24 @@ def _fmt_value(value: Any) -> str:
     return str(value)
 
 
+def _is_study_day(algorithm: str, params: Mapping[str, Any], target: str | None) -> bool:
+    """Whether a ``duration`` block follows the study-day rule of the verb.
+
+    The verb applies the SDTMIG study-day rule (no day 0) to a ``*DY``
+    target in days when ``add_one`` is not given.
+
+    References:
+        SDTMIG 3.4, section 4.4.4 (Use of the Study Day Variables).
+    """
+    return (
+        algorithm == "duration"
+        and bool(target)
+        and str(target).endswith("DY")
+        and params.get("unit", "days") in (None, "days")
+        and params.get("add_one") is None
+    )
+
+
 def render_method_text(
     standard: str,
     algorithm: str,
@@ -944,6 +973,8 @@ def render_method_text(
         return None
 
     given = {k for k, v in params.items() if v is not None}
+    if _is_study_day(algorithm, params, target):
+        return _STUDY_DAY_TEXT.format(start=params.get("start"), end=params.get("end"))
     values: dict[str, Any] = {"target": target or ""}
     for f in algo.params:
         raw = params.get(f.name)
@@ -1001,7 +1032,11 @@ def render_formal_expression(
     from fleet.core.lineage import defining_method_path
 
     # The class from_spec runs on, so the path is the one lineage records.
-    dotted = defining_method_path(_namespace_class(standard), algo.verb)
+    if "." in algo.verb:
+        fn = _namespace_method(standard, algo.verb)
+        dotted = f"{fn.__module__}.{fn.__qualname__}"
+    else:
+        dotted = defining_method_path(_namespace_class(standard), algo.verb)
     args: list[str] = []
     if target and algo.takes_target:
         args.append(repr(target))
@@ -1024,6 +1059,14 @@ def _dispatch_derivation(ns: Any, var: SpecVariableBase) -> Any:
 
         fn = resolve_callable(var.callable)
         if hasattr(fn, "kind"):
+            if fn.targets and var.target not in fn.targets:
+                from fleet.core.exceptions import SpecError
+
+                raise SpecError(
+                    f"callable {var.callable!r} writes {fn.targets}, not {var.target}. "
+                    f"Name the function {var.target}, or end its expression with "
+                    f".alias({var.target!r})."
+                )
             return ns.derivation(fn)
         return ns._materialise_then(fn(ns.to_frame()))
     return _default_dispatch(ns, var)
@@ -1042,10 +1085,19 @@ def _dispatch_nsv(ns: Any, var: SpecVariableBase) -> Any:
 
 
 def _dispatch_pick(ns: Any, var: SpecVariableBase) -> Any:
-    """pick(): multi-target verb; fall back to the variable name."""
+    """pick(): multi-target verb; fall back to the variable name.
+
+    A ``source:`` name in an event is a pinned dataset (ADR-0008 rule 3).
+    """
+    events = [
+        {**e, "source": ns._require_pin(e["source"].upper(), "pick")}
+        if isinstance(e, dict) and isinstance(e.get("source"), str)
+        else e
+        for e in var.events or []
+    ]
     return ns.pick(
         var.targets or [var.target],
-        events=var.events,
+        events=events,
         by=var.by,
         order=var.order,
         mode=var.mode,
@@ -1065,6 +1117,8 @@ _ASSIGN_TEXT = (
 _DATE_TEXT = ((set(), "ISO 8601 date/time derived from {source} (imputation: {impute})."),)
 _MERGE_TEXT = ((set(), "Records merged from {dataset} (join key: {on})."),)
 _DURATION_TEXT = ((set(), "Duration from {start} to {end}, in {unit}."),)
+#: ``duration`` on a ``*DY`` target in days is a study day (no day 0), not a span.
+_STUDY_DAY_TEXT = "Study day of {end} relative to {start}."
 _DERIVATION_TEXT = (({"expression"}, "Derived as: {expression}."),)
 _CALLABLE_FIELD = (("callable", str | None, None),)
 
@@ -1113,6 +1167,7 @@ spec_verb(
     standard="sdtm",
     required=("dataset", "on"),
     takes_target=False,
+    exclude=("validate",),
     description="Join a pinned reference dataset into the pipeline.",
     method_text=_MERGE_TEXT,
 )
@@ -1214,6 +1269,7 @@ spec_verb(
     standard="adam",
     required=("dataset", "on"),
     takes_target=False,
+    exclude=("validate",),
     description="SQL-style join against a pinned dataset.",
     method_text=_MERGE_TEXT,
 )
@@ -1359,6 +1415,31 @@ spec_verb(
 )
 
 
+def _trtemfl_text() -> tuple[tuple[set[str], str], ...]:
+    """Method text shapes of ``treatment_emergent``, most specific first."""
+    shapes: list[tuple[set[str], str]] = []
+    for offset in (True, False):
+        for window in (True, False):
+            for ended in (True, False):
+                ref = "{trtsdt} + {offset_days} days" if offset else "{trtsdt}"
+                text = "Set to 'Y' when {start_date} is on or after " + ref
+                if window:
+                    text += " and on or before {trtedt} + {end_window} days"
+                text += ", or when {start_date} is missing; null when {trtsdt} is missing"
+                text += " or {end_date} is before {trtsdt}." if ended else "."
+                keys = {"offset_days"} if offset else set()
+                shapes.append((keys | ({"end_window"} if window else set()), text))
+    return tuple(shapes)
+
+
+spec_verb(
+    "occds.treatment_emergent",
+    standard="adam",
+    description="Treatment-emergent flag, as admiral derive_var_trtemfl.",
+    method_text=_trtemfl_text(),
+)
+
+
 # --------------------------------------------------------------------- #
 # Inline-only verbs (machine-checked allowlist)                           #
 # --------------------------------------------------------------------- #
@@ -1368,8 +1449,8 @@ spec_verb(
 #: above or listed here — nothing falls through the cracks silently.
 SPEC_UNSUPPORTED: dict[str, set[str]] = {
     "sdtm": {
-        "study_day",  # pin-based reference join; a define.yaml uses duration
-        "export_supp",  # terminal exporter, not a derivation
+        "study_day",  # pin-based reference join; no spec form yet (duration gives a day 0)
+        "export_supp",  # terminal exporter; fleet run calls it for qualifier variables
         "baseline_flag",  # inline flag sugar; no per-variable spec semantics yet
         "epoch_assign",  # trial-design lookup (TrialDesignMixin)
         "element_boundaries",  # trial-design lookup (TrialDesignMixin)
@@ -1394,8 +1475,8 @@ SPEC_UNSUPPORTED: dict[str, set[str]] = {
         "verbs",  # discoverability helper, not a derivation
     },
     "adam": {
-        "study_day",  # pin-based reference join; a define.yaml uses duration
-        "source",  # variadic carry-through sugar; a define.yaml uses assign
+        "study_day",  # pin-based reference join; no spec form yet (duration gives a day 0)
+        "source",  # variadic carry-through sugar; to_spec_yaml writes it as assign
         "join_adsl",  # variadic pin sugar; a define.yaml uses merge
         "merge_adsl",  # pin sugar; a define.yaml uses merge
         "transform",  # spec equivalent is derivation with callable:

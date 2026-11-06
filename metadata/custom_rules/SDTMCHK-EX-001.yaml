@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
 # SDTMCHK-EX-001: EXDOSE missing when exposure occurred
-# Source: sdtmchecks::check_ex_exdose_exoccur
+# Based on: sdtmchecks::check_ex_exdose_exoccur. Conditions follow the R function; a difference is stated in Description.
 
 Core:
   Id: SDTMCHK-EX-001
@@ -36,6 +36,7 @@ Outcome:
 Description: >-
   EXDOSE must be populated when EXOCCUR is 'Y' or when EXOCCUR does not exist
   in the dataset.
+  Based on sdtmchecks::check_ex_exdose_exoccur. Same conditions as the R function.
 
 Sensitivity: Record
 Executability: Fully Executable

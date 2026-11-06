@@ -401,7 +401,7 @@ def load_study_context(config_path: Path) -> StudyContext:
         raise StudyConfigError(f"Study configuration file not found: {config_path}")
 
     try:
-        with open(config_path) as f:
+        with open(config_path, encoding="utf-8") as f:
             config_data = yaml.safe_load(f) or {}
     except yaml.YAMLError as e:
         raise StudyConfigError(f"Invalid YAML in study configuration: {e}") from e

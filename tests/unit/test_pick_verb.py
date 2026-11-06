@@ -804,3 +804,85 @@ class TestPickVerbSpecEquivalence:
         assert result.filter(pl.col("USUBJID") == "S01")["DTHSEV"][0] == "SEVERE"
         # S02 has no fatal AE → null
         assert result.filter(pl.col("USUBJID") == "S02")["DTHSEV"][0] is None
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# define.yaml: a source name in an event is a pinned dataset (c1-169, c1-651)
+# ═══════════════════════════════════════════════════════════════════════════
+
+_PICK_YAML = """\
+datasets:
+  - name: ADSL
+    variables:
+      - name: LSTALVDT
+        type: date
+        derivation:
+          algorithm: pick
+          events:
+            - when: 'pl.col("DTHDT").is_not_null()'
+              set: {LSTALVDT: DTHDT}
+              source: ADSL
+            - when: 'pl.col("AEENDT").is_not_null()'
+              set: {LSTALVDT: AEENDT}
+              source: AE
+              order: [AEENDT]
+              mode: last
+            - when: 'pl.col("TRTEDT").is_not_null()'
+              set: {LSTALVDT: TRTEDT}
+              source: ADSL
+          by: [USUBJID]
+          order: [LSTALVDT]
+          mode: last
+"""
+
+
+class TestPickFromSpec:
+    @pytest.fixture
+    def spec(self, tmp_path):
+        p = tmp_path / "define.yaml"
+        p.write_text(_PICK_YAML, encoding="utf-8")
+        return p
+
+    @pytest.fixture
+    def adsl(self) -> pl.DataFrame:
+        return pl.from_repr("""\
+┌─────────┬────────────┬────────────┐
+│ USUBJID ┆ DTHDT      ┆ TRTEDT     │
+│ ---     ┆ ---        ┆ ---        │
+│ str     ┆ date       ┆ date       │
+╞═════════╪════════════╪════════════╡
+│ S1      ┆ null       ┆ 2023-06-30 │
+│ S2      ┆ 2023-04-01 ┆ 2023-03-01 │
+│ S3      ┆ null       ┆ 2023-02-02 │
+└─────────┴────────────┴────────────┘
+""")
+
+    @pytest.fixture
+    def ae(self) -> pl.DataFrame:
+        return pl.from_repr("""\
+┌─────────┬────────────┐
+│ USUBJID ┆ AEENDT     │
+│ ---     ┆ ---        │
+│ str     ┆ date       │
+╞═════════╪════════════╡
+│ S1      ┆ 2023-01-10 │
+│ S2      ┆ 2023-05-01 │
+│ S2      ┆ 2023-02-01 │
+└─────────┴────────────┘
+""")
+
+    def test_source_names_resolve_through_the_pins(self, spec, adsl, ae):
+        """The latest date over all events, as admiral derive_vars_extreme_event."""
+        out = adsl.adam.adsl.pin(ADSL=adsl, AE=ae).from_spec(spec, dataset="ADSL").to_frame()
+
+        assert out["LSTALVDT"].to_list() == [
+            date(2023, 6, 30),
+            date(2023, 5, 1),
+            date(2023, 2, 2),
+        ]
+
+    def test_a_source_with_no_pin_raises_pin_error(self, spec, adsl):
+        from fleet.core.exceptions import PinError, SpecError
+
+        with pytest.raises((PinError, SpecError), match="AE"):
+            adsl.adam.adsl.pin(ADSL=adsl).from_spec(spec, dataset="ADSL").to_frame()

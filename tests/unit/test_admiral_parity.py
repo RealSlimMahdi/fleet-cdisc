@@ -41,7 +41,7 @@ class TestBSA:
 """)
         result = df.select(bsa("WEIGHT", "HEIGHT", method="Mosteller"))
         expected = math.sqrt(170.0 * 70.0 / 3600.0)
-        assert result["BSA"][0] == pytest.approx(round(expected, 4))
+        assert result["BSA"][0] == pytest.approx(expected, abs=1e-12)
 
     def test_dubois(self):
         df = pl.from_repr("""\
@@ -55,7 +55,7 @@ class TestBSA:
 """)
         result = df.select(bsa("WEIGHT", "HEIGHT", method="DuBois"))
         expected = 0.007184 * (170.0**0.725) * (70.0**0.425)
-        assert result["BSA"][0] == pytest.approx(round(expected, 4))
+        assert result["BSA"][0] == pytest.approx(expected, abs=1e-12)
 
     def test_haycock(self):
         df = pl.from_repr("""\
@@ -69,7 +69,7 @@ class TestBSA:
 """)
         result = df.select(bsa("WEIGHT", "HEIGHT", method="Haycock"))
         expected = 0.024265 * (170.0**0.3964) * (70.0**0.5378)
-        assert result["BSA"][0] == pytest.approx(round(expected, 4))
+        assert result["BSA"][0] == pytest.approx(expected, abs=1e-12)
 
     def test_gehan_george(self):
         df = pl.from_repr("""\
@@ -83,7 +83,7 @@ class TestBSA:
 """)
         result = df.select(bsa("WEIGHT", "HEIGHT", method="Gehan-George"))
         expected = 0.0235 * (170.0**0.42246) * (70.0**0.51456)
-        assert result["BSA"][0] == pytest.approx(round(expected, 4))
+        assert result["BSA"][0] == pytest.approx(expected, abs=1e-12)
 
     def test_unknown_method_raises(self):
         with pytest.raises(ValueError, match="Unknown BSA method"):
@@ -148,7 +148,9 @@ class TestQTc:
 """)
         result = df.select(qtc("QT", "RR", method="Fridericia"))
         # admiral compute_qtc, RR in ms: 430.88693800637674, 368.47478182187422
-        assert result["QTC"].to_list() == [430.89, 368.47]
+        assert result["QTC"].to_list() == pytest.approx(
+            [430.88693800637674, 368.47478182187422], abs=1e-12
+        )
 
     def test_bazett(self):
         df = pl.from_repr("""\
@@ -163,7 +165,9 @@ class TestQTc:
 """)
         result = df.select(qtc("QT", "RR", method="Bazett"))
         # admiral compute_qtc, RR in ms: 447.21359549995793, 378.07471494623951
-        assert result["QTC"].to_list() == [447.21, 378.07]
+        assert result["QTC"].to_list() == pytest.approx(
+            [447.21359549995793, 378.07471494623951], abs=1e-12
+        )
 
     def test_fridericia_rr_in_seconds(self):
         df = pl.from_repr("""\
@@ -176,7 +180,7 @@ class TestQTc:
 └───────┴─────┘
 """)
         result = df.select(qtc("QT", "RR", method="Fridericia", rr_unit="s"))
-        assert result["QTC"][0] == pytest.approx(430.89)
+        assert result["QTC"][0] == pytest.approx(430.88693800637674, abs=1e-12)
 
     def test_unknown_method_raises(self):
         with pytest.raises(ValueError, match="Unknown QTc method"):
@@ -299,7 +303,7 @@ class TestNamespaceBSA:
 """)
         result = df.adam.bsa("BSA", weight="WEIGHT", height="HEIGHT").to_frame()
         expected = math.sqrt(170.0 * 70.0 / 3600.0)
-        assert result["BSA"][0] == pytest.approx(round(expected, 4))
+        assert result["BSA"][0] == pytest.approx(expected, abs=1e-12)
 
 
 class TestNamespaceMAP:
@@ -330,7 +334,7 @@ class TestNamespaceQTc:
 """)
         result = df.adam.qtc("QTCF", qt="QT", rr="RR").to_frame()
         expected = 400.0 / (0.85 ** (1.0 / 3.0))
-        assert result["QTCF"][0] == pytest.approx(round(expected, 2))
+        assert result["QTCF"][0] == pytest.approx(expected, abs=1e-12)
 
 
 class TestDeriveSummaryRecords:
@@ -370,28 +374,31 @@ class TestDeriveSummaryRecords:
 
 
 class TestDeriveLOCFRecords:
-    def test_forward_fill(self):
+    def test_update_fills_in_place_with_dtype(self):
         df = pl.from_repr("""\
-┌─────────┬─────────┬───────┬────────────┐
-│ USUBJID ┆ PARAMCD ┆ AVAL  ┆ ADT        │
-│ ---     ┆ ---     ┆ ---   ┆ ---        │
-│ str     ┆ str     ┆ f64   ┆ str        │
-╞═════════╪═════════╪═══════╪════════════╡
-│ 01      ┆ SBP     ┆ 120.0 ┆ 2014-01-01 │
-│ 01      ┆ SBP     ┆ null  ┆ 2014-01-02 │
-│ 01      ┆ SBP     ┆ null  ┆ 2014-01-03 │
-│ 02      ┆ SBP     ┆ 110.0 ┆ 2014-01-01 │
-│ 02      ┆ SBP     ┆ null  ┆ 2014-01-02 │
-└─────────┴─────────┴───────┴────────────┘
+┌─────────┬─────────┬───────┬─────────┐
+│ USUBJID ┆ PARAMCD ┆ AVAL  ┆ AVISITN │
+│ ---     ┆ ---     ┆ ---   ┆ ---     │
+│ str     ┆ str     ┆ f64   ┆ i64     │
+╞═════════╪═════════╪═══════╪═════════╡
+│ 01      ┆ SBP     ┆ 120.0 ┆ 1       │
+│ 01      ┆ SBP     ┆ null  ┆ 2       │
+│ 01      ┆ SBP     ┆ null  ┆ 3       │
+│ 02      ┆ SBP     ┆ 110.0 ┆ 1       │
+│ 02      ┆ SBP     ┆ null  ┆ 2       │
+└─────────┴─────────┴───────┴─────────┘
 """)
+        visits = pl.DataFrame({"AVISITN": [1, 2]})
         result = df.adam.derive_locf_records(
+            dataset_ref=visits,
             by=["USUBJID", "PARAMCD"],
-            analysis_var="AVAL",
-            order_by="ADT",
+            order_by="AVISITN",
+            imputation="update",
         ).to_frame()
-        vals = result.sort(["USUBJID", "ADT"])["AVAL"].to_list()
+        out = result.sort(["USUBJID", "AVISITN"])
         # 01: 120, 120 (filled), 120 (filled); 02: 110, 110 (filled)
-        assert vals == [120.0, 120.0, 120.0, 110.0, 110.0]
+        assert out["AVAL"].to_list() == [120.0, 120.0, 120.0, 110.0, 110.0]
+        assert out["DTYPE"].to_list() == [None, "LOCF", "LOCF", None, "LOCF"]
 
 
 class TestDeriveParam:
@@ -606,8 +613,8 @@ class TestADSLAgeYears:
 """)
         result = df.adam.adsl.age_years("AAGE", age_col="AGE", age_unit_col="AGEU").to_frame()
         assert result["AAGE"][0] == pytest.approx(45.0)
-        # 62 months → ~5.2 years
-        assert result["AAGE"][1] == pytest.approx(round(62.0 / 12.0, 1))
+        # 62 months: 5.1666..., full precision as admiral compute_age_years
+        assert result["AAGE"][1] == pytest.approx(62.0 / 12.0, abs=1e-12)
 
 
 class TestADSLDerivePeriod:

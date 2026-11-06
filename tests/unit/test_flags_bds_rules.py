@@ -339,14 +339,16 @@ ECG = """\
 └─────────┴───────┴───────┘
 """
 
+# admiral compute_qtc, RR in ms, full precision (c1-76).
+QTCF = [430.88693800637674, 368.47478182187422]
+QTCB = [447.21359549995793, 378.07471494623951]
 
-@pytest.mark.parametrize(
-    ("method", "expected"), [("Fridericia", [430.89, 368.47]), ("Bazett", [447.21, 378.07])]
-)
+
+@pytest.mark.parametrize(("method", "expected"), [("Fridericia", QTCF), ("Bazett", QTCB)])
 def test_qtc_reads_rr_in_ms_by_default(method: str, expected: list[float]) -> None:
     out = pl.from_repr(ECG).adam.qtc("QTC", qt="QT", rr="RR", method=method).to_frame()
 
-    assert out["QTC"].to_list() == expected
+    assert out["QTC"].to_list() == pytest.approx(expected, abs=1e-9)
 
 
 @pytest.mark.parametrize("unit", ["s", "sec", "S"])
@@ -355,13 +357,13 @@ def test_qtc_reads_rr_in_seconds_when_stated(unit: str) -> None:
 
     out = ecg.adam.qtc("QTCF", qt="QT", rr="RR", rr_unit=unit).to_frame()
 
-    assert out["QTCF"].to_list() == [430.89, 368.47]
+    assert out["QTCF"].to_list() == pytest.approx(QTCF, abs=1e-9)
 
 
 def test_qtc_accepts_msec() -> None:
     out = pl.from_repr(ECG).adam.qtc("QTCF", rr_unit="msec").to_frame()
 
-    assert out["QTCF"].to_list() == [430.89, 368.47]
+    assert out["QTCF"].to_list() == pytest.approx(QTCF, abs=1e-9)
 
 
 def test_qtc_stops_on_seconds_data_with_the_default_unit() -> None:
@@ -394,7 +396,8 @@ def test_qtc_null_rr_gives_null_without_a_stop() -> None:
 
     out = ecg.adam.qtc("QTCF", qt="QT", rr="RR").to_frame()
 
-    assert out["QTCF"].to_list() == [430.89, None]
+    assert out["QTCF"][0] == pytest.approx(QTCF[0], abs=1e-9)
+    assert out["QTCF"][1] is None
 
 
 def test_qtc_unknown_unit_raises() -> None:

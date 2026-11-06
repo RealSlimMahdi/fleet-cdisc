@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
 # SDTMCHK-CM-001: CMDECOD missing for concomitant medications
-# Source: sdtmchecks::check_cm_cmdecod
+# Based on: sdtmchecks::check_cm_cmdecod. Conditions follow the R function; a difference is stated in Description.
 
 Core:
   Id: SDTMCHK-CM-001
@@ -31,6 +31,7 @@ Outcome:
 
 Description: >-
   CMDECOD must be populated for records where CMCAT contains 'CONCOMITANT'.
+  Based on sdtmchecks::check_cm_cmdecod. Same conditions as the R function.
 
 Sensitivity: Record
 Executability: Fully Executable

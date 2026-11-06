@@ -1,51 +1,71 @@
 # yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
 # SDTMCHK-AE-011: Both AETOXGR and AESEV are missing
-# Source: sdtmchecks::check_ae_aetoxgr
+# Based on: sdtmchecks::check_ae_aetoxgr. Conditions follow the R function; a difference is stated in Description.
 
 Core:
   Id: SDTMCHK-AE-011
   Status: Draft
-  Version: "1"
-
+  Version: '1'
 Rule Type: Record Data
-
 Scope:
   Classes:
-    Include: [EVENTS]
+    Include:
+    - EVENTS
   Domains:
-    Include: [AE]
-
+    Include:
+    - AE
 Check:
-  all:
+  any:
+  - all:
+    - name: AETOXGR
+      operator: exists
+    - name: AESEV
+      operator: exists
     - name: AETOXGR
       operator: empty
     - name: AESEV
       operator: empty
-
+  - all:
+    - name: AETOXGR
+      operator: not_exists
+    - name: AESEV
+      operator: exists
+    - name: AESEV
+      operator: empty
+  - all:
+    - name: AESEV
+      operator: not_exists
+    - name: AETOXGR
+      operator: exists
+    - name: AETOXGR
+      operator: empty
 Outcome:
-  Message: >-
-    Both AETOXGR and AESEV are missing. At least one severity/grade
-    variable must be populated for every AE record.
-  Output Variables: [USUBJID, AETERM, AEDECOD, AESTDTC, AETOXGR, AESEV]
-
-Description: >-
-  Every AE record must have either AETOXGR or AESEV populated.
-
+  Message: 'The severity or grade is missing: AETOXGR and AESEV are both missing, or the only one of them
+    that the study has is missing.'
+  Output Variables:
+  - USUBJID
+  - AETERM
+  - AEDECOD
+  - AESTDTC
+  - AETOXGR
+  - AESEV
+Description: 'Flags: The severity or grade is missing: AETOXGR and AESEV are both missing, or the only
+  one of them that the study has is missing. Based on sdtmchecks::check_ae_aetoxgr. Same conditions as
+  the R function.'
 Sensitivity: Record
 Executability: Fully Executable
-
 Authorities:
-  - Organization: sdtmchecks
-    Standards:
-      - Name: SDTMIG
-        Version: "3.4"
-        References:
-          - Origin: sdtmchecks R package
-            Rule Identifier:
-              Id: SDTMCHK-AE-011
-              Version: "1"
-            Version: "1"
-            Citations:
-              - Cited Guidance: check_ae_aetoxgr
-                Document: pharmaverse sdtmchecks
-                Section: AE Domain
+- Organization: sdtmchecks
+  Standards:
+  - Name: SDTMIG
+    Version: '3.4'
+    References:
+    - Origin: sdtmchecks R package
+      Rule Identifier:
+        Id: SDTMCHK-AE-011
+        Version: '1'
+      Version: '1'
+      Citations:
+      - Cited Guidance: check_ae_aetoxgr
+        Document: pharmaverse sdtmchecks
+        Section: AE Domain

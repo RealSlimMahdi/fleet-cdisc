@@ -1,56 +1,61 @@
 # yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
 # SDTMCHK-EX-007: Duplicate EX records
-# Source: sdtmchecks::check_ex_dup
+# Based on: sdtmchecks::check_ex_dup. Conditions follow the R function; a difference is stated in Description.
 
 Core:
   Id: SDTMCHK-EX-007
   Status: Draft
-  Version: "1"
-
+  Version: '1'
 Rule Type: Record Data
-
 Scope:
   Classes:
-    Include: [INTERVENTIONS]
+    Include:
+    - INTERVENTIONS
   Domains:
-    Include: [EX]
-
+    Include:
+    - EX
 Check:
   all:
-    - name: EXTRT
-      operator: is_not_unique_set
-      value:
-        - USUBJID
-        - EXSTDTC
-        - EXENDTC
-        - EXDOSE
-        - VISIT
-
+  - any:
+    - name: EXOCCUR
+      operator: not_exists
+    - name: EXOCCUR
+      operator: equal_to
+      value: Y
+      value_is_literal: true
+  - name: EXTRT
+    operator: is_not_unique_set
+    value:
+    - USUBJID
+    - EXDOSE
+    - EXSTDTC
 Outcome:
-  Message: >-
-    Duplicate EX record detected. The combination of USUBJID, EXTRT, EXSTDTC,
-    EXENDTC, EXDOSE, and VISIT is not unique — potential duplicate entry.
-  Output Variables: [USUBJID, EXTRT, EXSTDTC, EXENDTC, EXDOSE, VISIT, EXSEQ]
-
-Description: >-
-  Checks for duplicate EX records based on key identifying variables
-  (USUBJID, EXTRT, EXSTDTC, EXENDTC, EXDOSE, VISIT).
-
+  Message: 'Duplicate EX record: USUBJID, EXTRT, EXDOSE and EXSTDTC are not unique.'
+  Output Variables:
+  - USUBJID
+  - EXTRT
+  - EXSTDTC
+  - EXENDTC
+  - EXDOSE
+  - VISIT
+  - EXSEQ
+Description: 'Flags: Duplicate EX record: USUBJID, EXTRT, EXDOSE and EXSTDTC are not unique. Based on
+  sdtmchecks::check_ex_dup. Difference from the R function: The key is computed on all records; R drops
+  EXOCCUR = N records before it looks for duplicates.'
 Sensitivity: Record
 Executability: Fully Executable
-
 Authorities:
-  - Organization: sdtmchecks
-    Standards:
-      - Name: SDTMIG
-        Version: "3.4"
-        References:
-          - Origin: sdtmchecks R package
-            Rule Identifier:
-              Id: SDTMCHK-EX-007
-              Version: "1"
-            Version: "1"
-            Citations:
-              - Cited Guidance: check_ex_dup
-                Document: pharmaverse sdtmchecks
-                Section: EX Domain
+- Organization: sdtmchecks
+  Standards:
+  - Name: SDTMIG
+    Version: '3.4'
+    References:
+    - Origin: sdtmchecks R package
+      Rule Identifier:
+        Id: SDTMCHK-EX-007
+        Version: '1'
+      Version: '1'
+      Citations:
+      - Cited Guidance: check_ex_dup
+        Document: pharmaverse sdtmchecks
+        Section: EX Domain

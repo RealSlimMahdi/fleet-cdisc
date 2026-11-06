@@ -1,524 +1,353 @@
-"""Time-to-event (ADTTE) source models, prebuilt library, and selection engine.
+"""Time-to-event (ADTTE) selection engine behind ``df.adam.tte.param()``.
 
-Implements the admiral ``derive_param_tte`` architecture the Fleet way:
-
-- :class:`EventSource` / :class:`CensorSource` — typed, validated Pydantic
-  descriptions of where an event/censoring candidate lives (``dataset`` is a
-  **pin nickname** resolved against the pipeline's pinned frames).
-- A prebuilt library porting admiral's ``tte_source_objects`` (``DEATH_EVENT``,
-  ``AE_EVENT``, ...), browsable as a DataFrame via
-  :func:`prebuilt_sources_frame`.
-- :func:`select_tte` — the pure selection engine: per subject, the earliest
-  event wins (CNSR=0); otherwise the latest censoring record (CNSR≥1).
-
-Unlike admiral's opaque quosure objects, every layer here is inspectable as a
-DataFrame: sources render via ``to_polars()`` / :func:`sources_frame`, and the
-engine returns a per-subject decision **trace** explaining every selection.
+Each event or censor source is a plain Polars frame with the subject keys and
+an ``ADT`` column. :func:`select_tte` selects one record per subject: the
+first event on or before the first stop date (``CNSR = 0``), else the last
+censor record on or before it (``CNSR`` = the key of its frame). It also
+returns a decision trace that tells why each record was selected.
 """
 
 from __future__ import annotations
 
+import difflib
 import warnings
-from collections.abc import Callable
-from typing import Any, Literal
+from pathlib import Path
+from typing import Literal
 
 import polars as pl
-from pydantic import BaseModel, ConfigDict, Field
 
+from fleet.core.define_spec import load_spec_yaml
 from fleet.core.exceptions import DerivationError
+from fleet.core.study_context import StudyConfigError, find_study_config, load_study_context
 
-# ------------------------------------------------------------------ #
-# Source models                                                        #
-# ------------------------------------------------------------------ #
-
-
-class TTESource(BaseModel):
-    """Base description of a time-to-event candidate source.
-
-    Each field carries its own ``description`` (rendered by mkdocstrings) —
-    Pydantic fields are not ``__init__`` parameters, so a docstring ``Args:``
-    section would confuse griffe.  In ``set``, plain values (including
-    strings) are **literals**; pass a ``pl.Expr`` (e.g. ``pl.col("AESEQ")``)
-    to reference source columns — ``EVNTDESC="DEATH"`` is never read as a
-    column lookup.
-    """
-
-    model_config = ConfigDict(arbitrary_types_allowed=True, extra="forbid")
-
-    dataset: str = Field(
-        min_length=1,
-        description='Pin nickname of the frame to scan (e.g. "ADSL", "ADAE") — '
-        "attach frames with .pin(name, df).",
-    )
-    date: str = Field(
-        min_length=1,
-        description="Date column in that frame (must be Date/Datetime typed; "
-        "parse DTC strings with .date() first).",
-    )
-    where: str | pl.Expr | None = Field(
-        default=None,
-        description="Optional filter selecting which records qualify "
-        "(string expression or pl.Expr).",
-    )
-    order: list[str] | None = Field(
-        default=None,
-        description="Tie-break columns when several records share the "
-        'selected date (e.g. ["AESEQ"]).',
-    )
-    set: dict[str, Any] = Field(
-        default_factory=dict,
-        description="Constant/derived columns stamped on the output row when "
-        "this source is selected. SRCDOM/SRCVAR/SRCSEQ are auto-stamped from "
-        "dataset/date/order unless overridden here.",
-    )
-
-    @property
-    def kind(self) -> str:
-        """``"event"`` or ``"censor"``."""
-        return "censor" if isinstance(self, CensorSource) else "event"
-
-    @property
-    def label(self) -> str:
-        """Human-readable identifier used in error messages and traces."""
-        desc = self.set.get("EVNTDESC")
-        return str(desc) if isinstance(desc, str) else f"{self.kind}({self.dataset}.{self.date})"
-
-    def to_polars(self) -> pl.DataFrame:
-        """Render the source definition as a one-row DataFrame.
-
-        Returns:
-            pl.DataFrame: Columns ``kind``, ``dataset``, ``date``, ``where``,
-                ``order``, ``censor``, ``set`` — the inspectable answer to
-                "what does this source actually select?".
-
-        Examples:
-            Review a source before using it::
-
-                from fleet.adam.tte import DEATH_EVENT
-
-                print(DEATH_EVENT.to_polars())
-        """
-        return pl.DataFrame(
-            {
-                "kind": [self.kind],
-                "dataset": [self.dataset],
-                "date": [self.date],
-                "where": [str(self.where) if self.where is not None else None],
-                "order": [", ".join(self.order) if self.order else None],
-                "censor": [self.censor if isinstance(self, CensorSource) else None],
-                "set": [", ".join(f"{k}={v!r}" for k, v in self.set.items()) or None],
-            },
-            schema_overrides={
-                "where": pl.String,
-                "order": pl.String,
-                "censor": pl.Int64,
-                "set": pl.String,
-            },
-        )
-
-
-class EventSource(TTESource):
-    """A source of **event** records — the earliest one per subject wins (CNSR=0)."""
-
-
-class CensorSource(TTESource):
-    """A source of **censoring** records — the latest one per subject is used
-    when no event exists."""
-
-    censor: int = Field(
-        default=1,
-        ge=1,
-        description="Value written to CNSR when this source is selected "
-        "(must be ≥ 1 — events are implicitly 0).",
-    )
-
-
-def sources_frame(*sources: TTESource) -> pl.DataFrame:
-    """Stack any mix of sources into one inspectable definition table.
-
-    Args:
-        *sources: Event and/or censor sources.
-
-    Returns:
-        pl.DataFrame: One row per source (see ``TTESource.to_polars``).
-
-    Examples:
-        Review a study's TTE source library::
-
-            from fleet.adam.tte import sources_frame, DEATH_EVENT, LASTALIVE_CENSOR
-
-            print(sources_frame(DEATH_EVENT, LASTALIVE_CENSOR))
-    """
-    if not sources:
-        raise DerivationError("sources_frame() requires at least one source.")
-    return pl.concat([s.to_polars() for s in sources], how="vertical")
-
-
-# ------------------------------------------------------------------ #
-# Prebuilt library (ported from admiral R/tte_sources.R)               #
-# ------------------------------------------------------------------ #
-
-DEATH_EVENT = EventSource(
-    dataset="ADSL",
-    where='pl.col("DTHFL") == "Y"',
-    date="DTHDT",
-    set={"EVNTDESC": "DEATH"},
-)
-LASTALIVE_CENSOR = CensorSource(
-    dataset="ADSL",
-    date="LSTALVDT",
-    set={"EVNTDESC": "ALIVE"},
-)
-AE_EVENT = EventSource(
-    dataset="ADAE",
-    where='pl.col("TRTEMFL") == "Y"',
-    date="ASTDT",
-    order=["AESEQ"],
-    set={"EVNTDESC": "ADVERSE EVENT"},
-)
-AE_SER_EVENT = EventSource(
-    dataset="ADAE",
-    where='(pl.col("TRTEMFL") == "Y") & (pl.col("AESER") == "Y")',
-    date="ASTDT",
-    order=["AESEQ"],
-    set={"EVNTDESC": "SERIOUS ADVERSE EVENT"},
-)
-AE_SEV_EVENT = EventSource(
-    dataset="ADAE",
-    where='(pl.col("TRTEMFL") == "Y") & (pl.col("AESEV") == "SEVERE")',
-    date="ASTDT",
-    order=["AESEQ"],
-    set={"EVNTDESC": "SEVERE ADVERSE EVENT"},
-)
-AE_WD_EVENT = EventSource(
-    dataset="ADAE",
-    where='(pl.col("TRTEMFL") == "Y") & (pl.col("AEACN") == "DRUG WITHDRAWN")',
-    date="ASTDT",
-    order=["AESEQ"],
-    set={"EVNTDESC": "ADVERSE EVENT LEADING TO DRUG WITHDRAWAL"},
-)
-_AE_GRADE_EVENTS = {
-    f"AE_GR{g}_EVENT": EventSource(
-        dataset="ADAE",
-        where=f'(pl.col("TRTEMFL") == "Y") & (pl.col("ATOXGR") == "{g}")',
-        date="ASTDT",
-        order=["AESEQ"],
-        set={"EVNTDESC": f"GRADE {g} ADVERSE EVENT"},
-    )
-    for g in range(1, 6)
-}
-AE_GR1_EVENT = _AE_GRADE_EVENTS["AE_GR1_EVENT"]
-AE_GR2_EVENT = _AE_GRADE_EVENTS["AE_GR2_EVENT"]
-AE_GR3_EVENT = _AE_GRADE_EVENTS["AE_GR3_EVENT"]
-AE_GR4_EVENT = _AE_GRADE_EVENTS["AE_GR4_EVENT"]
-AE_GR5_EVENT = _AE_GRADE_EVENTS["AE_GR5_EVENT"]
-AE_GR35_EVENT = EventSource(
-    dataset="ADAE",
-    where='(pl.col("TRTEMFL") == "Y") & pl.col("ATOXGR").is_in(["3", "4", "5"])',
-    date="ASTDT",
-    order=["AESEQ"],
-    set={"EVNTDESC": "GRADE 3-5 ADVERSE EVENT"},
-)
-
-#: The ported admiral prebuilt registry — name → source.
-PREBUILT_SOURCES: dict[str, TTESource] = {
-    "DEATH_EVENT": DEATH_EVENT,
-    "LASTALIVE_CENSOR": LASTALIVE_CENSOR,
-    "AE_EVENT": AE_EVENT,
-    "AE_SER_EVENT": AE_SER_EVENT,
-    "AE_SEV_EVENT": AE_SEV_EVENT,
-    "AE_WD_EVENT": AE_WD_EVENT,
-    **_AE_GRADE_EVENTS,
-    "AE_GR35_EVENT": AE_GR35_EVENT,
-}
-
-
-def prebuilt_sources_frame() -> pl.DataFrame:
-    """Browse the prebuilt source library as a DataFrame.
-
-    Returns:
-        pl.DataFrame: One row per prebuilt source with a leading ``name``
-            column (the importable constant name).
-
-    Examples:
-        List every shipped TTE source::
-
-            from fleet.adam.tte import prebuilt_sources_frame
-
-            print(prebuilt_sources_frame())
-    """
-    rows = [
-        src.to_polars()
-        .with_columns(pl.lit(name).alias("name"))
-        .select("name", pl.all().exclude("name"))
-        for name, src in PREBUILT_SOURCES.items()
-    ]
-    return pl.concat(rows, how="vertical")
-
-
-# ------------------------------------------------------------------ #
-# Selection engine                                                     #
-# ------------------------------------------------------------------ #
+#: Columns that a source frame carries onto the selected ADTTE row.
+CARRIED_COLUMNS = ("EVNTDESC", "CNSDTDSC", "SRCDOM", "SRCVAR", "SRCSEQ")
 
 _ADT = "__tte_date__"
 _KIND = "__tte_kind__"
 _CNSR = "__tte_cnsr__"
-_SRC_IDX = "__tte_src_idx__"
+_SRC = "__tte_source__"
+_IDX = "__tte_src_idx__"
+_START = "__startdt__"
+_STOP = "__stopdt__"
 
 
-def _parse(expr: str | pl.Expr) -> pl.Expr:
-    from fleet.sdtm.utils import parse_expression
+def _hint(col: str, available: list[str]) -> str:
+    close = difflib.get_close_matches(col, available, n=1)
+    return f" Did you mean '{close[0]}'?" if close else ""
 
-    return expr if isinstance(expr, pl.Expr) else parse_expression(str(expr))
+
+def _is_date(dtype: pl.DataType) -> bool:
+    return dtype == pl.Date or isinstance(dtype, pl.Datetime)
 
 
-def _validate_source_columns(
-    source: TTESource, frame: pl.DataFrame, subject_keys: list[str], by: list[str]
-) -> None:
-    """Fail at declaration time with did-you-mean hints — never mid-engine."""
-    import difflib
-
-    available = frame.columns
-    needed: list[tuple[str, str]] = [("date", source.date)]
-    needed += [("order", c) for c in (source.order or [])]
-    needed += [("subject key", c) for c in subject_keys]
-    needed += [("by", c) for c in by]
-    if source.where is not None:
-        expr = _parse(source.where)
-        try:
-            needed += [("where", c) for c in expr.meta.root_names()]
-        except Exception:  # pragma: no cover - unresolvable roots
-            pass
-    for key, value in source.set.items():
-        if isinstance(value, pl.Expr):
-            try:
-                needed += [(f"set[{key}]", c) for c in value.meta.root_names()]
-            except Exception:  # pragma: no cover - unresolvable roots
-                pass
-
-    for role, col in needed:
-        if col not in available:
-            close = difflib.get_close_matches(col, available, n=1)
-            hint = f" Did you mean '{close[0]}'?" if close else ""
+def _check_columns(where: str, frame: pl.DataFrame, needed: list[str]) -> None:
+    for col in needed:
+        if col not in frame.columns:
+            fix = (
+                ' Give the date as ADT, for example adae.select("USUBJID", ADT="ASTDT").'
+                if col == "ADT"
+                else ""
+            )
             raise DerivationError(
-                f"TTE source '{source.label}' on pin {source.dataset}: {role} column "
-                f"'{col}' not found.{hint} Available: {available[:25]}"
+                f"{where}: column '{col}' not found.{_hint(col, frame.columns)}{fix} "
+                f"Available: {frame.columns[:25]}"
             )
 
-    dtype = frame.schema[source.date]
-    if dtype not in (pl.Date,) and not isinstance(dtype, pl.Datetime):
+
+def _check_date(where: str, frame: pl.DataFrame, col: str) -> None:
+    dtype = frame.schema[col]
+    if not _is_date(dtype):
         raise DerivationError(
-            f"TTE source '{source.label}' on pin {source.dataset}: date column "
-            f"'{source.date}' has dtype {dtype} — dates must be typed Date/Datetime. "
-            "Parse DTC strings first with .date()."
+            f"{where}: date column '{col}' has dtype {dtype}. Dates must be typed "
+            "Date/Datetime. Parse DTC strings first with .date()."
         )
 
 
 def _candidates(
-    source: TTESource,
+    label: str,
+    kind: Literal["event", "censor"],
+    cnsr: int,
     index: int,
     frame: pl.DataFrame,
+    keys: list[str],
+    stops: pl.DataFrame | None,
     subject_keys: list[str],
-    by: list[str],
-    create_datetime: bool,
+    date_dtype: pl.DataType,
 ) -> pl.DataFrame:
-    """One selected record per subject(+stratum) for a single source."""
-    keys = subject_keys + by
-    df = frame
-    if source.where is not None:
-        df = df.filter(_parse(source.where))
-    df = df.filter(pl.col(source.date).is_not_null())
+    """One record per subject (and stratum) from one source frame."""
+    df = frame.filter(pl.col("ADT").is_not_null()).with_columns(
+        pl.col("ADT").cast(date_dtype).alias(_ADT)
+    )
+    if stops is not None:
+        df = (
+            df.join(stops, on=subject_keys, how="left", nulls_equal=True)
+            .filter(pl.col(_STOP).is_null() | (pl.col(_ADT) <= pl.col(_STOP)))
+            .drop(_STOP)
+        )
     if df.is_empty():
         return pl.DataFrame()
 
-    order = source.order or []
-    if not order:
-        dup = df.group_by(keys + [source.date]).len().filter(pl.col("len") > 1)
+    if "SRCSEQ" not in df.columns:
+        dup = df.group_by(keys + [_ADT]).len().filter(pl.col("len") > 1)
         if dup.height:
             warnings.warn(
-                f"TTE source '{source.label}': {dup.height} group(s) have several "
-                f"records on the selected date and no order= tie-break — resolving "
-                "deterministically by full-row sort. Add order= to control this.",
+                f"TTE source {label}: {dup.height} group(s) have several records on the "
+                "selected date and no SRCSEQ column. The record is chosen by a sort on "
+                'all columns. Carry SRCSEQ (for example SRCSEQ="AESEQ") to control this.',
                 UserWarning,
                 stacklevel=4,
             )
-    # Deterministic regardless of input row order: after date+order, break any
-    # remaining ties on every other column (sorted by name).
-    residual = sorted(c for c in df.columns if c not in {*keys, source.date, *order})
-    df = df.sort(keys + [source.date] + order + residual)
-    grouped = df.group_by(keys, maintain_order=True)
-    picked = grouped.first() if source.kind == "event" else grouped.last()
+    order = ["SRCSEQ"] if "SRCSEQ" in df.columns else []
+    residual = sorted(c for c in df.columns if c not in {*keys, _ADT, *order})
+    grouped = df.sort(keys + [_ADT] + order + residual).group_by(keys, maintain_order=True)
+    picked = grouped.first() if kind == "event" else grouped.last()
 
-    date_expr = pl.col(source.date)
-    date_expr = date_expr.cast(pl.Datetime("us")) if create_datetime else date_expr.cast(pl.Date)
-
-    stamped: list[pl.Expr] = [
-        date_expr.alias(_ADT),
-        pl.lit(source.kind).alias(_KIND),
-        pl.lit(0 if source.kind == "event" else source.censor).cast(pl.Int64).alias(_CNSR),
-        pl.lit(index).cast(pl.Int64).alias(_SRC_IDX),
+    carried = [c for c in CARRIED_COLUMNS if c in df.columns]
+    stamps = [
+        pl.lit(kind).alias(_KIND),
+        pl.lit(cnsr).cast(pl.Int64).alias(_CNSR),
+        pl.lit(label).alias(_SRC),
+        pl.lit(index).cast(pl.Int64).alias(_IDX),
     ]
-    # Auto traceability: SRCDOM/SRCVAR/SRCSEQ from what the source already
-    # declares; explicit set= entries override.
-    set_spec: dict[str, Any] = {
-        "SRCDOM": pl.lit(source.dataset),
-        "SRCVAR": pl.lit(source.date),
-        **({"SRCSEQ": pl.col(source.order[0])} if source.order else {}),
-        **source.set,
-    }
-    for name, value in set_spec.items():
-        # Strings (and other plain values) are literals; only pl.Expr
-        # references source columns — EVNTDESC="DEATH" must never be read
-        # as a column lookup.
-        expr = value if isinstance(value, pl.Expr) else pl.lit(value)
-        stamped.append(expr.alias(name))
+    if kind == "event":
+        carried = [c for c in carried if c != "EVNTDESC"] + ["EVNTDESC"]
+        stamps.append(pl.lit(label).alias("EVNTDESC"))
+    return picked.with_columns(stamps).select(keys + [_ADT, _KIND, _CNSR, _SRC, _IDX] + carried)
 
-    picked = picked.with_columns(stamped)
-    payload = [c for c in set_spec]
-    return picked.select(keys + [_ADT, _KIND, _CNSR, _SRC_IDX] + payload)
+
+def _sources(
+    events: dict[str, pl.DataFrame | pl.LazyFrame],
+    censors: dict[int, pl.DataFrame | pl.LazyFrame],
+) -> list[tuple[str, Literal["event", "censor"], int, pl.DataFrame]]:
+    if not events:
+        raise DerivationError("param() needs at least one event frame in events=.")
+    out: list[tuple[str, Literal["event", "censor"], int, pl.DataFrame]] = []
+    for label, frame in events.items():
+        if not isinstance(label, str) or not label:
+            raise DerivationError(
+                f"events= keys are the EVNTDESC of each event, a non-empty string. Got {label!r}."
+            )
+        out.append((label, "event", 0, frame))
+    for cnsr, frame in censors.items():
+        if isinstance(cnsr, bool) or not isinstance(cnsr, int) or cnsr < 1:
+            raise DerivationError(
+                f"censors= keys are CNSR values, integers >= 1 (events are CNSR 0). Got {cnsr!r}."
+            )
+        out.append((f"CNSR {cnsr}", "censor", cnsr, frame))
+    for label, _, _, frame in out:
+        if not isinstance(frame, pl.DataFrame | pl.LazyFrame):
+            raise DerivationError(
+                f"TTE source {label}: expected a Polars frame, got {type(frame).__name__}."
+            )
+    return [
+        (lb, kd, cn, fr.collect() if isinstance(fr, pl.LazyFrame) else fr) for lb, kd, cn, fr in out
+    ]
+
+
+def param_label(paramcd: str, domain: str = "ADTTE") -> str:
+    """Return the PARAM of *paramcd* from the study's controlled terminology.
+
+    The study is the first ``study_config.yaml`` in the working directory
+    or above it. The label is the ``decode`` of the *paramcd* item in a
+    codelist that a ``PARAMCD`` variable of the ADaM ``define.yaml``
+    references (the *domain* dataset first, then the others). ``fleet init
+    ct`` writes the CDISC CT preferred terms as these decodes, so a PARAMCD
+    in a pinned CDISC CT codelist resolves here too.
+
+    Args:
+        paramcd: The parameter code, for example ``"OS"``.
+        domain: The dataset whose ``PARAMCD`` codelist is read first.
+
+    Returns:
+        str: The decode, for example ``"Overall Survival"``.
+
+    Raises:
+        DerivationError: When no source gives a label. The message names
+            *paramcd*, the places searched and the fix (``param=``).
+
+    References:
+        ADaMIG v1.3, BDS analysis parameter variables: PARAM and PARAMCD
+        map one to one. CDISC
+        ADaM CT (NCI EVS) has no time-to-event PARAMCD codelist; its
+        parameter codelists are questionnaire and scale codes. ADR-0043.
+
+    Examples:
+        The label of OS in a study whose ADTTE.PARAMCD has a codelist::
+
+            label = param_label("OS")  # "Overall Survival"
+    """
+    searched: list[str] = []
+    config = find_study_config()
+    if config is None:
+        searched.append(f"no study_config.yaml in {Path.cwd()} or above it")
+    else:
+        try:
+            define = load_study_context(config).metadata_adam_dir / "define.yaml"
+        except StudyConfigError as err:
+            searched.append(f"{config} (cannot be read: {err})")
+        else:
+            label = _define_decode(define, paramcd, domain) if define.is_file() else None
+            if label is not None:
+                return label
+            searched.append(f"the PARAMCD codelists of {define}")
+    searched.append("CDISC ADaM CT (it has no time-to-event PARAMCD codelist)")
+    raise DerivationError(
+        f"param(): no PARAM label for PARAMCD '{paramcd}'. Searched: {'; '.join(searched)}. "
+        f'Pass param=, for example param("{paramcd}", "Overall Survival", ...), or add '
+        f"'{paramcd}' with a decode to the PARAMCD codelist of {domain} in the ADaM define.yaml."
+    )
+
+
+def _define_decode(define: Path, paramcd: str, domain: str) -> str | None:
+    """The decode of *paramcd* in a codelist a PARAMCD variable of *define* references."""
+    spec = load_spec_yaml(define.read_text(encoding="utf-8")) or {}
+    codelists = {str(cl.get("oid")): cl for cl in spec.get("codelists") or []}
+    datasets = sorted(spec.get("datasets") or [], key=lambda ds: ds.get("name") != domain)
+    for ds in datasets:
+        for var in ds.get("variables") or []:
+            if var.get("name") != "PARAMCD" or not var.get("codelist"):
+                continue
+            for item in codelists.get(str(var["codelist"]), {}).get("items") or []:
+                if str(item.get("coded_value")) == paramcd and item.get("decode"):
+                    return str(item["decode"])
+    return None
 
 
 def select_tte(
     *,
     universe: pl.DataFrame,
-    start_date: str,
-    events: list[EventSource],
-    censors: list[CensorSource],
-    resolve: Callable[[str], pl.DataFrame],
+    start: str,
+    events: dict[str, pl.DataFrame | pl.LazyFrame],
+    censors: dict[int, pl.DataFrame | pl.LazyFrame],
     subject_keys: list[str],
+    stop_at: list[str] | None = None,
     by: list[str] | None = None,
-    end_dates: list[CensorSource] | None = None,
-    event_type: Literal["negative", "positive"] = "negative",
     create_datetime: bool = False,
     retain: Literal["drop", "censor_at_start"] = "drop",
 ) -> tuple[pl.DataFrame, pl.DataFrame]:
-    """Select one TTE record per subject (per stratum) — the pure engine.
+    """Select one time-to-event record per subject (per stratum).
 
-    Selection rule (admiral parity): pool the FIRST record per subject from
-    every event source and keep the EARLIEST → CNSR=0.  Subjects without an
-    event take the LATEST record pooled from the censor sources → CNSR≥1.
-    ``end_dates`` sources close the observation window: the earliest end date
-    invalidates later events and takes precedence over ordinary censoring.
-    Dates before the start date are floored to it.
+    The stop date of a subject is the earliest non-null *stop_at* date in
+    *universe*. Event and censor records after it are dropped. The first
+    event left wins (``CNSR = 0``, ``EVNTDESC`` = its key). A subject
+    without an event takes the last censor record left (``CNSR`` = its
+    key); on a date tie the censor frame given last wins. An event or
+    censor date before the start date is set to the start date; the CNSR
+    does not change.
 
     Args:
-        universe: Subject-level frame (ADSL) supplying the population and
-            *start_date*.
-        start_date: Column in *universe* holding the time origin.
-        events: Ordered event sources.
-        censors: Ordered censor sources.
-        resolve: ``pin nickname → DataFrame`` resolver.
+        universe: Subject-level frame (ADSL) with *start*, *stop_at* and the
+            subject keys.
+        start: Date column in *universe* that starts the clock
+            (``STARTDT``).
+        events: ``EVNTDESC -> frame``. Each frame holds the subject keys
+            and ``ADT``.
+        censors: ``CNSR -> frame`` (CNSR >= 1). Each frame holds the
+            subject keys and ``ADT``; ``EVNTDESC`` comes from a frame
+            column, else it is null and a warning names the frame.
         subject_keys: Subject identifier columns (usually ``["USUBJID"]``).
-        by: Optional stratification columns (must exist in every source
-            frame) — one output row per subject per stratum.
-        end_dates: Censor sources whose EARLIEST date truncates the window.
-        event_type: ``"positive"`` requires *end_dates* (favorable events —
-            subjects without one are censored at the window end).
-        create_datetime: Emit ``ADTM``/``STARTDTM`` (µs) instead of dates.
-        retain: ``"drop"`` (admiral parity — subjects with no event and no
-            censor record are dropped, with a warning) or
-            ``"censor_at_start"`` (kept, censored at STARTDT with
-            ``EVNTDESC="NO EVENT OBSERVED"``).
+        stop_at: Date columns in *universe*; the earliest non-null one
+            ends the observation of the subject.
+        by: Stratum columns, present in every source frame.
+        create_datetime: Give ``ADTM``/``STARTDTM`` instead of dates.
+        retain: ``"drop"`` (a subject with no record left is dropped with a
+            warning) or ``"censor_at_start"`` (censored at ``STARTDT`` with
+            ``EVNTDESC = "NO EVENT OBSERVED"``).
 
     Returns:
-        tuple[pl.DataFrame, pl.DataFrame]: ``(rows, trace)`` — the selected
-            TTE rows, and the per-candidate decision trace
-            (``kind | SRCDOM | date | selected | reason`` per subject).
+        tuple[pl.DataFrame, pl.DataFrame]: The selected rows, and the
+            decision trace (one row per candidate: ``kind``, ``source``,
+            ``date``, ``selected``, ``reason``).
 
     Raises:
-        DerivationError: On unknown columns (with did-you-mean), string-typed
-            date columns, missing by-columns, or ``event_type="positive"``
-            without *end_dates*.
+        DerivationError: On a missing column (with a did-you-mean hint), a
+            date column that is not Date/Datetime, or a bad dict key.
+
+    References:
+        admiral 1.5 ``derive_param_tte`` (``end_dates``,
+        ``event_type = "negative"``); ADR-0043
+        (docs/adr/0043-tte-censors-at-the-last-record-before-the-stop-date.md).
+
+    Examples:
+        PFS, censored at the last assessment before new therapy::
+
+            rows, trace = select_tte(
+                universe=adsl,
+                start="TRTSDT",
+                events={"PD": adrs.filter(pl.col("AVALC") == "PD")},
+                censors={2: adrs.select("USUBJID", "ADT")},
+                subject_keys=["USUBJID"],
+                stop_at=["EOSDT", "NACTDT"],
+            )
     """
     by = by or []
-    if not events:
-        raise DerivationError("select_tte() requires at least one event source.")
-    if event_type not in ("negative", "positive"):
-        raise DerivationError(
-            f"select_tte() event_type={event_type!r} is not supported. "
-            "Choose 'negative' or 'positive'."
-        )
-    if event_type == "positive" and not end_dates:
-        raise DerivationError("event_type='positive' requires end_dates= sources.")
-    if start_date not in universe.columns:
-        import difflib
-
-        close = difflib.get_close_matches(start_date, universe.columns, n=1)
-        hint = f" Did you mean '{close[0]}'?" if close else ""
-        raise DerivationError(f"start_date column '{start_date}' not found in ADSL.{hint}")
-
-    date_dtype = pl.Datetime("us") if create_datetime else pl.Date
-    base = universe.select(
-        subject_keys + [pl.col(start_date).cast(date_dtype).alias("__startdt__")]
-    ).unique(subject_keys)
-
-    def pool(sources: list[TTESource], offset: int = 0) -> pl.DataFrame:
-        frames = []
-        for i, src in enumerate(sources):
-            frame = resolve(src.dataset)
-            _validate_source_columns(src, frame, subject_keys, by)
-            cand = _candidates(src, offset + i, frame, subject_keys, by, create_datetime)
-            if not cand.is_empty():
-                frames.append(cand)
-        if not frames:
-            return pl.DataFrame()
-        return pl.concat(frames, how="diagonal_relaxed")
-
+    stop_at = stop_at or []
+    sources = _sources(events, censors)
     keys = subject_keys + by
-    event_pool = pool(list(events))
-    censor_pool = pool(list(censors), offset=len(events))
-    end_pool = pool(list(end_dates or []), offset=len(events) + len(censors))
 
-    # Winners: earliest event / latest censor / earliest window end.
-    def winner(candidates: pl.DataFrame, earliest: bool) -> pl.DataFrame:
-        if candidates.is_empty():
-            return candidates
-        picked = candidates.sort(
-            keys + [_ADT, _SRC_IDX], descending=[False] * len(keys) + [not earliest, False]
+    no_desc = [lb for lb, kd, _, fr in sources if kd == "censor" and "EVNTDESC" not in fr.columns]
+    if no_desc:
+        warnings.warn(
+            f"TTE censor frame(s) {', '.join(no_desc)} have no EVNTDESC column, so EVNTDESC "
+            "is null on their rows. Give the reason of the censoring on the frame, for "
+            'example adsl.select("USUBJID", ADT="LSTALVDT", EVNTDESC=pl.lit("ALIVE")).',
+            UserWarning,
+            stacklevel=3,
         )
-        return picked.group_by(keys, maintain_order=True).first()
 
-    event_win = winner(event_pool, earliest=True)
-    end_win = winner(end_pool, earliest=True)
+    _check_columns("ADSL", universe, subject_keys + [start, *stop_at])
+    for col in [start, *stop_at]:
+        _check_date("ADSL", universe, col)
 
-    # Window truncation: an event after the subject's end date does not count.
-    if not event_win.is_empty() and not end_win.is_empty():
-        event_win = event_win.join(
-            end_win.select(keys + [pl.col(_ADT).alias("__end__")]),
-            on=keys,
-            how="left",
-            nulls_equal=True,
-        )
-        event_win = event_win.filter(
-            pl.col("__end__").is_null() | (pl.col(_ADT) <= pl.col("__end__"))
-        ).drop("__end__")
+    date_dtype: pl.DataType = pl.Datetime("us") if create_datetime else pl.Date
+    base = universe.select(subject_keys + [pl.col(start).cast(date_dtype).alias(_START)]).unique(
+        subject_keys, maintain_order=True
+    )
+    stops = (
+        universe.select(
+            subject_keys
+            + [pl.min_horizontal([pl.col(c).cast(date_dtype) for c in stop_at]).alias(_STOP)]
+        ).unique(subject_keys, maintain_order=True)
+        if stop_at
+        else None
+    )
 
-    censor_win = winner(censor_pool, earliest=False)
+    pools: dict[str, list[pl.DataFrame]] = {"event": [], "censor": []}
+    for index, (label, kind, cnsr, frame) in enumerate(sources):
+        where = f"TTE {kind} {label}"
+        _check_columns(where, frame, keys + ["ADT"])
+        _check_date(where, frame, "ADT")
+        cand = _candidates(label, kind, cnsr, index, frame, keys, stops, subject_keys, date_dtype)
+        if not cand.is_empty():
+            pools[kind].append(cand)
+    event_pool, censor_pool = (
+        pl.concat(pools[k], how="diagonal_relaxed") if pools[k] else pl.DataFrame()
+        for k in ("event", "censor")
+    )
 
-    # Precedence: event → window-end censor → ordinary censor.
-    chosen = event_win
-    for fallback in (end_win, censor_win):
-        if fallback.is_empty():
-            continue
-        taken = chosen.select(keys).unique() if not chosen.is_empty() else None
+    def winner(pool: pl.DataFrame, first: bool) -> pl.DataFrame:
+        if pool.is_empty():
+            return pool
+        grouped = pool.sort(keys + [_ADT, _IDX]).group_by(keys, maintain_order=True)
+        return grouped.first() if first else grouped.last()
+
+    chosen = winner(event_pool, first=True)
+    censor_win = winner(censor_pool, first=False)
+    if not censor_win.is_empty():
         extra = (
-            fallback
-            if taken is None
-            else fallback.join(taken, on=keys, how="anti", nulls_equal=True)
+            censor_win
+            if chosen.is_empty()
+            else censor_win.join(chosen.select(keys), on=keys, how="anti", nulls_equal=True)
         )
         chosen = extra if chosen.is_empty() else pl.concat([chosen, extra], how="diagonal_relaxed")
 
-    # Universe join: STARTDT, strata expansion, and retain policy.
-    if by:
-        strata = (
-            pl.concat(
-                [p.select(by) for p in (event_pool, censor_pool, end_pool) if not p.is_empty()],
-                how="vertical_relaxed",
-            ).unique()
-            if not (event_pool.is_empty() and censor_pool.is_empty() and end_pool.is_empty())
-            else pl.DataFrame()
+    pooled = [p for p in (event_pool, censor_pool) if not p.is_empty()]
+    if by and pooled:
+        strata = pl.concat([p.select(by) for p in pooled], how="vertical_relaxed").unique(
+            maintain_order=True
         )
-        base = base.join(strata, how="cross") if not strata.is_empty() else base
+        base = base.join(strata, how="cross")
     rows = (
         base.join(chosen, on=keys, how="left", nulls_equal=True)
         if not chosen.is_empty()
@@ -526,7 +355,8 @@ def select_tte(
             pl.lit(None, dtype=date_dtype).alias(_ADT),
             pl.lit(None, dtype=pl.String).alias(_KIND),
             pl.lit(None, dtype=pl.Int64).alias(_CNSR),
-            pl.lit(None, dtype=pl.Int64).alias(_SRC_IDX),
+            pl.lit(None, dtype=pl.String).alias(_SRC),
+            pl.lit(None, dtype=pl.Int64).alias(_IDX),
         )
     )
 
@@ -535,76 +365,41 @@ def select_tte(
     if unresolved.height:
         if retain == "censor_at_start":
             filled = unresolved.with_columns(
-                pl.col("__startdt__").alias(_ADT),
+                pl.col(_START).alias(_ADT),
                 pl.lit("censor").alias(_KIND),
                 pl.lit(1).cast(pl.Int64).alias(_CNSR),
                 pl.lit("NO EVENT OBSERVED").alias("EVNTDESC"),
                 pl.lit("ADSL").alias("SRCDOM"),
-                pl.lit(start_date).alias("SRCVAR"),
+                pl.lit(start).alias("SRCVAR"),
             )
             rows = pl.concat([rows, filled], how="diagonal_relaxed") if rows.height else filled
         else:
+            ids = unresolved.get_column(subject_keys[-1]).unique(maintain_order=True)
+            window = " on or before the first stop_at date" if stop_at else ""
             warnings.warn(
-                f"select_tte(): {unresolved.height} subject(s) have no event and no "
-                "censoring record and were dropped. Use retain='censor_at_start' "
-                "or add an ADSL censor source to keep them.",
+                f"select_tte(): {ids.len()} subject(s) have no event and no censor "
+                f"record{window} and were dropped: {ids.head(5).to_list()}"
+                f"{' ...' if ids.len() > 5 else ''}. Add a censor frame on the start date "
+                f'(for example {{3: adsl.select("USUBJID", ADT="{start}")}}) or use '
+                "retain='censor_at_start'.",
                 UserWarning,
                 stacklevel=3,
             )
 
-    # Floor dates before the time origin to the origin (admiral parity).
-    floored = (pl.col(_ADT) < pl.col("__startdt__")) & pl.col("__startdt__").is_not_null()
+    # admiral: ADT = max(ADT, STARTDT).
+    floored = (pl.col(_ADT) < pl.col(_START)) & pl.col(_START).is_not_null()
     rows = rows.with_columns(
         floored.fill_null(False).alias("__floored__"),
-        pl.when(floored).then(pl.col("__startdt__")).otherwise(pl.col(_ADT)).alias(_ADT),
+        pl.when(floored).then(pl.col(_START)).otherwise(pl.col(_ADT)).alias(_ADT),
     )
 
-    # Decision trace — every pooled candidate, with the winner marked.
-    trace_pool = (
-        pl.concat(
-            [p for p in (event_pool, censor_pool, end_pool) if not p.is_empty()],
-            how="diagonal_relaxed",
-        )
-        if not (event_pool.is_empty() and censor_pool.is_empty() and end_pool.is_empty())
-        else pl.DataFrame()
-    )
-    if not trace_pool.is_empty():
-        winners = rows.select(keys + [_ADT, _KIND, _SRC_IDX, "__floored__"]).with_columns(
-            pl.lit(True).alias("selected")
-        )
-        trace = trace_pool.join(
-            winners, on=keys + [_KIND, _SRC_IDX], how="left", suffix="_w", nulls_equal=True
-        )
-        trace = trace.with_columns(
-            pl.col("selected").fill_null(False),
-            pl.when(pl.col("selected") & (pl.col(_KIND) == "event") & pl.col("__floored__"))
-            .then(pl.lit("earliest event (floored to STARTDT)"))
-            .when(pl.col("selected") & (pl.col(_KIND) == "event"))
-            .then(pl.lit("earliest event"))
-            .when(pl.col("selected") & pl.col("__floored__"))
-            .then(pl.lit("latest censor, floored to STARTDT"))
-            .when(pl.col("selected"))
-            .then(pl.lit("latest censor (no event)"))
-            .otherwise(pl.lit("not selected"))
-            .alias("reason"),
-        ).select(
-            keys
-            + [
-                pl.col(_KIND).alias("kind"),
-                pl.col("SRCDOM"),
-                pl.col(_ADT).alias("date"),
-                "selected",
-                "reason",
-            ]
-        )
-    else:
-        trace = pl.DataFrame()
+    trace = _trace(pooled, rows, keys, date_dtype)
     if unresolved.height and retain == "drop":
         dropped = unresolved.select(
             keys
             + [
                 pl.lit(None, dtype=pl.String).alias("kind"),
-                pl.lit(None, dtype=pl.String).alias("SRCDOM"),
+                pl.lit(None, dtype=pl.String).alias("source"),
                 pl.lit(None, dtype=date_dtype).alias("date"),
                 pl.lit(False).alias("selected"),
                 pl.lit("dropped: no event or censor record").alias("reason"),
@@ -612,10 +407,56 @@ def select_tte(
         )
         trace = pl.concat([trace, dropped], how="diagonal_relaxed") if trace.height else dropped
 
-    # Final shape.
-    start_name = "STARTDTM" if create_datetime else "STARTDT"
-    adt_name = "ADTM" if create_datetime else "ADT"
-    rows = rows.rename({"__startdt__": start_name, _ADT: adt_name, _CNSR: "CNSR"}).drop(
-        _KIND, _SRC_IDX, "__floored__"
+    start_name, adt_name = ("STARTDTM", "ADTM") if create_datetime else ("STARTDT", "ADT")
+    rows = rows.rename({_START: start_name, _ADT: adt_name, _CNSR: "CNSR"}).drop(
+        _KIND, _SRC, _IDX, "__floored__"
     )
+    if "STUDYID" in universe.columns and "STUDYID" not in rows.columns:
+        study = universe.select(subject_keys + ["STUDYID"]).unique()
+        if study.select(subject_keys).is_duplicated().any():
+            raise DerivationError(
+                f"select_tte(): a subject key {subject_keys} has two STUDYID values in ADSL. "
+                'Give subject_keys=["STUDYID", "USUBJID"].'
+            )
+        rows = rows.join(study, on=subject_keys, how="left", nulls_equal=True).select(
+            "STUDYID", pl.exclude("STUDYID")
+        )
     return rows, trace
+
+
+def _trace(
+    pooled: list[pl.DataFrame], rows: pl.DataFrame, keys: list[str], date_dtype: pl.DataType
+) -> pl.DataFrame:
+    """Every candidate per subject, the selected one marked, with the reason."""
+    if not pooled:
+        return pl.DataFrame()
+    winners = rows.select(keys + [_KIND, _IDX, "__floored__"]).with_columns(
+        pl.lit(True).alias("selected")
+    )
+    trace = pl.concat(pooled, how="diagonal_relaxed").join(
+        winners, on=keys + [_KIND, _IDX], how="left", nulls_equal=True
+    )
+    selected = pl.col("selected")
+    event = pl.col(_KIND) == "event"
+    return trace.with_columns(
+        selected.fill_null(False),
+        pl.when(selected & event & pl.col("__floored__"))
+        .then(pl.lit("earliest event (floored to STARTDT)"))
+        .when(selected & event)
+        .then(pl.lit("earliest event"))
+        .when(selected & pl.col("__floored__"))
+        .then(pl.lit("last censor, floored to STARTDT"))
+        .when(selected)
+        .then(pl.lit("last censor (no event)"))
+        .otherwise(pl.lit("not selected"))
+        .alias("reason"),
+    ).select(
+        keys
+        + [
+            pl.col(_KIND).alias("kind"),
+            pl.col(_SRC).alias("source"),
+            pl.col(_ADT).cast(date_dtype).alias("date"),
+            "selected",
+            "reason",
+        ]
+    )

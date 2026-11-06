@@ -172,6 +172,32 @@ def test_unknown_command_exits_2(capsys: pytest.CaptureFixture) -> None:
     assert "err" in capsys.readouterr().err.lower()
 
 
+@pytest.mark.parametrize("argv", [["--help"], ["doctor"], ["check"]])
+def test_a_cp1252_stdout_prints_glyphs_escaped_not_a_traceback(
+    argv: list[str], tmp_path: Path
+) -> None:
+    """c1-314: a Windows pipe or redirect is cp1252; a check mark must not crash."""
+    import os
+    import subprocess
+    import sys
+
+    result = subprocess.run(
+        [sys.executable, "-c", "from fleet.cli import main; main()", *argv],
+        cwd=tmp_path,
+        env={**os.environ, "PYTHONIOENCODING": "cp1252"},
+        capture_output=True,
+        encoding="cp1252",
+        errors="replace",
+        timeout=120,
+        check=False,
+    )
+
+    assert "Traceback" not in result.stderr
+    assert "UnicodeEncodeError" not in result.stderr
+    if argv == ["doctor"]:
+        assert "\\u2713" in result.stdout or "\\u2717" in result.stdout
+
+
 # ------------------------------------------------------------------ #
 # Config discovery                                                    #
 # ------------------------------------------------------------------ #
@@ -293,6 +319,119 @@ def test_run_xpt_writes_v5_with_the_define_labels(
     assert meta.table_name == "DM"
     assert meta.file_label == "Demographics"
     assert meta.column_names_to_labels["USUBJID"] == "Unique Subject Identifier"
+
+
+def test_run_dataset_json_writes_the_define_labels_and_oids(
+    study: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """c1-576: the Dataset-JSON of fleet run carries the define metadata."""
+    monkeypatch.chdir(study)
+
+    assert _run(["run", "--format", "dataset-json"]) == 0
+
+    payload = json.loads((study / "data" / "sdtm" / "dm.json").read_text(encoding="utf-8"))
+    cols = {c["name"]: c for c in payload["columns"]}
+    assert payload["label"] == "Demographics"
+    assert payload["studyOID"] == "STDY.TESTRUN"
+    assert payload["metaDataVersionOID"] == "MDV.TESTRUN.1.SDTMIG.3.4"
+    assert cols["USUBJID"] == {
+        "itemOID": "IT.DM.USUBJID",
+        "name": "USUBJID",
+        "label": "Unique Subject Identifier",
+        "dataType": "string",
+        "length": 20,
+        "keySequence": 2,
+    }
+    assert cols["AGE"]["itemOID"] == "IT.DM.AGE"
+
+
+def test_run_prints_each_input_with_its_file(
+    study: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    """c1-286: the log names the file each input came from."""
+    monkeypatch.chdir(study)
+
+    assert _run(["run"]) == 0
+
+    assert f"    input dm_raw -> {study / 'data' / 'raw' / 'dm.csv'}" in capsys.readouterr().out
+
+
+def test_run_writes_the_format_the_define_declares(
+    study: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    """c1-287: with no --format, output_format: drives the file, as it drives the leaf href."""
+    pytest.importorskip("pyreadstat")
+    define = study / "metadata" / "sdtm" / "define.yaml"
+    define.write_text("output_format: xpt\n" + _SDTM_DEFINE, encoding="utf-8")
+    monkeypatch.chdir(study)
+
+    assert _run(["run"]) == 0
+
+    assert (study / "data" / "sdtm" / "dm.xpt").is_file()
+    assert not (study / "data" / "sdtm" / "dm.parquet").exists()
+    assert "Format:  DM xpt" in capsys.readouterr().out
+
+
+def test_run_warns_when_the_format_flag_differs_from_the_define(
+    study: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    define = study / "metadata" / "sdtm" / "define.yaml"
+    define.write_text("output_format: xpt\n" + _SDTM_DEFINE, encoding="utf-8")
+    monkeypatch.chdir(study)
+
+    assert _run(["run", "--format", "parquet"]) == 0
+
+    assert "--format parquet overrides output_format: xpt" in capsys.readouterr().err
+
+
+_EXTRA_MANDATORY = """\
+      - name: SITEID
+        label: Study Site Identifier
+        type: text
+        mandatory: true
+"""
+
+
+@pytest.mark.parametrize(
+    "variables",
+    [_EXTRA_MANDATORY, None],
+    ids=["a mandatory column is absent", "no column at all"],
+)
+def test_run_keeps_the_old_file_when_the_build_does_not_match_its_define(
+    variables: str | None,
+    study: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture,
+) -> None:
+    """c1-286 step 6: a build that misses its define stops before the write."""
+    head, _ = _SDTM_DEFINE.split("    variables:\n")
+    body = _SDTM_DEFINE + variables if variables else head + "    variables:\n" + _EXTRA_MANDATORY
+    (study / "metadata" / "sdtm" / "define.yaml").write_text(body, encoding="utf-8")
+    old = study / "data" / "sdtm" / "dm.parquet"
+    old.parent.mkdir(parents=True)
+    old.write_bytes(b"old file")
+    monkeypatch.chdir(study)
+
+    assert _run(["run", "--format", "parquet"]) == 1
+
+    assert "The old file is kept." in capsys.readouterr().err
+    assert old.read_bytes() == b"old file"
+
+
+def test_define_xml_warns_when_a_leaf_names_no_file(
+    study: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    """c1-287: the leaf href must name a file the data folder holds."""
+    monkeypatch.chdir(study)
+
+    assert _run(["define-xml", "--standard", "sdtm", "--no-preview"]) == 0
+
+    assert "no file in" in capsys.readouterr().err
+
+    assert _run(["run"]) == 0
+    capsys.readouterr()
+    assert _run(["define-xml", "--standard", "sdtm", "--no-preview"]) == 0
+    assert "no file in" not in capsys.readouterr().err
 
 
 def test_checker_write_xpt_carries_the_define_labels(study: Path) -> None:

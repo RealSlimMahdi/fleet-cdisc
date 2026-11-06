@@ -122,12 +122,21 @@ def _item_def(oid: str, origin: str, desc: str | None = None) -> str:
     )
 
 
+def _method_def(oid: str) -> str:
+    return (
+        f'<MethodDef OID="{oid}" Name="Algorithm for X" Type="Computation">'
+        "<Description><TranslatedText xml:lang='en'>t</TranslatedText></Description>"
+        "</MethodDef>"
+    )
+
+
 class TestSemanticLint:
     def test_method_on_non_derived_is_flagged(self):
         xml = _doc(
             '<ItemGroupDef OID="IG.DM" Name="DM" Repeating="No">'
             '<ItemRef ItemOID="IT.DM.SEX" MethodOID="MT.DM.SEX"/></ItemGroupDef>'
             + _item_def("IT.DM.SEX", "Collected")
+            + _method_def("MT.DM.SEX")
         )
         problems = semantic_errors(xml)
         assert len(problems) == 1 and "Collected" in problems[0]
@@ -137,6 +146,7 @@ class TestSemanticLint:
             '<ItemGroupDef OID="IG.DM" Name="DM" Repeating="No">'
             '<ItemRef ItemOID="IT.DM.AGEGR1" MethodOID="MT.DM.AGEGR1"/></ItemGroupDef>'
             + _item_def("IT.DM.AGEGR1", "Derived")
+            + _method_def("MT.DM.AGEGR1")
         )
         assert semantic_errors(xml) == []
 
@@ -217,6 +227,8 @@ class TestSemanticLint:
             "  originator: Fleet\n  standard: ADAMIG\n  standard_version: '1.1'\n"
             "datasets:\n  - name: ADAE\n    label: Adverse Events Analysis\n"
             "    structure: One record per event\n    keys: [USUBJID]\n    variables:\n"
+            "      - name: USUBJID\n        label: Unique Subject Identifier\n        type: text\n"
+            "        length: 20\n        origin: Predecessor\n        predecessor: ADSL.USUBJID\n"
             "      - name: TRTSDT\n        label: Date of First Exposure\n        type: date\n"
             "        origin: Derived\n        derivation:\n          algorithm: merge\n"
             "          dataset: ADSL\n          on: USUBJID\n"
@@ -294,6 +306,22 @@ class TestGeneratorSemantics:
                 }
             ],
         }
+
+    def test_a_failed_validation_names_no_option_the_cli_lacks(self, tmp_path):
+        """c1-536: the error told a CLI user to pass validate_xml=False."""
+        spec = self._spec(
+            {
+                "name": "SEX",
+                "label": "Sex",
+                "type": "text",
+                "length": 1,
+                "origin": "Derived",
+                "comment": "Copy of ``sex``",
+            }
+        )
+        with pytest.raises(Exception, match="Correct define.yaml") as err:
+            _generate(spec, tmp_path)
+        assert "Pass validate_xml=False" not in str(err.value)
 
     def test_comment_becomes_the_method_description(self, tmp_path):
         spec = self._spec(
@@ -669,7 +697,8 @@ class TestPredecessorPopulate:
         assert origin.get("Type") == "Predecessor"
         assert _origin_desc(root, "COUNTRY") == "DM.COUNTRY"
 
-    def test_merge_ambiguity_gets_a_review_note(self):
+    def test_a_merged_column_is_a_stub_not_a_predecessor(self):
+        """c1-40: TRTSDT does not exist in DM, so it is no DM.TRTSDT Predecessor."""
         ex = pl.from_repr("""\
 ┌─────────┬────────────┐
 │ USUBJID ┆ TRTSDT     │
@@ -680,12 +709,58 @@ class TestPredecessorPopulate:
 └─────────┴────────────┘
 """)
         ns = self._adsl_ns().merge(ex, on="USUBJID")
-        text = ns.to_spec_yaml(dataset="ADSL", predecessor="DM")
-        assert "merges other datasets" in text
-        # Without a join, no note.
-        assert "merges other datasets" not in self._adsl_ns().to_spec_yaml(
-            dataset="ADSL", predecessor="DM"
+        with pytest.warns(UserWarning, match="TRTSDT"):
+            text = ns.to_spec_yaml(dataset="ADSL", predecessor="DM")
+        entries = {v["name"]: v for v in yaml.safe_load(text)["datasets"][0]["variables"]}
+
+        assert "predecessor" not in entries["TRTSDT"]
+        assert "origin" not in entries["TRTSDT"]
+        assert entries["TRTSDT"]["derivation"]["callable"] == "TODO_TRTSDT"
+        assert "# TODO: column TRTSDT was added by a verb that records no lineage" in text
+        assert entries["COUNTRY"]["predecessor"] == "DM.COUNTRY"
+
+    def test_a_new_column_with_no_node_gets_no_predecessor(self):
+        """c1-40: first_date and count_events columns were labelled DM.TRTSDT and DM.NUMAE."""
+        dm = pl.from_repr("""\
+┌─────────┬─────────┬─────┐
+│ STUDYID ┆ USUBJID ┆ AGE │
+│ ---     ┆ ---     ┆ --- │
+│ str     ┆ str     ┆ i64 │
+╞═════════╪═════════╪═════╡
+│ X       ┆ S1      ┆ 40  │
+│ X       ┆ S2      ┆ 50  │
+└─────────┴─────────┴─────┘
+""")
+        ex = pl.from_repr("""\
+┌─────────┬────────────┐
+│ USUBJID ┆ EXSTDTC    │
+│ ---     ┆ ---        │
+│ str     ┆ str        │
+╞═════════╪════════════╡
+│ S1      ┆ 2024-01-02 │
+└─────────┴────────────┘
+""")
+        ae = pl.from_repr("""\
+┌─────────┐
+│ USUBJID │
+│ ---     │
+│ str     │
+╞═════════╡
+│ S1      │
+└─────────┘
+""")
+        ns = dm.adam.adsl.first_date("TRTSDT", from_dataset=ex, date_col="EXSTDTC").count_events(
+            "NUMAE", from_dataset=ae
         )
+        with pytest.warns(UserWarning, match="TRTSDT, NUMAE"):
+            text = ns.to_spec_yaml(dataset="ADSL", predecessor="DM")
+        entries = {v["name"]: v for v in yaml.safe_load(text)["datasets"][0]["variables"]}
+
+        for name in ("TRTSDT", "NUMAE"):
+            assert "predecessor" not in entries[name]
+            assert entries[name].get("origin") != "Predecessor"
+        for name in ("STUDYID", "USUBJID", "AGE"):
+            assert entries[name]["predecessor"] == f"DM.{name}"
 
     def test_sdtm_pipeline_rejects_predecessor(self):
         raw = fleet.frame(
@@ -710,6 +785,31 @@ class TestPredecessorPopulate:
 
 class TestMethodTextShapes:
     """One verb, several reviewer texts: the keys given in the block pick the shape."""
+
+    @pytest.mark.parametrize(
+        "doc",
+        [
+            "Y when baseline BMI >= 18.5 kg/m2 and AGE >= 65.",
+            "Derived per SAP v2.1 section 3.4 using the LOCF rule.",
+            # formula case: asterisks are multiplication, not reST emphasis
+            "Dose per kg = AVAL*1000/WEIGHT*FREQ, rounded to 2 decimals.",
+            "BSA = 0.007184*HEIGHT**0.725*WEIGHT**0.425 (DuBois).",
+        ],
+    )
+    def test_a_docstring_method_text_keeps_numbers_and_operators(self, doc):
+        """c1-732: the summary cut at 18.5 and the markup strip removed asterisks."""
+        from fleet.core.algorithm_resolver import docstring_summary
+        from fleet.define_xml.semantic_checks import REST_EMPHASIS
+        from fleet.define_xml.spec_generator import _strip_rest_markup
+
+        text = _strip_rest_markup(docstring_summary(doc + "\n\nMore detail. Not in the text."))
+        assert text == doc
+        assert REST_EMPHASIS.search(text) is None
+
+    def test_rest_markup_is_still_stripped(self):
+        from fleet.define_xml.spec_generator import _strip_rest_markup
+
+        assert _strip_rest_markup("Copy of ``AGE`` into *target*.") == "Copy of AGE into target."
 
     @pytest.mark.parametrize(
         ("params", "text"),
@@ -744,7 +844,7 @@ class TestMethodTextShapes:
                     "name": "DM",
                     "label": "Demographics",
                     "structure": "One record per subject",
-                    "keys": ["USUBJID"],
+                    "keys": ["SEX"],
                     "variables": [
                         {
                             "name": "SEX",
@@ -769,3 +869,44 @@ class TestMethodTextShapes:
         root = _generate(spec, tmp_path, enrich_methods=True)
         texts = [e.text for e in root.iter(f"{ODM}TranslatedText")]
         assert "Value of sex mapped to controlled terminology." in texts
+
+
+@schemas_present
+def test_row_steps_become_the_dataset_comment(tmp_path):
+    """c1-39 (ADR-0034): a frozen record filter reaches Define-XML as a def:CommentDef."""
+    spec = {
+        "study": dict(_STUDY),
+        "datasets": [
+            {
+                "name": "DM",
+                "label": "Demographics",
+                "structure": "One record per subject",
+                "keys": ["USUBJID"],
+                "row_steps": [
+                    {
+                        "algorithm": "whereclauses",
+                        "where": "ARMCD != 'SCRNFAIL'",
+                        "after": "USUBJID",
+                    }
+                ],
+                "variables": [
+                    {
+                        "name": "USUBJID",
+                        "label": "Unique Subject Identifier",
+                        "type": "text",
+                        "length": 20,
+                        "origin": "Collected",
+                    }
+                ],
+            }
+        ],
+    }
+    root = _generate(spec, tmp_path)
+    group = next(root.iter(f"{ODM}ItemGroupDef"))
+    assert group.get(f"{DEF}CommentOID") == "COM.DM.ROWS"
+    comment = next(c for c in root.iter(f"{DEF}CommentDef") if c.get("OID") == "COM.DM.ROWS")
+    text = comment.find(f"{ODM}Description/{ODM}TranslatedText").text
+    assert text == (
+        "Record selection, in derivation order: after USUBJID, keep the records where "
+        "ARMCD != 'SCRNFAIL'."
+    )

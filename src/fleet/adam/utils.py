@@ -3,13 +3,21 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from datetime import date, datetime
 from typing import Literal
 
 import polars as pl
 
-from fleet.core.dtc import date_part, is_iso8601, time_groups, warn_on_collect
-from fleet.core.exceptions import DerivationError
+from fleet.core.dtc import (
+    date_part,
+    is_iso8601,
+    refuse_number,
+    time_groups,
+    to_day,
+    warn_on_collect,
+)
+from fleet.core.exceptions import DerivationError, VerbUsageError
 
 
 def study_day(analysis_date: str, reference_date: str, target: str = "ADY") -> pl.Expr:
@@ -51,36 +59,61 @@ def baseline(
 
 
 def chg(aval: str = "AVAL", base: str = "BASE", target: str = "CHG") -> pl.Expr:
-    """Change from baseline: CHG = AVAL - BASE."""
-    return (pl.col(aval) - pl.col(base)).alias(target)
+    """Change from baseline: CHG = AVAL - BASE, as Float64 (an unsigned input cannot wrap)."""
+    return (pl.col(aval).cast(pl.Float64) - pl.col(base).cast(pl.Float64)).alias(target)
 
 
 def pchg(aval: str = "AVAL", base: str = "BASE", target: str = "PCHG") -> pl.Expr:
-    """Percent change from baseline: PCHG = (AVAL - BASE) / BASE * 100."""
-    return (
-        pl.when(pl.col(base).is_not_null() & (pl.col(base) != 0))
-        .then((pl.col(aval) - pl.col(base)) / pl.col(base) * 100)
-        .otherwise(None)
-        .alias(target)
-    )
+    """Percent change from baseline: PCHG = (AVAL - BASE) / BASE * 100, as Float64."""
+    a = pl.col(aval).cast(pl.Float64)
+    b = pl.col(base).cast(pl.Float64)
+    return pl.when(b.is_not_null() & (b != 0)).then((a - b) / b * 100).otherwise(None).alias(target)
 
 
-def bmi(weight: str = "weight_kg", height: str = "height_cm", target: str = "BMI") -> pl.Expr:
-    """BMI = weight_kg / (height_m^2). Height input assumed in cm."""
+def sas_round(expr: pl.Expr, digits: int | None) -> pl.Expr:
+    """Round as SAS ``ROUND(x, 10**-digits)``: half away from zero; ``None`` keeps *expr*.
+
+    The value is first rounded to 8 decimals of the scaled number, so a
+    binary value such as 24.25 rounds to 24.3, as SAS does.
+    """
+    if digits is None:
+        return expr
+    scale = 10.0**digits
+    # The last round(digits) removes the 1-ulp error of the division (93.30000000000001).
+    rounded = (expr * scale).round(8).round(0, mode="half_away_from_zero") / scale
+    return rounded.round(digits)
+
+
+def bmi(
+    weight: str = "weight_kg",
+    height: str = "height_cm",
+    target: str = "BMI",
+    *,
+    round_digits: int | None = None,
+) -> pl.Expr:
+    """BMI = weight_kg / (height_m^2). Height input assumed in cm; height 0 gives null."""
     height_m = pl.col(height) / 100.0
-    return (pl.col(weight) / (height_m * height_m)).round(1).alias(target)
+    value = pl.when(pl.col(height) != 0).then(pl.col(weight) / (height_m * height_m))
+    return sas_round(value, round_digits).alias(target)
 
 
-def nrind(value: str, low: str, high: str, target: str = "NRIND") -> pl.Expr:
+def nrind(
+    value: str, low: str, high: str, target: str = "NRIND", *, signif_dig: int = 15
+) -> pl.Expr:
     """Normal range indicator: LOW / NORMAL / HIGH (admiral semantics).
 
-    Null guard: a null analysis value, or both limits null, yields a
+    Null guard: a null or NaN analysis value, or both limits null, yields a
     null indicator instead of a spurious "NORMAL".  One-sided ranges
-    classify against the available limit only.
+    classify against the available limit only.  The three values are
+    compared at *signif_dig* significant digits, as admiral ``signif()``.
     """
-    value_col = pl.col(value)
-    low_col = pl.col(low)
-    high_col = pl.col(high)
+
+    def _signif(name: str) -> pl.Expr:
+        return pl.col(name).cast(pl.Float64).fill_nan(None).round_sig_figs(signif_dig)
+
+    value_col = _signif(value)
+    low_col = _signif(low)
+    high_col = _signif(high)
     return (
         pl.when(value_col.is_null() | (low_col.is_null() & high_col.is_null()))
         .then(pl.lit(None, dtype=pl.String))
@@ -100,19 +133,29 @@ def on_treatment(
     target: str = "ONTRTFL",
     *,
     open_ended: bool = True,
+    dtypes: Mapping[str, pl.DataType] | None = None,
 ) -> pl.Expr:
     """ONTRTFL = "Y" when ADT is on or between TRTSDT and TRTEDT (inclusive).
 
     When *open_ended* is ``True`` (default) and TRTEDT is null the interval
     is treated as ongoing — ``adt >= trtsdt`` is sufficient for "Y".
+    Each column is read by its dtype in *dtypes* (``to_day``): ``--DTC``
+    text by its date portion, a number raises.  The start comparison
+    keeps the time when ADT and TRTSDT are both ``pl.Datetime``; the end
+    comparison is at date level (admiral ``derive_var_ontrtfl``).
     """
-    adt_d = pl.col(adt).cast(pl.Date)
-    start_d = pl.col(trtsdt).cast(pl.Date)
-    end_d = pl.col(trtedt).cast(pl.Date)
+    dtypes = dtypes or {}
 
-    on_trt = (adt_d >= start_d) & (adt_d <= end_d)
+    def day(name: str) -> pl.Expr:
+        return to_day(pl.col(name), dtypes.get(name), verb="on_treatment").cast(pl.Date)
+
+    adt_d, start_d, end_d = day(adt), day(trtsdt), day(trtedt)
+    timed = isinstance(dtypes.get(adt), pl.Datetime) and isinstance(dtypes.get(trtsdt), pl.Datetime)
+    started = pl.col(adt) >= pl.col(trtsdt) if timed else adt_d >= start_d
+
+    on_trt = started & (adt_d <= end_d)
     if open_ended:
-        on_trt = on_trt | (end_d.is_null() & (adt_d >= start_d))
+        on_trt = on_trt | (end_d.is_null() & started)
 
     return pl.when(on_trt).then(pl.lit("Y")).otherwise(pl.lit(None)).alias(target)
 
@@ -133,6 +176,7 @@ def bsa(
     *,
     method: str = "Mosteller",
     target: str = "BSA",
+    round_digits: int | None = None,
 ) -> pl.Expr:
     """
     Body Surface Area (m²).
@@ -159,7 +203,7 @@ def bsa(
         raise DerivationError(
             f"Unknown BSA method '{method}'. Supported: Mosteller, DuBois, Haycock, Gehan-George."
         )
-    return expr.round(4).alias(target)
+    return sas_round(expr, round_digits).alias(target)
 
 
 # ------------------------------------------------------------------ #
@@ -172,13 +216,14 @@ def mean_arterial_pressure(
     diastolic: str = "DIABP",
     *,
     target: str = "MAP",
+    round_digits: int | None = None,
 ) -> pl.Expr:
     """
     Mean Arterial Pressure: ``MAP = DBP + (SBP - DBP) / 3``.
     """
     sbp = pl.col(systolic).cast(pl.Float64)
     dbp = pl.col(diastolic).cast(pl.Float64)
-    return (dbp + (sbp - dbp) / 3.0).round(2).alias(target)
+    return sas_round(dbp + (sbp - dbp) / 3.0, round_digits).alias(target)
 
 
 # ------------------------------------------------------------------ #
@@ -195,6 +240,7 @@ def qtc(
     method: str = "Fridericia",
     target: str = "QTC",
     rr_unit: str = "ms",
+    round_digits: int | None = None,
 ) -> pl.Expr:
     """
     Corrected QT interval.
@@ -222,7 +268,7 @@ def qtc(
         expr = qt_col / rr_col.sqrt()
     else:
         raise DerivationError(f"Unknown QTc method '{method}'. Supported: Fridericia, Bazett.")
-    return expr.round(2).alias(target)
+    return sas_round(expr, round_digits).alias(target)
 
 
 # ------------------------------------------------------------------ #
@@ -235,6 +281,7 @@ def age_in_years(
     age_unit_col: str = "AGEU",
     *,
     target: str = "AAGE",
+    round_digits: int | None = None,
 ) -> pl.Expr:
     """
     Convert age to years, handling common unit strings.
@@ -244,7 +291,7 @@ def age_in_years(
     """
     age = pl.col(age_col).cast(pl.Float64)
     unit = pl.col(age_unit_col).str.to_uppercase()
-    return (
+    years = (
         pl.when(unit == "YEARS")
         .then(age)
         .when(unit == "MONTHS")
@@ -254,9 +301,43 @@ def age_in_years(
         .when(unit == "DAYS")
         .then(age / 365.25)
         .otherwise(None)
-        .round(1)
-        .alias(target)
     )
+    return sas_round(years, round_digits).alias(target)
+
+
+def age_between(
+    birth: pl.Expr,
+    reference: pl.Expr,
+    *,
+    unit: Literal["years", "decimal"],
+    round_digits: int | None,
+    verb: str,
+) -> pl.Expr:
+    """Age from two date expressions: completed years (Int64) or decimal years.
+
+    ``"years"`` is SAS ``FLOOR(YRDIF(birth, reference, 'AGE'))``: the year
+    difference, minus 1 when the birthday of the reference year is not yet
+    reached.  A 29 February birthday is reached on 1 March in a non-leap
+    year.  A reference date before birth gives a negative age.
+    ``"decimal"`` is days / 365.25, rounded only with *round_digits*.
+    """
+    if unit == "years":
+        if round_digits is not None:
+            raise VerbUsageError(
+                f"{verb}: round_digits applies to unit='decimal' only; "
+                "unit='years' gives whole completed years."
+            )
+        before_birthday = (reference.dt.month() < birth.dt.month()) | (
+            (reference.dt.month() == birth.dt.month()) & (reference.dt.day() < birth.dt.day())
+        )
+        return (
+            reference.dt.year().cast(pl.Int64)
+            - birth.dt.year().cast(pl.Int64)
+            - before_birthday.cast(pl.Int64)
+        )
+    if unit == "decimal":
+        return sas_round((reference - birth).dt.total_days() / 365.25, round_digits)
+    raise VerbUsageError(f"{verb}: unit={unit!r} is not supported. Use 'years' or 'decimal'.")
 
 
 # ------------------------------------------------------------------ #
@@ -330,28 +411,92 @@ def _resolve_time(strategy: str) -> str | None:
     return strategy
 
 
-def dtf_expr(source: str, target: str = "DTF") -> pl.Expr:
-    """Derive the Date Imputation Flag from a ``--DTC`` character column.
+#: Year, month and day of a ``--DTC`` value; a hyphen stands for a missing part (SDTMIG 4.4.2).
+_DATE_FORM = r"^(\d{4})(?:-(\d{2}|-)(?:-(\d{2}|-))?)?(?:T|$)"
+
+
+def _col(source: str | pl.Expr) -> pl.Expr:
+    return pl.col(source) if isinstance(source, str) else source
+
+
+def _date_form(source: str | pl.Expr) -> tuple[pl.Expr, pl.Expr, pl.Expr]:
+    """Year, month and day text of a value; a missing part, or a value of another form, is null."""
+    parts = _col(source).str.extract_groups(_DATE_FORM)
+    year, month, day = (parts.struct.field(str(i)) for i in (1, 2, 3))
+    return year, pl.when(month != "-").then(month), pl.when(day != "-").then(day)
+
+
+def _imputed_level(source: str | pl.Expr) -> pl.Expr:
+    """0 for a complete date, 1 when the day is missing, 2 when the month is missing."""
+    year, month, day = _date_form(source)
+    return (
+        pl.when(year.is_null())
+        .then(None)
+        .when(month.is_null())
+        .then(2)
+        .when(day.is_null())
+        .then(1)
+        .otherwise(0)
+    )
+
+
+def source_text(source: str, dtype: pl.DataType | None, *, verb: str) -> pl.Expr:
+    """Return ``--DTC`` text of *source*: text as it is, a date or a date-time as ISO 8601.
+
+    A ``pl.Date`` gives ``2021-03-15`` and a ``pl.Datetime`` gives
+    ``2021-03-15T10:30:00.000000``, so the one date engine reads every
+    source.  A number raises (``refuse_number``).
+
+    Args:
+        source: The column name.
+        dtype: Its dtype in the frame, or ``None`` when unknown.
+        verb: The verb call, quoted in the error for a number.
 
     Returns:
-        ``"M"`` when only year is present (month was imputed),
-        ``"D"`` when year-month is present (day was imputed),
-        ``null`` when the date is complete (YYYY-MM-DD or longer).
+        pl.Expr: A ``pl.String`` expression named *source*.
+
+    Raises:
+        DerivationError: When *dtype* is numeric.
+
+    Examples:
+        Read a SAS date column as ISO text::
+
+            text = source_text("TRTSDT", adsl.collect_schema().get("TRTSDT"), verb="date")
     """
-    length = pl.col(source).str.len_chars()
+    col = pl.col(source)
+    if dtype == pl.Date:
+        return col.dt.to_string("%Y-%m-%d")
+    if isinstance(dtype, pl.Datetime):
+        return col.dt.to_string("%Y-%m-%dT%H:%M:%S%.f")
+    refuse_number(source, dtype, verb=verb)
+    return col
+
+
+def dtf_expr(source: str | pl.Expr, target: str = "DTF") -> pl.Expr:
+    """Derive the Date Imputation Flag from a ``--DTC`` character column.
+
+    Reads the form of the value, as the date engine does (SDTMIG 3.4
+    section 4.4.2): a hyphen stands for a missing part.
+
+    Returns:
+        ``"M"`` when the month is missing (month and day imputed: ``2021``,
+        ``2021---15``),
+        ``"D"`` when only the day is missing (``2021-03``, ``2021-03--T08:30``),
+        ``null`` when the date is complete, or the value is null or of no
+        ISO 8601 date form.
+    """
+    level = _imputed_level(source)
     return (
-        pl.when(pl.col(source).is_null() | (length == 0))
-        .then(pl.lit(None, dtype=pl.String))
-        .when(length <= 4)
+        pl.when(level == 2)
         .then(pl.lit("M"))
-        .when(length <= 7)
+        .when(level == 1)
         .then(pl.lit("D"))
         .otherwise(pl.lit(None, dtype=pl.String))
         .alias(target)
     )
 
 
-def tmf_expr(source: str, target: str = "TMF") -> pl.Expr:
+def tmf_expr(source: str | pl.Expr, target: str = "TMF") -> pl.Expr:
     """Derive the Time Imputation Flag from a ``--DTC`` character column.
 
     Reads the time part of the value (ADaM CT C81226, TIMEFL):
@@ -362,7 +507,7 @@ def tmf_expr(source: str, target: str = "TMF") -> pl.Expr:
         ``"S"`` when hours and minutes are collected (seconds imputed),
         ``null`` when the seconds are collected, or the value is null.
     """
-    col = pl.col(source)
+    col = _col(source)
     parts = time_groups(col)
     return (
         pl.when(col.is_null() | (col.str.strip_chars() == ""))
@@ -379,25 +524,28 @@ def tmf_expr(source: str, target: str = "TMF") -> pl.Expr:
 
 
 def impute_dtc_to_date(
-    source: str,
+    source: str | pl.Expr,
     target: str,
     *,
     day_imputation: str = "first",
     month_imputation: str = "first",
 ) -> pl.Expr:
-    """Pad a partial ``--DTC`` string and parse to ``pl.Date``.
+    """Impute a partial ``--DTC`` string and parse to ``pl.Date``.
 
-    Handles four levels of completeness based on string length:
-    - ``>=10``  → already complete (YYYY-MM-DD or longer), parse directly
-    - ``7``     → YYYY-MM, append ``-DD`` using *day_imputation*
-    - ``4``     → YYYY, append ``-MM-DD`` using *month_imputation* and *day_imputation*
-    - null/empty → null
+    Reads the form of the value, a hyphen standing for a missing part
+    (SDTMIG 3.4 section 4.4.2; admiral ``impute_dtc_dt``):
+
+    - complete date (``YYYY-MM-DD``, with or without a time) → parsed directly;
+    - day missing (``YYYY-MM``, ``YYYY-MM--T08:30``) → day from *day_imputation*;
+    - month missing (``YYYY``, ``YYYY---15``) → month and day imputed; a
+      collected day is not used, as admiral does;
+    - year missing, null, or another form (``202103``) → null.
 
     For ``day_imputation="last"`` the last day of the month is calculated
     using Polars date arithmetic.
 
     Args:
-        source: Name of the ``--DTC`` column (``pl.String``).
+        source: Name of the ``--DTC`` column (``pl.String``), or a text expression.
         target: Name of the output ``pl.Date`` column.
         day_imputation: One of ``"first"``, ``"last"``, ``"mid"``, ``"none"``,
             a column name, or a date literal (``"YYYY-MM-DD"``).
@@ -407,104 +555,170 @@ def impute_dtc_to_date(
     Returns:
         pl.Expr: Expression producing a ``pl.Date`` column.
     """
-    col = pl.col(source)
-    complete = date_part(col)
+    col = _col(source)
+    year, month, _ = _date_form(col)
+    level = _imputed_level(col)
 
-    # YYYY-MM: append day
-    if day_imputation == "none":
-        with_day = pl.lit(None, dtype=pl.Date)
-    elif day_imputation == "last":
-        # Parse YYYY-MM-01 then go to next month and subtract 1 day
-        first_of_month = (col.str.slice(0, 7) + pl.lit("-01")).str.to_date("%Y-%m-%d", strict=False)
-        with_day = first_of_month.dt.month_end()
-    else:
-        day_val = _resolve_day(day_imputation)
-        with_day = (col.str.slice(0, 7) + pl.lit("-") + day_val).str.to_date(
-            "%Y-%m-%d", strict=False
-        )
+    def build(month_text: pl.Expr) -> pl.Expr:
+        if day_imputation == "none":
+            return pl.lit(None, dtype=pl.Date)
+        if day_imputation == "last":
+            first = pl.concat_str(year, month_text, pl.lit("01"), separator="-")
+            return first.str.to_date("%Y-%m-%d", strict=False).dt.month_end()
+        text = pl.concat_str(year, month_text, _resolve_day(day_imputation), separator="-")
+        return text.str.to_date("%Y-%m-%d", strict=False)
 
-    # YYYY: append month and day
+    with_day = build(month)
     if month_imputation == "none":
         with_month_day = pl.lit(None, dtype=pl.Date)
     else:
-        month_val = _resolve_month(month_imputation)
-        if day_imputation == "none":
-            with_month_day = pl.lit(None, dtype=pl.Date)
-        elif day_imputation == "last":
-            first_of_month = (
-                col.str.slice(0, 4) + pl.lit("-") + month_val + pl.lit("-01")
-            ).str.to_date("%Y-%m-%d", strict=False)
-            with_month_day = first_of_month.dt.month_end()
-        else:
-            day_val = _resolve_day(day_imputation)
-            with_month_day = (
-                col.str.slice(0, 4) + pl.lit("-") + month_val + pl.lit("-") + day_val
-            ).str.to_date("%Y-%m-%d", strict=False)
+        with_month_day = build(_resolve_month(month_imputation))
 
     return (
-        pl.when(col.str.contains(r"^\d{4}-\d{2}-\d{2}(?:T|$)"))
-        .then(complete)
-        .when(col.str.contains(r"^\d{4}-\d{2}$"))
+        pl.when(level == 0)
+        .then(date_part(col))
+        .when(level == 1)
         .then(with_day)
-        .when(col.str.contains(r"^\d{4}$"))
+        .when(level == 2)
         .then(with_month_day)
         .otherwise(pl.lit(None, dtype=pl.Date))
         .alias(target)
     )
 
 
+#: Year, month, day, hour, minute and second of a ``--DTC`` value; a hyphen is a missing part.
+_DTM_FORM = (
+    r"^(\d{4}|-)(?:-(\d{2}|-)(?:-(\d{2}|-)"
+    r"(?:T(\d{2}|-)(?::(\d{2}|-)(?::(\d{2}(?:\.\d+)?|-))?)?)?)?)?"
+    r"(?:Z|[+-]\d{2}(?::?\d{2})?)?$"
+)
+
+#: admiral ``highest_imputation`` on a *DTM target: the first missing part it may impute.
+_HIGHEST_DTM = {"M": 1, "D": 2, "h": 3, "m": 4, "s": 5, "n": 6}
+
+
+def _dtm_form(source: str | pl.Expr) -> tuple[pl.Expr, pl.Expr, pl.Expr, pl.Expr]:
+    """The first missing part (0 year to 5 second, 6 none) and the hour, minute, second text."""
+    groups = _col(source).str.extract_groups(_DTM_FORM)
+    parts = [groups.struct.field(str(i)) for i in range(1, 7)]
+    level = pl.lit(6)
+    for i in reversed(range(6)):
+        level = pl.when(parts[i].is_null() | (parts[i] == "-")).then(pl.lit(i)).otherwise(level)
+    return level, parts[3], parts[4], parts[5]
+
+
+def _dtm_ceiling(highest: str | None, target: str) -> int:
+    """The lowest first-missing part *highest* accepts; no *highest* accepts a missing month."""
+    if highest is None:
+        return _HIGHEST_DTM["M"]
+    if highest == "Y":
+        raise DerivationError(
+            f"date('{target}'): highest='Y' is not supported. Fleet does not impute a missing "
+            "year; admiral needs min_dates or max_dates for it, and a *DTM target refuses "
+            "min_date= and max_date=. Use 'n', 's', 'm', 'h', 'D' or 'M'."
+        )
+    if highest not in _HIGHEST_DTM:
+        raise DerivationError(
+            f"date('{target}'): highest={highest!r} is not valid. "
+            "Choose 'n', 's', 'm', 'h', 'D' or 'M'."
+        )
+    return _HIGHEST_DTM[highest]
+
+
 def impute_dtc_to_datetime(
-    source: str,
+    source: str | pl.Expr,
     target: str,
     *,
-    day_imputation: str = "first",
-    month_imputation: str = "first",
+    date_imputation: str = "first",
     time_imputation: str = "first",
-) -> pl.Expr:
-    """Parse a ``--DTC`` string with a complete date to ``pl.Datetime``, imputing the time.
+    highest: str | None = None,
+) -> tuple[pl.Expr, pl.Expr, pl.Expr]:
+    """Impute a ``--DTC`` value to ``pl.Datetime``, with its DTF and TMF flags.
 
-    Every collected part of the time is kept, and only the missing parts
-    are imputed, by position (admiral ``derive_vars_dtm``):
+    The one *DTM path of ``.sdtm.date()`` and ``.adam.date()``.  It follows
+    admiral ``derive_vars_dtm`` with ``preserve = FALSE``:
 
-    - no hour: the whole time from *time_imputation* (``first`` 00:00:00,
-      ``mid`` 12:00:00, ``last`` 23:59:59, a column or a literal);
-    - hour only: minutes and seconds 00 (``first``, ``mid``) or 59 (``last``);
-    - hour and minute: seconds 00 or 59.
+    - The first missing part decides.  A part below it is not used, so
+      ``2021-03--T08:30`` gives 2021-03-01T00:00:00 with DTF ``D`` and
+      TMF ``H``, and ``2021-03-15T08:-:45`` gives 08:00:00 with TMF ``M``.
+    - A missing date part takes *date_imputation*, as ``impute_dtc_to_date``.
+    - No hour: the whole time from *time_imputation* (``first`` 00:00:00,
+      ``mid`` 12:00:00, ``last`` 23:59:59, a column or a literal).  Hour
+      only: minutes and seconds 00, or 59 for ``last``.  Hour and minute:
+      seconds 00 or 59.
+    - *highest* names the highest part that may be imputed: ``"M"``,
+      ``"D"``, ``"h"``, ``"m"``, ``"s"`` or ``"n"`` (none).  A value that
+      needs more is null.  ``None`` is ``"M"``, as on a *DT target.
 
     A fraction of a second is kept.  A ``Z`` or an offset is dropped, so
-    the value is the wall clock.  A partial date gives null here; the
-    ``.date()`` verb imputes the date first.
+    the value is the wall clock.  A missing year gives null.  A flag is
+    null where the value is null.
 
     Args:
-        source: Name of the ``--DTC`` column (``pl.String``).
+        source: Name of the ``--DTC`` column (``pl.String``), or a text expression.
         target: Name of the output ``pl.Datetime`` column.
-        day_imputation: Kept for the call signature; dates are not imputed here.
-        month_imputation: Kept for the call signature; dates are not imputed here.
+        date_imputation: Strategy for the missing date parts, or ``"none"``.
         time_imputation: Strategy for the missing time parts, or ``"none"``.
+        highest: The admiral ``highest_imputation`` level, or ``None``.
 
     Returns:
-        pl.Expr: Expression producing a ``pl.Datetime("us")`` column.
+        tuple[pl.Expr, pl.Expr, pl.Expr]: The ``pl.Datetime("us")`` value
+            named *target*, the DTF flag and the TMF flag.
+
+    Raises:
+        DerivationError: When *highest* is ``"Y"`` or not a level.
+
+    References:
+        admiral 1.4.1 ``derive_vars_dtm`` and ``impute_dtc_dtm``; ADaMIG
+        1.3 section 3.3.3 (DTF and TMF); ADR-0045.
+
+    Examples:
+        Impute AESTDTC to ASTDTM, with no imputation above the hour::
+
+            value, dtf, tmf = impute_dtc_to_datetime("AESTDTC", "ASTDTM", highest="h")
+            adae = ae.with_columns(value, dtf.alias("ASTDTF"), tmf.alias("ASTTMF"))
     """
-    col = pl.col(source)
-    parts = time_groups(col)
-    hour, minute, second = (parts.struct.field(f) for f in ("hour", "minute", "second"))
-    if time_imputation == "none":
-        clock = pl.when(second.is_not_null()).then(
-            pl.concat_str(hour, minute, second, separator=":")
+    ceiling = _dtm_ceiling(highest, target)
+    col = _col(source)
+    level, hour, minute, second = _dtm_form(col)
+    date = (
+        pl.when(level >= 3)
+        .then(date_part(col))
+        .otherwise(
+            impute_dtc_to_date(
+                col, "__date__", day_imputation=date_imputation, month_imputation=date_imputation
+            )
         )
+    )
+    if time_imputation == "none":
+        clock = pl.when(level == 6).then(pl.concat_str(hour, minute, second, separator=":"))
     else:
-        fill = "59" if time_imputation == "last" else "00"
+        fill = pl.lit("59" if time_imputation == "last" else "00")
         clock = (
-            pl.when(hour.is_null())
+            pl.when(level <= 3)
             .then(_whole_time(time_imputation))
-            .when(minute.is_null())
-            .then(pl.concat_str(hour, pl.lit(fill), pl.lit(fill), separator=":"))
-            .when(second.is_null())
-            .then(pl.concat_str(hour, minute, pl.lit(fill), separator=":"))
+            .when(level == 4)
+            .then(pl.concat_str(hour, fill, fill, separator=":"))
+            .when(level == 5)
+            .then(pl.concat_str(hour, minute, fill, separator=":"))
             .otherwise(pl.concat_str(hour, minute, second, separator=":"))
         )
-    text = pl.concat_str(date_part(col).dt.to_string("%Y-%m-%d"), pl.lit("T"), clock)
-    return text.str.to_datetime("%Y-%m-%dT%H:%M:%S%.f", time_unit="us", strict=False).alias(target)
+    text = pl.concat_str(date.dt.to_string("%Y-%m-%d"), pl.lit("T"), clock)
+    value = pl.when(level >= ceiling).then(
+        text.str.to_datetime("%Y-%m-%dT%H:%M:%S%.f", time_unit="us", strict=False)
+    )
+    dtf = pl.when(value.is_not_null()).then(
+        pl.when(level == 1).then(pl.lit("M")).when(level == 2).then(pl.lit("D"))
+    )
+    tmf = pl.when(value.is_not_null()).then(
+        pl.when(level <= 3)
+        .then(pl.lit("H"))
+        .when(level == 4)
+        .then(pl.lit("M"))
+        .when(level == 5)
+        .then(pl.lit("S"))
+    )
+    return value.alias(target), dtf, tmf
 
 
 def _whole_time(strategy: str) -> pl.Expr:
@@ -594,29 +808,39 @@ def _resolve_flag_names(
     return dtf, tmf
 
 
-def _apply_highest(
-    source_col: pl.Expr,
-    highest: str,
-) -> pl.Expr:
-    """Return a boolean mask that is True when the source has enough precision.
+#: admiral ``highest_imputation`` on a *DT target: the highest date part that may be imputed.
+_HIGHEST_DT = {"n": 0, "D": 1, "M": 2}
 
-    Used to nullify results where the imputation ceiling is exceeded.
+
+def _apply_highest(
+    source: str | pl.Expr,
+    highest: str,
+    target: str,
+) -> pl.Expr:
+    """Return True where the date needs no imputation above *highest* (admiral meaning).
+
+    ``"n"``: no imputation; ``"D"``: the day may be imputed; ``"M"``: the
+    month and the day may be imputed.  Time levels and ``"Y"`` raise.
     """
-    # Map highest level to the minimum string length that satisfies it
-    # Y=4 (YYYY), M=7 (YYYY-MM), D=10 (YYYY-MM-DD)
-    # h=13 (YYYY-MM-DDThh), m=16 (YYYY-MM-DDThh:mm), s=19 (full)
-    level_map = {"Y": 4, "M": 7, "D": 10, "h": 13, "m": 16, "s": 19}
-    min_len = level_map.get(highest)
-    if min_len is None:
+    if highest in ("h", "m", "s"):
         raise DerivationError(
-            f"highest={highest!r} is not valid. Choose one of: {sorted(level_map)}"
+            f"date('{target}'): highest={highest!r} is a time level and a *DT target has no "
+            "time. Use 'n', 'D' or 'M'."
         )
-    length = source_col.str.len_chars()
-    return length >= min_len
+    if highest == "Y":
+        raise DerivationError(
+            f"date('{target}'): highest='Y' is not supported. Fleet does not impute a missing "
+            "year; admiral needs min_dates or max_dates for it. Use 'n', 'D' or 'M'."
+        )
+    if highest not in _HIGHEST_DT:
+        raise DerivationError(
+            f"date('{target}'): highest={highest!r} is not valid. Choose 'n', 'D' or 'M'."
+        )
+    return _imputed_level(source) <= _HIGHEST_DT[highest]
 
 
 def _apply_bounds(
-    source: str,
+    source: str | pl.Expr,
     target_expr: pl.Expr,
     min_date: str | None,
     max_date: str | None,
@@ -646,7 +870,7 @@ def _apply_bounds(
 
 
 def impute_and_flag(
-    source: str | None,
+    source: str | pl.Expr | None,
     target: str,
     *,
     value: str | date | datetime | None = None,
@@ -662,6 +886,8 @@ def impute_and_flag(
     """Unified imputation engine for the ``.date()`` verb.
 
     Returns a list of expressions: the target column plus any flag columns.
+    *source* is a column name or a text expression (``source_text``).  A
+    flag is null where the target is null.
 
     When *value* is provided, broadcasts a literal and skips imputation.
     When *flag* is a str, uses it as the explicit DTF flag name.
@@ -693,11 +919,12 @@ def impute_and_flag(
                 parsed = pl.lit(value).str.to_date("%Y-%m-%d", strict=False)
                 return [parsed.alias(target)]
             else:  # dtm
-                parsed = pl.lit(value).str.to_datetime("%Y-%m-%dT%H:%M:%S", strict=False)
-                if parsed is None:
-                    parsed = (
-                        pl.lit(value).str.to_date("%Y-%m-%d", strict=False).cast(pl.Datetime("us"))
-                    )
+                parsed = pl.coalesce(
+                    pl.lit(value).str.to_datetime(
+                        "%Y-%m-%dT%H:%M:%S", time_unit="us", strict=False
+                    ),
+                    pl.lit(value).str.to_date("%Y-%m-%d", strict=False).cast(pl.Datetime("us")),
+                )
                 return [parsed.alias(target)]
 
     assert source is not None, "Either source or value must be provided"
@@ -706,9 +933,9 @@ def impute_and_flag(
 
     if output_type == "dtc":
         # DTC path is handled by the SDTM namespace directly
-        from fleet.sdtm.utils import dtc_date_expr
+        from fleet.sdtm.utils import dtc_text
 
-        exprs.append(dtc_date_expr(source, target))
+        exprs.append(dtc_text(_col(source)).alias(target))
         return exprs
 
     if output_type == "dt":
@@ -719,40 +946,35 @@ def impute_and_flag(
             day_imputation=impute,
             month_imputation=impute,
         )
-        # Apply highest ceiling
         if highest is not None:
-            mask = _apply_highest(pl.col(source), highest)
-            date_expr = (
-                pl.when(mask).then(date_expr).otherwise(pl.lit(None, dtype=pl.Date)).alias(target)
-            )
+            date_expr = pl.when(_apply_highest(source, highest, target)).then(date_expr)
         # Bounds move an imputed date only (admiral derive_vars_dt)
         if min_date is not None or max_date is not None:
             date_expr = _apply_bounds(source, date_expr, min_date, max_date)
         exprs.append(warn_unread(source, target, date_expr, pl.Date).alias(target))
-        # Flags
         if dtf_name is not None:
-            exprs.append(dtf_expr(source, dtf_name))
+            exprs.append(pl.when(date_expr.is_not_null()).then(dtf_expr(source)).alias(dtf_name))
         return exprs
 
     # output_type == "dtm"
     refuse_dtm_bounds(target, min_date, max_date)
-    dtm_expr = impute_dtc_to_datetime(
+    dtm_expr, dtf, tmf = impute_dtc_to_datetime(
         source,
         target,
-        day_imputation=impute,
-        month_imputation=impute,
+        date_imputation=impute,
         time_imputation=impute_time or impute,
+        highest=highest,
     )
     exprs.append(warn_unread(source, target, dtm_expr, pl.Datetime("us")).alias(target))
     if dtf_name is not None:
-        exprs.append(dtf_expr(source, dtf_name))
+        exprs.append(dtf.alias(dtf_name))
     if tmf_name is not None:
-        exprs.append(tmf_expr(source, tmf_name))
+        exprs.append(tmf.alias(tmf_name))
     return exprs
 
 
 def refuse_dtm_bounds(target: str, min_date: str | None, max_date: str | None) -> None:
-    """Refuse ``min_date`` and ``max_date`` on a date-time target, which has no tested rule yet."""
+    """Refuse ``min_date`` and ``max_date`` on a date-time target (no tested rule)."""
     if min_date is not None or max_date is not None:
         raise DerivationError(
             f"date('{target}'): min_date= and max_date= apply to a date (*DT) target only. "
@@ -760,9 +982,11 @@ def refuse_dtm_bounds(target: str, min_date: str | None, max_date: str | None) -
         )
 
 
-def warn_unread(source: str, target: str, value: pl.Expr, dtype: pl.DataType) -> pl.Expr:
+def warn_unread(source: str | pl.Expr, target: str, value: pl.Expr, dtype: pl.DataType) -> pl.Expr:
     """*value*, warning at collect on source text that is not ISO 8601 or carries an offset."""
-    text = pl.col(source).cast(pl.String)
+    text = _col(source).cast(pl.String)
+    if not isinstance(source, str):
+        source = source.meta.output_name(raise_if_undetermined=False) or "the source"
     given = text.str.strip_chars().fill_null("") != ""
     value = warn_on_collect(
         value,
@@ -786,3 +1010,70 @@ def warn_unread(source: str, target: str, value: pl.Expr, dtype: pl.DataType) ->
         dtype=dtype,
         shown=text,
     )
+
+
+def dtm_source_text(
+    schema: pl.Schema,
+    *,
+    source: str,
+    target: str,
+    time: str,
+    input_format: str | None = None,
+) -> pl.Expr:
+    """Join a date column and a time column or ``hh:mm[:ss]`` literal into ``--DTC`` text.
+
+    The *DTM path then reads the text as any ``--DTC`` value, so ``time=``
+    comes first, then the imputation, then ``highest=`` (ADR-0045).  The
+    text follows SDTMIG 3.4 section 4.4.2: ``2024-03-15`` and ``08:15``
+    give ``2024-03-15T08:15``; a partial date takes a hyphen for each
+    missing part (``2024-03--T08:15``); a blank time leaves the date alone.
+    A time in another layout (``0815``) is left out, with one warning.
+
+    Args:
+        schema: The schema of the frame.
+        source: The date column: text, ``pl.Date``, or raw text read with *input_format*.
+        target: The *DTM column, quoted in the messages.
+        time: A time column, or an ``hh:mm[:ss]`` literal.
+        input_format: A ``strptime`` layout of the raw date text, or ``None``.
+
+    Returns:
+        pl.Expr: A ``pl.String`` expression of ``--DTC`` text.
+
+    Raises:
+        DerivationError: When *time* names no column, or *source* is a
+            number or already holds a time.
+
+    Examples:
+        Join AESTDTC and AESTTIM, then impute::
+
+            text = dtm_source_text(ae.collect_schema(), source="AESTDTC",
+                                   target="ASTDTM", time="AESTTIM")
+            astdtm, astdtf, asttmf = impute_dtc_to_datetime(text, "ASTDTM")
+    """
+    from fleet.sdtm.utils import TIME_LITERAL, bad_time, dtc_text, dtc_with_time
+
+    call = f"date('{target}')"
+    if isinstance(schema.get(source), pl.Datetime):
+        raise DerivationError(
+            f"{call}: {source} is a date-time and already holds a time. Drop time=, or "
+            "pass the date column."
+        )
+    time_is_literal = bool(TIME_LITERAL.match(time))
+    if not time_is_literal and time not in schema.names():
+        raise DerivationError(
+            f"time='{time}' column not found in the DataFrame. Available columns: {schema.names()}"
+        )
+    date_text = dtc_text(
+        source_text(source, schema.get(source), verb=call), input_format=input_format
+    )
+    raw_time = pl.lit(time) if time_is_literal else pl.col(time)
+    return warn_on_collect(
+        dtc_with_time(date_text, pl.col(source), raw_time),
+        bad_time(raw_time),
+        lambda n, values: (
+            f"{call}: {n} time value(s) of {time} are not hh:mm[:ss], so {target} takes an "
+            f"imputed time. Values: {values}"
+        ),
+        dtype=pl.String,
+        shown=raw_time.cast(pl.String),
+    ).alias(source)

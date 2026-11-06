@@ -1,6 +1,6 @@
 # Therapeutic-Area Extensions
 
-Fleet ships six TA extensions accessible via `df.adam.<ta>`, mirroring the [admiral TA packages](https://pharmaverse.github.io/admiral/).
+Fleet ships eight TA extensions accessible via `df.adam.<ta>`, inspired by the [admiral TA packages](https://pharmaverse.github.io/admiral/). They are not ports: a verb can give other values than its admiral counterpart. Each verb docstring names its source under `References`.
 
 Every TA namespace inherits the shared ADaM verbs, so autocomplete shows about
 45 names. To list only the verbs a TA namespace adds, filter `verbs()` on its

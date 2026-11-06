@@ -287,7 +287,7 @@ and they are the same three on every surface:
 | --- | --- | --- |
 | `abs_tol` / `--abs-tol` | Numeric variables | Absolute tolerance. Default `0.0` — exact. |
 | `rel_tol` / `--rel-tol` | Numeric variables | Relative tolerance, as a fraction of the **base** value. Default `0.0` — exact. |
-| `ignore_trailing_whitespace` / `--ignore-trailing-whitespace` | String variables | Strip trailing whitespace from both sides before comparing. Default `False`. |
+| `ignore_trailing_whitespace` / `--ignore-trailing-whitespace` | String variables and string keys | Strip trailing whitespace from both sides before comparing. Default `False`. |
 
 A numeric pair differs when the absolute difference exceeds
 `max(abs_tol, rel_tol × |base|)`, so the wider of the two tolerances is the one
@@ -323,6 +323,8 @@ What the options do **not** change:
 - **Nulls and NaN keep their rule.** Null still equals null, NaN still equals
   NaN, and null against NaN — or NaN against a number — still differs, however
   wide the tolerance. A NaN is never *within* a tolerance of a number.
+  Infinity follows R `all.equal`: `inf` equals `inf`, and `inf` against a
+  number or against `-inf` differs in every mode.
 - **Only trailing whitespace is ignored.** `"M "` equals `"M"` when asked;
   `" M"` never does.
 - **The listing shows the values as they are.** A difference that survives the
@@ -335,6 +337,11 @@ The rule in effect is on every surface: the settings line of the text report
 (`Settings:  abs_tol=1e-09, rel_tol=0, ignoring trailing whitespace`, or
 `Settings:  exact`), the header of the HTML report, and the `settings` block of
 the JSON document as the three raw fields.
+
+The option also strips the string keys, before the duplicate-key check. A
+SAS-padded USUBJID `"01-701-1015 "` then pairs with `"01-701-1015"` from Fleet.
+Two keys that differ only in trailing blanks are duplicates. The listing
+shows the keys stripped.
 
 ## Duplicate keys
 

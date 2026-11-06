@@ -1,10 +1,12 @@
 """
-CM TLG sub-namespace — concomitant-medication summary tables.
+CM TLG sub-namespace — medication summary tables.
 
 Accessed via ``df.tlg.cm`` on any Polars DataFrame containing ADaM CM
 (ADCM) data.  Produces a hierarchical CMCLAS→CMDECOD summary of subjects
-with at least one concomitant medication, mirroring the GDSR ``cmt01a``
-template (ATC class → preferred term, n / % subjects per arm).
+with at least one medication record, mirroring the GDSR ``cmt01a``
+template (ATC class → preferred term, n / % subjects per arm).  Every
+record of the input counts, prior medications included, unless a filter
+is set (for example ``ATIREL`` = ``CONCOMITANT``, as NEST CMT01A).
 """
 
 from __future__ import annotations
@@ -20,10 +22,13 @@ from ._specs import Row, SummarySpecBase, Uncoded
 
 
 class CMSummarySpec(SummarySpecBase):
-    """Spec for a concomitant-medication summary table (t_cm_summary).
+    """Spec for a medication summary table (t_cm_summary).
 
     Defaults provide zero-config convenience for a standard CMCLAS→CMDECOD
-    table, counting subjects with at least one medication per arm.  Every
+    table, counting subjects with at least one medication record per
+    arm.  Every ADCM record counts, prior medications included: set
+    ``dataset_filter`` (for example ``'pl.col("ATIREL") ==
+    "CONCOMITANT"'``) to count concomitant medications only.  Every
     field is also settable inline through the same pattern as
     :class:`AESummarySpec`.  Uncoded rule: a null ``CMCLAS`` or
     ``CMDECOD`` is counted under ``"No Coding Available"``.
@@ -63,11 +68,12 @@ class CMByPTSpec(CMSummarySpec):
 
 
 class CMTLGNamespace(BuilderVerbsMixin):
-    """Concomitant-medication tables and diagnostics.
+    """Medication tables and diagnostics.
 
     Accessed as ``df.tlg.cm``.  Produces a CDISC-aligned ARD summarising
-    subjects with at least one concomitant medication, broken down by ATC
-    class (``CMCLAS``) and preferred term (``CMDECOD``).
+    subjects with at least one medication record, broken down by ATC
+    class (``CMCLAS``) and preferred term (``CMDECOD``).  Every record
+    of the input counts unless a filter is set.
 
     Args:
         df: A Polars DataFrame containing ADaM CM-level data.
@@ -92,7 +98,9 @@ class CMTLGNamespace(BuilderVerbsMixin):
         """Produce a CM summary ARD (Analysis Results Dataset).
 
         Computes big-N from *adsl*, then n / % subjects for each
-        CMCLAS→CMDECOD (or custom row hierarchy) level.
+        CMCLAS→CMDECOD (or custom row hierarchy) level.  Every record of
+        the input counts, prior medications included, unless
+        ``spec.dataset_filter`` is set.
 
         Args:
             groupby: Treatment arm column name.  Overrides
@@ -103,16 +111,27 @@ class CMTLGNamespace(BuilderVerbsMixin):
                 default spec is used.
 
         Returns:
-            pl.DataFrame: Long-format {cards}-compatible ARD with columns
+            pl.DataFrame: ARD in the {cards} long layout, with columns
                 ``group1``, ``group1_level``, ``group2``, ``group2_level``,
                 ``variable``, ``variable_level``, ``stat_name``,
                 ``stat_label``, ``stat``, ``fmt_fn``, ``stat_fmt``,
                 ``warning``, ``error``, ``context``.
 
         Examples:
-            Zero-config CM summary::
+            CM summary (all records), ADSL arm in TRT01A::
 
-                ard = adcm.tlg.cm.t_summary(groupby="TRTA", adsl=adsl)
+                spec = CMSummarySpec(adsl_group_col="TRT01A")
+                ard = adcm.tlg.cm.t_summary(spec=spec, adsl=adsl)
+
+            Concomitant medications only, as NEST CMT01A::
+
+                from fleet.tlg import CMSummarySpec
+
+                spec = CMSummarySpec(
+                    dataset_filter='pl.col("ATIREL") == "CONCOMITANT"',
+                    adsl_group_col="TRT01A",
+                )
+                ard = adcm.tlg.cm.t_summary(spec=spec, adsl=adsl)
 
             Custom spec with pooled arms::
 
@@ -120,6 +139,7 @@ class CMTLGNamespace(BuilderVerbsMixin):
 
                 spec = CMSummarySpec(
                     pools=[GroupPool(label="Total", arms="*")],
+                    adsl_group_col="TRT01A",
                 )
                 ard = adcm.tlg.cm.t_summary(spec=spec, adsl=adsl)
         """
@@ -140,19 +160,24 @@ class CMTLGNamespace(BuilderVerbsMixin):
 
         Single-level variant of :meth:`t_summary` mirroring the GDSR
         ``cmt02_pt`` template: counts subjects with at least one
-        concomitant medication per arm, broken down by preferred term
+        medication record per arm (every record, unless
+        ``spec.dataset_filter`` is set), broken down by preferred term
         (``CMDECOD``) without the ATC-class hierarchy.
 
         Args:
             groupby: Treatment arm column name (defaults to ``"TRTA"``).
             adsl: ADSL DataFrame for big-N denominators.  Required for
                 percentage calculations.
+            spec: Optional ``CMByPTSpec`` override.
 
         Returns:
-            pl.DataFrame: Long-format {cards}-compatible ARD.
+            pl.DataFrame: ARD in the {cards} long layout.
 
         Examples:
-            ``ard = adcm.tlg.cm.t_by_pt(groupby="TRTA", adsl=adsl)``
+            ADSL arm in TRT01A::
+
+                spec = CMByPTSpec(adsl_group_col="TRT01A")
+                ard = adcm.tlg.cm.t_by_pt(spec=spec, adsl=adsl)
         """
         return summarize_spec(self._df, spec or CMByPTSpec(), groupby=groupby, adsl=adsl)
 

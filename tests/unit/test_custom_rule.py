@@ -151,3 +151,40 @@ class TestCustomRuleEngine:
 
         status = our_rule[0].get("status", "UNKNOWN")
         assert status != "EXECUTION_ERROR", f"Rule execution error: {our_rule[0].get('message')}"
+
+    def test_a_scaffolded_dm_rule_fires_on_dm(self, engine: Path, tmp_path: Path) -> None:
+        """c1-526: a rule from fleet add-rule --domain DM runs on DM (Classes ALL)."""
+        import subprocess
+
+        import polars as pl
+
+        from fleet.validation.rule_scaffolder import scaffold_rule
+
+        pyreadstat = pytest.importorskip("pyreadstat")
+        rules = tmp_path / "rules"
+        path = scaffold_rule(domain="DM", description="AGE is empty", output_dir=rules)
+        rule = yaml.safe_load(path.read_text(encoding="utf-8"))
+        rule["Check"] = {"all": [{"name": "AGE", "operator": "empty"}]}
+        rule["Outcome"]["Message"] = "AGE is empty"
+        path.write_text(yaml.safe_dump(rule, sort_keys=False), encoding="utf-8")
+        dm = pl.from_repr("""\
+┌─────────┬────────┬─────────┬────────┬──────┐
+│ STUDYID ┆ DOMAIN ┆ USUBJID ┆ SUBJID ┆ AGE  │
+│ ---     ┆ ---    ┆ ---     ┆ ---    ┆ ---  │
+│ str     ┆ str    ┆ str     ┆ str    ┆ f64  │
+╞═════════╪════════╪═════════╪════════╪══════╡
+│ S       ┆ DM     ┆ S-1     ┆ 1      ┆ 40.0 │
+│ S       ┆ DM     ┆ S-2     ┆ 2      ┆ null │
+└─────────┴────────┴─────────┴────────┴──────┘
+""")
+        xpt = tmp_path / "dm.xpt"
+        pyreadstat.write_xport(dm, str(xpt), file_format_version=5, table_name="DM")
+        output = tmp_path / "result"
+        cmd = [str(engine), "validate", "-s", "sdtmig", "-v", "3-4", "-dp", str(xpt)]
+        cmd += ["-lr", str(rules), "-o", str(output), "-of", "JSON", "-rr"]
+
+        subprocess.run(cmd, capture_output=True, text=True, cwd=str(engine.parent), timeout=300)
+
+        report = json.loads(output.with_suffix(".json").read_text(encoding="utf-8"))
+        fired = {row.get("core_id") for row in report.get("Issue_Details", [])}
+        assert "FLEET-DM-001" in fired

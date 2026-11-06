@@ -35,10 +35,11 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import keyword
 import os
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, NoReturn
+from typing import TYPE_CHECKING, Any, NoReturn, get_args, get_type_hints
 
 from fleet.core.define_spec import load_spec_yaml
 from fleet.core.study_context import find_study_config
@@ -49,6 +50,7 @@ if TYPE_CHECKING:
 
     import polars as pl
 
+    from fleet.core.define_spec import DatasetEntry, DefineSpec
     from fleet.core.study_context import StudyContext
 
 #: Optional-dependency probes for ``fleet doctor`` / ``fleet check``:
@@ -164,12 +166,14 @@ def _load_dataset(path_str: str, encoding: str | None = None) -> pl.DataFrame:
     return load_raw_data(p, **_encoding_option(p, encoding)).collect()
 
 
-def _detect_groupby(df: pl.DataFrame, explicit: str | None) -> str:
+def _detect_groupby(
+    df: pl.DataFrame, explicit: str | None, candidates: tuple[str, ...] = ()
+) -> str:
     """Resolve the treatment-arm column against the *analysis data* frame.
 
     Uses ``--groupby`` when given (validated against the frame), otherwise
-    auto-detects TRTA → TRT01A → TRT01P.  On failure, errors out listing
-    the candidate columns actually present in the data.
+    auto-detects from *candidates*, by default TRTA → TRT01A → TRT01P.
+    On failure, errors out listing the candidate columns tried.
     """
     if explicit:
         if explicit not in df.columns:
@@ -180,15 +184,35 @@ def _detect_groupby(df: pl.DataFrame, explicit: str | None) -> str:
         return explicit
     from fleet.tlg import GROUPBY_CANDIDATES, detect_groupby
 
-    detected = detect_groupby(df.columns)
+    candidates = candidates or GROUPBY_CANDIDATES
+    detected = detect_groupby(df.columns, candidates)
     if detected is not None:
         return detected
     _fail(
         "could not auto-detect a treatment-arm column "
-        f"(tried {', '.join(GROUPBY_CANDIDATES)}). Pass --groupby <column>. "
+        f"(tried {', '.join(candidates)}). Pass --groupby <column>. "
         f"Columns present in the data: {', '.join(df.columns)}"
     )
     raise AssertionError("unreachable")
+
+
+def _spec_groupby(spec: Any, df: pl.DataFrame, explicit: str | None) -> str | None:
+    """Resolve a spec run's arm column: --groupby, the spec's columns:, detection."""
+    from fleet.tlg import resolve_groupby
+
+    if explicit:
+        return _detect_groupby(df, explicit)
+    groupby, source = resolve_groupby(spec, df.columns)
+    if source == "none":
+        return _detect_groupby(df, None)
+    return groupby
+
+
+def _with_adsl_groupby(spec: Any, adsl_groupby: str | None) -> Any:
+    """Apply ``--adsl-groupby`` to a summary spec (listings have no big N)."""
+    if adsl_groupby and "adsl_group_col" in type(spec).model_fields:
+        return spec.model_copy(update={"adsl_group_col": adsl_groupby})
+    return spec
 
 
 def _watch_loop(paths: Sequence[Path], run_once: Callable[[], None]) -> None:
@@ -269,6 +293,14 @@ def _run_init_cfg(args: argparse.Namespace) -> None:
     hint = _config_flag_hint(config_path)
     print(f"Created study workspace → {ctx.study_root}")
     print(f"Config  → {config_path}")
+    if ctx.custom_rules_dir is not None and adam_datasets:
+        from fleet.validation.rule_scaffolder import scaffold_population_flag_rule
+
+        try:
+            rule_file = scaffold_population_flag_rule(ctx.custom_rules_dir)
+            print(f"Rule    → {rule_file} (ADSL population flags are Y or N)")
+        except FileExistsError:
+            pass
     print()
     print("Next steps:")
     print(f"  fleet init define{hint}")
@@ -388,7 +420,10 @@ def _run_init_rules(args: argparse.Namespace) -> None:
                 print(f"Warning: {exc}")
 
     print()
-    print("Rules cached. Commit to VCS for a permanent audit trail.")
+    print(
+        "Rules cached for reference. CORE runs its own rules; "
+        "pin the engine with fleet install-engine --version."
+    )
 
 
 def _run_init_ct_pipeline(args: argparse.Namespace) -> None:
@@ -440,6 +475,10 @@ def _run_init_ct_pipeline(args: argparse.Namespace) -> None:
         dest = gen.write(output)
 
     print(f"Generated {gen.codelist_count} codelists ({', '.join(cfg.ct.pins)}) → {dest}")
+    from fleet.ct.study_codelists import ct_version_problems
+
+    for problem in ct_version_problems(ctx):
+        print(f"Note: {problem}")
     terms = gen.define_terms()
     for dpath in (sdtm_define, adam_define):
         if dpath.is_file():
@@ -521,7 +560,8 @@ def _run_add_ct(args: argparse.Namespace) -> None:
             _fail(
                 f"{output} was generated from {', '.join(current)}, not {args.package}; "
                 "fleet add-ct does not change the CT package of existing codelists. "
-                "Set ct.package in study_config.yaml, then run: fleet init ct --force"
+                "Set ct.package in study_config.yaml, then run: fleet init ct --force, "
+                "and set study.ct_version in each define.yaml to the package date"
             )
     existing = existing_concept_ids(output)
 
@@ -636,7 +676,7 @@ def _run_check_rule(args: argparse.Namespace) -> None:
         # Also print a summary of what was found
         import yaml as _yaml
 
-        with open(rule_path) as f:
+        with open(rule_path, encoding="utf-8") as f:
             rule = _yaml.safe_load(f)
         core_id = rule.get("Core", {}).get("Id", "?")
         rule_type = rule.get("Rule Type", "?")
@@ -787,6 +827,15 @@ def _generate_define_xml(args: argparse.Namespace) -> None:
     gen = DefineSpecGenerator(str(spec), strict=getattr(args, "strict", False))
     gen.generate(str(output), html_preview=not args.no_preview)
     print(f"Generated Define-XML → {output}")
+    ctx = _try_ctx(getattr(args, "config", None))
+    if ctx is not None and getattr(args, "standard", None) in ("sdtm", "adam"):
+        data_dir = ctx.data_dir(args.standard)
+        absent = [href for href in gen.leaf_hrefs().values() if not (data_dir / href).is_file()]
+        if absent:
+            _err(
+                f"warning: no file in {data_dir} for leaf href(s) {', '.join(absent)}. "
+                "Run fleet run, or check output_format: and output: in define.yaml."
+            )
     if not args.no_preview:
         # The generator skips the preview (with its own message) when the
         # XSL stylesheet is unavailable — only report a file that exists.
@@ -860,6 +909,21 @@ def _run_define_xml(args: argparse.Namespace) -> None:
 # ────────────────────────────────────────────────────────────────────── #
 
 
+#: SDTMIG 3.4 SUPPQUAL variable labels, for a SUPP dataset that no define declares.
+_SUPP_LABELS = {
+    "STUDYID": "Study Identifier",
+    "RDOMAIN": "Related Domain Abbreviation",
+    "USUBJID": "Unique Subject Identifier",
+    "IDVAR": "Identifying Variable",
+    "IDVARVAL": "Identifying Variable Value",
+    "QNAM": "Qualifier Variable Name",
+    "QLABEL": "Qualifier Variable Label",
+    "QVAL": "Data Value",
+    "QORIG": "Origin",
+    "QEVAL": "Evaluator",
+}
+
+
 def _run_run(args: argparse.Namespace) -> None:
     """``fleet run``: print the study plan, build it, write each dataset.
 
@@ -870,32 +934,41 @@ def _run_run(args: argparse.Namespace) -> None:
     """
     from fleet.core.define_spec import load_define_spec
     from fleet.io import save_dataset_json, save_parquet, save_xpt
+    from fleet.io.dataset_json import metadata_from_define
     from fleet.run import plan_study, run_study
 
     ctx = _load_ctx(args.config)
     plan = plan_study(ctx, datasets=args.dataset)
-    entries = {
-        e.name.upper(): e
-        for define in {s.define for s in plan.steps}
-        for e in load_define_spec(define).datasets or []
+    specs = {
+        e.name.upper(): spec
+        for spec in map(load_define_spec, {s.define for s in plan.steps})
+        for e in spec.datasets or []
     }
+    entries = {name: spec.select(name) for name, spec in specs.items()}
 
     writers: dict[str, Callable[[pl.DataFrame, Path, str], Path]] = {
         "parquet": lambda df, d, n: save_parquet(df, d / f"{n.lower()}.parquet"),
         "xpt": lambda df, d, n: save_xpt(
             df,
             d / f"{n.lower()}.xpt",
-            label=entries[n].label,
-            column_labels={v.name: v.label for v in entries[n].variables},
+            label=entries[n].label if n in entries else f"Supplemental Qualifiers for {n[4:]}",
+            column_labels=(
+                {v.name: v.label for v in entries[n].variables} if n in entries else _SUPP_LABELS
+            ),
         ),
-        "dataset-json": lambda df, d, n: save_dataset_json(df, d / f"{n.lower()}.json", domain=n),
+        "dataset-json": lambda df, d, n: save_dataset_json(
+            df, d / f"{n.lower()}.json", domain=n, **metadata_from_define(specs[n], n)
+        ),
     }
-    writer = writers[args.format]
+    formats = {
+        s.dataset: _run_format(args.format, specs[s.dataset], entries[s.dataset])
+        for s in plan.steps
+    }
     out_override = Path(args.out) if args.out else None
     total = len(plan.steps)
 
     print(f"Config:  {ctx.study_root / 'study_config.yaml'}")
-    print(f"Format:  {args.format}")
+    print(f"Format:  {', '.join(f'{name} {fmt}' for name, fmt in formats.items())}")
     print(f"Plan:    {total} dataset(s)")
     for i, step in enumerate(plan.steps, start=1):
         print(f"  [{i}/{total}] {step.dataset} ({step.standard}, {step.define.name})")
@@ -903,13 +976,58 @@ def _run_run(args: argparse.Namespace) -> None:
 
     for i, built in enumerate(run_study(plan, strict=args.strict), start=1):
         step = built.step
+        _check_built(built.frame, step.define, step.dataset, strict=args.strict)
         out_dir = out_override or ctx.data_dir(step.standard)
-        out_path = writer(built.frame, out_dir, step.dataset)
+        out_path = writers[formats[step.dataset]](built.frame, out_dir, step.dataset)
         rows, cols = built.frame.shape
         print(f"[{i}/{total}] {step.dataset}: {rows} rows × {cols} cols → {out_path}")
+        if built.supp is not None:
+            supp_path = writers[formats[step.dataset]](built.supp, out_dir, f"SUPP{step.dataset}")
+            print(f"        SUPP{step.dataset}: {built.supp.height} rows → {supp_path}")
+        for name, source in built.inputs.items():
+            where = source.path or ("built in this run" if source.source == "built" else "seed")
+            print(f"    input {name} -> {where}")
+        declared = entries[step.dataset].output
+        if declared and Path(declared).name != out_path.name:
+            _err(
+                f"warning: {step.dataset}: define.yaml output: {declared} is the Define-XML "
+                f"leaf; fleet run wrote {out_path.name}."
+            )
 
     print()
     print(f"Done — {total} dataset(s) written.")
+
+
+def _check_built(frame: pl.DataFrame, define: Path, dataset: str, *, strict: bool) -> None:
+    """Stop before the write when the built dataset does not match its define; the old file stays."""
+    from fleet.core.exceptions import StudyRunError
+    from fleet.define_xml import DatasetChecker
+
+    if frame.width == 0:
+        raise StudyRunError(f"dataset {dataset}: the build has no column. The old file is kept.")
+    checker = DatasetChecker(define, check_types=False, check_ct=False, validate_schema=False)
+    errors = checker.check(frame, dataset, strict=strict).errors
+    if errors:
+        raise StudyRunError(
+            f"dataset {dataset} does not match {define.name}: {'; '.join(errors)}. "
+            "The old file is kept."
+        )
+
+
+def _run_format(flag: str | None, spec: DefineSpec, entry: DatasetEntry) -> str:
+    """The format of one dataset: --format, then its output_format, then the spec's, then parquet.
+
+    This is the rule of the Define-XML leaf href, so the leaf names the file
+    fleet run writes.  A flag that differs from the define warns.
+    """
+    spec_level = spec.output_format if "output_format" in spec.model_fields_set else None
+    declared = entry.output_format or spec_level
+    if flag and declared and flag != declared:
+        _err(
+            f"warning: {entry.name}: --format {flag} overrides output_format: {declared} "
+            "of define.yaml, so the Define-XML leaf names another file."
+        )
+    return flag or declared or "parquet"
 
 
 # ────────────────────────────────────────────────────────────────────── #
@@ -934,6 +1052,7 @@ def _run_validate(args: argparse.Namespace) -> None:
             custom_rules=args.custom_rules,
             timeout=args.timeout,
             config=Path(args.config) if args.config else None,
+            define_xml=args.define,
         )
     except ValidationSetupError as exc:
         _fail(str(exc), code=_VALIDATE_COULD_NOT_RUN)
@@ -951,12 +1070,21 @@ def _run_validate(args: argparse.Namespace) -> None:
             version=setup.ig_version.value,
             custom_rules=setup.custom_rules.value,
             timeout=setup.timeout.value,
+            define_xml=setup.define_xml.value,
         )
         setups = {d.name: d.setup for d in datasets}
         for name, result in by_name.items():
             result.apply_setup(setups.get(name) or setup)
             result.print_report()
             results.append(result)
+        runs = {id(run): run for r in by_name.values() for run in r.rule_runs}.values()
+        problems = [line for run in runs for line in run.problem_lines()]
+        if problems:
+            print(
+                f"Rule problems in the {standard} engine run (not data findings; exit code kept):"
+            )
+            for line in problems:
+                print(f"  {line}")
 
     could_not_run = sweep.could_not_run
     for d in could_not_run:
@@ -1158,7 +1286,8 @@ def _run_check(args: argparse.Namespace) -> None:
                 continue
             found_define = True
             try:
-                DefineSpecGenerator(path, strict=True).to_xml_string()
+                # Read-only: the study's derivations_module is not imported.
+                DefineSpecGenerator(path, strict=True, import_study_code=False).to_xml_string()
                 rows.append(("PASS", label, f"{path} — generates a valid Define-XML"))
             except Exception as exc:
                 rows.append(("FAIL", label, str(exc)))
@@ -1512,12 +1641,12 @@ def _tlg_run_once(args: argparse.Namespace) -> None:
         adsl_df = _load_dataset(args.adsl)
 
     for spec_path in spec_paths:
-        spec = load_spec(spec_path)
+        spec = _with_adsl_groupby(load_spec(spec_path), args.adsl_groupby)
         meta = TEMPLATES[spec.template]
         data_df, population, is_listing = _resolve_spec_frames(
             spec_path, meta, named_data, default_data, adsl_df, args.adsl, ctx
         )
-        groupby = None if is_listing else _detect_groupby(data_df, args.groupby)
+        groupby = None if is_listing else _spec_groupby(spec, data_df, args.groupby)
 
         result = run_spec(spec, data_df, adsl=population, groupby=groupby)
 
@@ -1565,16 +1694,16 @@ def _tlg_explore_once(args: argparse.Namespace) -> None:
 
     entries = []
     for spec_path in spec_paths:
-        spec = load_spec(spec_path)
+        spec = _with_adsl_groupby(load_spec(spec_path), args.adsl_groupby)
         meta = TEMPLATES[spec.template]
         data_df, population, is_listing = _resolve_spec_frames(
             spec_path, meta, named_data, default_data, adsl_df, args.adsl, ctx
         )
         # A declared groupby axis supplies the arm column per variant —
-        # only detect one when the spec leaves it fixed.
+        # only resolve one when the spec leaves it fixed.
         has_groupby_axis = spec.interactive is not None and spec.interactive.groupby is not None
         groupby = (
-            None if (is_listing or has_groupby_axis) else _detect_groupby(data_df, args.groupby)
+            None if (is_listing or has_groupby_axis) else _spec_groupby(spec, data_df, args.groupby)
         )
         n_variants = len(enumerate_variants(spec))
         print(f"{spec_path.name}: {n_variants} variant(s)")
@@ -1662,10 +1791,13 @@ def _run_tlg_export(args: argparse.Namespace) -> None:
     )
 
     # Metadata (page_by flows through RenderMetadata into every renderer)
+    footnotes = list(args.footnote or [])
+    if args.population:
+        footnotes.append(f"Population: {args.population}")
     rmeta = RenderMetadata(
         title=args.title or "",
         subtitle=args.subtitle or "",
-        footnotes=args.footnote or [],
+        footnotes=footnotes,
         page_by=args.page_by,
     )
 
@@ -1678,18 +1810,31 @@ def _run_tlg_export(args: argparse.Namespace) -> None:
         html_wrapper = wp.read_text(encoding="utf-8")
 
     # Detect the treatment-arm column against the DATA frame (not ADSL).
-    group_col = _detect_groupby(data_df, args.groupby)
+    # A subject-level table (dm, ds) takes the ADSL arm, TRT01A then TRT01P.
+    ns_cls = NAMESPACE_CLASSES[domain]
+    spec_hint = get_type_hints(ns_cls.t_summary)["spec"]
+    spec_cls = next(a for a in get_args(spec_hint) if a is not type(None))
+    group_col = _detect_groupby(data_df, args.groupby, spec_cls.arm_fallback)
 
     print(f"Domain:   {domain}")
     print(f"Format:   {fmt}")
     print(f"Data:     {data_arg} ({data_df.shape[0]} rows)")
     print(f"ADSL:     {adsl_arg} ({adsl_df.shape[0]} rows)")
     print(f"Groupby:  {group_col}")
+    if args.population:
+        print(f"Population: {args.population}")
     print(f"Output:   {output_path}")
     print()
 
     # Registry-driven dispatch: every TLG namespace exposes t_summary.
-    ard = NAMESPACE_CLASSES[domain](data_df).t_summary(groupby=group_col, adsl=adsl_df)
+    # --population goes to the default spec's adsl_filter, as in a YAML spec.
+    spec = None
+    if args.population or args.adsl_groupby:
+        try:
+            spec = spec_cls(adsl_filter=args.population, adsl_group_col=args.adsl_groupby)
+        except ValueError as exc:
+            _fail(f"--population is not a valid filter: {exc}")
+    ard = ns_cls(data_df).t_summary(groupby=group_col, adsl=adsl_df, spec=spec)
     print(f"ARD:      {ard.shape[0]} rows × {ard.shape[1]} cols")
 
     _render_output(
@@ -1805,7 +1950,9 @@ def _run_tdd_ctgov(args: argparse.Namespace) -> None:
             f"trial design spec not found: {design_path}. "
             "Create it first, or run without --write to print the YAML."
         )
-    data = yaml.safe_load(design_path.read_text(encoding="utf-8"))
+    from fleet.sdtm.design import load_strict_yaml
+
+    data = load_strict_yaml(design_path.read_text(encoding="utf-8"))
     root = data.get("trial_design", data)
     existing = {(p.get("tsparmcd"), p.get("tsseq", 1)) for p in root.get("parameters") or []}
     added = [p for p in params if (p["tsparmcd"], p.get("tsseq", 1)) not in existing]
@@ -1880,10 +2027,20 @@ def _run_tdd_build(args: argparse.Namespace) -> None:
             column_labels={v["name"]: v.get("label") for v in ig.get("variables", [])},
         )
 
+    def dataset_json(df: pl.DataFrame, d: Path, n: str) -> Path:
+        ig = packaged_structure(n) or {}
+        return save_dataset_json(
+            df,
+            d / f"{n.lower()}.json",
+            domain=n,
+            label=ig.get("label"),
+            columns={v["name"]: {"label": v.get("label")} for v in ig.get("variables", [])},
+        )
+
     writers: dict[str, Callable[[pl.DataFrame, Path, str], Path]] = {
         "parquet": lambda df, d, n: save_parquet(df, d / f"{n.lower()}.parquet"),
         "xpt": xpt,
-        "dataset-json": lambda df, d, n: save_dataset_json(df, d / f"{n.lower()}.json", domain=n),
+        "dataset-json": dataset_json,
     }
     writer = writers[args.format]
     out_dir = Path(args.out) if args.out else _load_ctx(args.config).sdtm_data_dir
@@ -1910,6 +2067,8 @@ def _run_derivation_add(args: argparse.Namespace) -> None:
     name: str = args.name.strip()
     dataset: str = args.dataset.strip().upper()
     kind: str = args.kind
+    if not name.isidentifier() or keyword.iskeyword(name):
+        _fail(f"derivation name {name!r} is not a Python identifier (for example AGEGR1).")
 
     # Resolve derivations directory from the study config — no silent
     # fallback to ./derivations (siblings hard-error too).
@@ -1949,9 +2108,9 @@ def {name}() -> pl.Expr:
                 .to_frame()
             )
     """
-    return pl.col("REPLACE_ME").cast(pl.String)  # TODO: replace with real logic
+    return pl.col("REPLACE_ME").cast(pl.String).alias("{name}")  # TODO: replace with real logic
 '''
-    elif kind == "frame":
+    else:  # frame
         template = f'''"""{name} — {dataset} custom derivation (frame-level)."""
 from fleet.core.derivation import derivation
 import polars as pl
@@ -1978,38 +2137,6 @@ def {name}(df: pl.DataFrame) -> pl.DataFrame:
     """
     return df.with_columns(
         pl.col("REPLACE_ME").cast(pl.String).alias("{name}")  # TODO: replace with real logic
-    )
-'''
-    else:  # param
-        template = f'''"""{name} — {dataset} custom derivation (param-level)."""
-from fleet.core.derivation import derivation
-import polars as pl
-
-
-@derivation(
-    by=["USUBJID"],  # TODO: set correct by-vars
-    set_values_to={{"PARAMCD": "{name}", "PARAM": "{name} description"}},
-)
-def {name}(df: pl.DataFrame) -> pl.DataFrame:
-    """One-sentence summary of {name} derivation.
-
-    Args:
-        df: Upstream DataFrame.
-
-    Returns:
-        pl.DataFrame: Frame with {name} parameter rows added.
-
-    Examples:
-        Use in an inline pipeline::
-
-            {dataset.lower()} = (
-                dm.adam
-                .derivation({name})
-                .to_frame()
-            )
-    """
-    return df.with_columns(
-        pl.col("REPLACE_ME").cast(pl.Float64).alias("AVAL")  # TODO: replace with real logic
     )
 '''
 
@@ -2281,6 +2408,11 @@ def _add_define_xml_parser(sub: argparse._SubParsersAction) -> None:
     defxml = sub.add_parser(
         "define-xml",
         help="Generate Define-XML 2.1 from a define.yaml specification.",
+        description=(
+            "Generate Define-XML 2.1 from a define.yaml specification. This imports the "
+            "spec's derivations_module (study Python code) to describe callable: "
+            "derivations: run it only on a study you trust."
+        ),
     )
     defxml.add_argument(
         "--spec",
@@ -2319,7 +2451,8 @@ def _add_define_xml_parser(sub: argparse._SubParsersAction) -> None:
         action="store_true",
         help=(
             "Kept for old scripts: MethodDefs are on by default. Every Derived "
-            "variable with a comment: or a derivation: gets a MethodDef."
+            "variable with a comment: or a derivation: gets a MethodDef. This "
+            "imports the spec's derivations_module (study Python code)."
         ),
     )
     defxml.add_argument(
@@ -2426,14 +2559,19 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
         default=None,
         help=(
             "Output directory for every dataset. Default: the configured "
-            "data/sdtm and data/adam directories."
+            "data/sdtm and data/adam directories. Fleet only writes here: inputs "
+            "are read from the run, a declared path:, the raw directory (type: raw) "
+            "or the data directory of the input's standard (type: dataset)."
         ),
     )
     run.add_argument(
         "--format",
-        default="parquet",
+        default=None,
         choices=["parquet", "xpt", "dataset-json"],
-        help="Output format (default: parquet).",
+        help=(
+            "Output format of every dataset. Default: the output_format of the dataset, "
+            "else of define.yaml, else parquet (the rule of the Define-XML leaf)."
+        ),
     )
     run.add_argument(
         "--strict",
@@ -2480,11 +2618,20 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
         ),
     )
     validate.add_argument(
+        "--define",
+        default=None,
+        metavar="PATH",
+        help=(
+            "Define-XML file that CORE checks with the datasets (CORE -dxp). Opt-in: "
+            "Fleet never passes a define by default."
+        ),
+    )
+    validate.add_argument(
         "--custom-rules",
         default=None,
         help=(
-            "Directory of custom validation rule YAML files. "
-            "Default: validation.custom_rules from the discovered study_config.yaml."
+            "Directory of custom validation rule YAML files, relative to the working "
+            "directory. Default: validation.custom_rules from the discovered study_config.yaml."
         ),
     )
     validate.add_argument(
@@ -2961,7 +3108,18 @@ def _add_tlg_parsers(sub: argparse._SubParsersAction) -> None:
     tlg_run.add_argument(
         "--groupby",
         default=None,
-        help="Treatment-arm column. Default: auto-detect (TRTA → TRT01A → TRT01P).",
+        help=(
+            "Treatment-arm column. Default: the spec's columns: field when it "
+            "declares one, else auto-detect (TRTA → TRT01A → TRT01P)."
+        ),
+    )
+    tlg_run.add_argument(
+        "--adsl-groupby",
+        default=None,
+        help=(
+            "ADSL arm column for the big N when ADSL lacks the analysis arm "
+            "(e.g. TRT01A for an ADAE grouped by TRTA). Sets adsl_group_col."
+        ),
     )
     tlg_run.add_argument("--title", default="", help="Output title (default: template title).")
     tlg_run.add_argument("--subtitle", default="", help="Output subtitle.")
@@ -3032,7 +3190,16 @@ def _add_tlg_parsers(sub: argparse._SubParsersAction) -> None:
         default=None,
         help=(
             "Treatment-arm column for specs without a groupby axis. "
-            "Default: auto-detect (TRTA → TRT01A → TRT01P)."
+            "Default: the spec's columns: field when it declares one, else "
+            "auto-detect (TRTA → TRT01A → TRT01P)."
+        ),
+    )
+    tlg_explore.add_argument(
+        "--adsl-groupby",
+        default=None,
+        help=(
+            "ADSL arm column for the big N when ADSL lacks the analysis arm "
+            "(e.g. TRT01A for an ADAE grouped by TRTA). Sets adsl_group_col."
         ),
     )
     tlg_explore.add_argument("--title", default="", help="Output title (default: template title).")
@@ -3096,7 +3263,27 @@ def _add_tlg_parsers(sub: argparse._SubParsersAction) -> None:
     tlg_export.add_argument(
         "--groupby",
         default=None,
-        help="Treatment-arm column. Default: auto-detect (TRTA → TRT01A → TRT01P).",
+        help=(
+            "Treatment-arm column. Default: auto-detect (TRTA → TRT01A → TRT01P); "
+            "TRT01A → TRT01P for the ADSL domains dm and ds."
+        ),
+    )
+    tlg_export.add_argument(
+        "--adsl-groupby",
+        default=None,
+        help=(
+            "ADSL arm column for the big N when ADSL lacks the analysis arm "
+            "(e.g. TRT01A for an ADAE grouped by TRTA). Sets adsl_group_col."
+        ),
+    )
+    tlg_export.add_argument(
+        "--population",
+        default=None,
+        metavar="FILTER",
+        help=(
+            "ADSL population filter, passed to the spec's adsl_filter and shown in a "
+            'footnote, e.g. \'pl.col("SAFFL") == "Y"\'. Default: none (all ADSL subjects).'
+        ),
     )
     tlg_export.add_argument(
         "--title",
@@ -3191,8 +3378,11 @@ def _add_derivation_parsers(sub: argparse._SubParsersAction) -> None:
     drv_add.add_argument(
         "--kind",
         default="column",
-        choices=["column", "frame", "param"],
-        help="Derivation kind: column / frame / param (default: column).",
+        choices=["column", "frame"],
+        help=(
+            "Derivation kind: column / frame (default: column). "
+            "For a new parameter row, use .adam.derive_param()."
+        ),
     )
     _add_config_flag(drv_add)
     drv_add.set_defaults(func=_run_derivation_add)
@@ -3237,6 +3427,9 @@ def main(argv: Sequence[str] | None = None) -> None:
         SystemExit: ``0`` on success, ``1`` on any Fleet error (single
             clean message on stderr), ``2`` on argparse usage errors.
     """
+    # A cp1252 pipe on Windows cannot encode a check mark; print \u2713 instead of crashing.
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(errors="backslashreplace")
     parser = _build_parser()
     args = parser.parse_args(argv)
 

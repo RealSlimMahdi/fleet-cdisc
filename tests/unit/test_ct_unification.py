@@ -298,6 +298,26 @@ class TestCheckerInlineCodelists:
         assert any("C99999" in w for w in result.warnings)
         assert result.ct_violations == []
 
+    def test_codelist_with_no_items_warns_instead_of_a_silent_skip(self, tmp_path):
+        """c1-536: a codelist with no items used to skip the CT check with no message."""
+        spec = yaml.safe_load(yaml.safe_dump(CHECKER_SPEC))
+        spec["codelists"][0].pop("items")
+        p = tmp_path / "define.yaml"
+        p.write_text(yaml.safe_dump(spec))
+        checker = DatasetChecker(p, validate_schema=False)
+        df = pl.from_repr("""\
+┌─────────┬─────────┐
+│ USUBJID ┆ SEX     │
+│ ---     ┆ ---     │
+│ str     ┆ str     │
+╞═════════╪═════════╡
+│ S1      ┆ Unknown │
+└─────────┴─────────┘
+""")
+        result = checker.check(df, dataset="DM")
+        assert any("C66731 has no items" in w and "fleet init ct" in w for w in result.warnings)
+        assert result.ct_violations == []
+
     def test_check_ct_false_disables(self, tmp_path):
         p = tmp_path / "define.yaml"
         p.write_text(yaml.safe_dump(CHECKER_SPEC))
