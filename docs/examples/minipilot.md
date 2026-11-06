@@ -19,7 +19,7 @@ uv run fleet run --config examples/minipilot/study_config.yaml --out out/minipil
 - **It is a template.** Copy the folder to start a study that `fleet run`
   builds, and replace the raw files and the variables.
 - **A test keeps it working.** `tests/unit/test_minipilot_study.py` runs it
-  with `fleet run` and `build_dag` and checks every declared variable.
+  with `fleet run` and checks every declared variable.
 
 ## What is in the folder
 
@@ -46,6 +46,17 @@ ADAE and ADEX, because they read it.
 
 ## How to use it
 
+### 1. Check the study
+
+`fleet check` reads the study config and checks each define file against its
+schema, before any dataset is built:
+
+```bash
+uv run fleet check --config examples/minipilot/study_config.yaml
+```
+
+### 2. Build the datasets
+
 Build every dataset, then only some of them:
 
 ```bash
@@ -54,24 +65,52 @@ uv run fleet run --config examples/minipilot/study_config.yaml --out out/minipil
     --dataset ADSL --dataset ADVS
 ```
 
-The same run from Python, with no file written:
+`out/minipilot` then holds one parquet file per dataset: `dm.parquet` to
+`adex.parquet`.
+
+### 3. QC a dataset with inline verbs
+
+A QC programmer writes ADVS a second time, with the inline verbs, from the
+SDTM VS and the ADSL that `fleet run` wrote. Each verb is one rule of the
+define file:
 
 ```python
+import polars as pl
+
 import fleet
 
-ctx = fleet.load_study_context("examples/minipilot/study_config.yaml")
-built = {b.step.dataset: b.frame for b in fleet.run_study(fleet.plan_study(ctx))}
-built["ADVS"].select("USUBJID", "VISIT", "AVAL", "ABLFL", "BASE", "CHG")
+vs = fleet.frame(pl.read_parquet("out/minipilot/vs.parquet"))
+adsl = pl.read_parquet("out/minipilot/adsl.parquet").select("USUBJID", "TRTSDT")
+
+advs = (
+    vs.adam.merge(dataset=adsl, on="USUBJID", how="left")
+    .assign("PARAMCD", source="VSTESTCD")
+    .assign("AVAL", source="VSSTRESN")
+    .date("ADT", source="VSDTC")
+    .flag(
+        "ABLFL",
+        criteria="last",
+        by=["USUBJID", "PARAMCD"],
+        order_by=["ADT", "VISITNUM"],
+        where="pl.col('AVAL').is_not_null() & (pl.col('ADT') <= pl.col('TRTSDT'))",
+    )
+    .baseline("BASE", aval="AVAL", baseline_flag="ABLFL", by=["USUBJID", "PARAMCD"])
+    .chg("CHG", aval="AVAL", base="BASE", post_baseline="pl.col('ADT') > pl.col('TRTSDT')")
+    .pchg("PCHG", aval="AVAL", base="BASE", post_baseline="pl.col('ADT') > pl.col('TRTSDT')")
+    .to_frame()
+)
+advs.write_parquet("out/minipilot/advs_qc.parquet")
 ```
 
-The dependency graph of the same define files:
+Then `fleet compare`, the PROC COMPARE of Fleet, checks the derived
+variables of the two datasets:
 
-```python
-from fleet.core.dag import build_dag
-
-dag = build_dag("examples/minipilot/sdtm/define.yaml", "examples/minipilot/adam/define.yaml")
-dag.impacted_by("vs_raw")  # VS, then ADVS
+```bash
+uv run fleet compare out/minipilot/advs.parquet out/minipilot/advs_qc.parquet \
+    --keys USUBJID,PARAMCD,VISITNUM --variables ADT,AVAL,ABLFL,BASE,CHG,PCHG
 ```
+
+The verdict is `EQUAL: no differences found.` and the exit code is 0.
 
 ## When a variable is missing
 
