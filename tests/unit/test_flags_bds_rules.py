@@ -285,6 +285,33 @@ def test_flag_tie_with_no_where_follows_input_order(criteria: str, expected: lis
     assert out["ANL01FL"].to_list() == expected
 
 
+@pytest.mark.parametrize(
+    ("criteria", "expected"),
+    [("last", [None, "Y", "Y", None, "Y"]), ("first", ["Y", "Y", None, "Y", None])],
+)
+def test_flag_unsorted_groups_and_a_missing_by_value(criteria: str, expected: list) -> None:
+    """Groups interleave in the input; records with a missing AETERM form one group."""
+    adae = pl.from_repr("""\
+┌─────────┬────────┬────────┬───────┐
+│ USUBJID ┆ AETERM ┆ AESEVN ┆ AESEQ │
+│ ---     ┆ ---    ┆ ---    ┆ ---   │
+│ str     ┆ str    ┆ i64    ┆ i64   │
+╞═════════╪════════╪════════╪═══════╡
+│ S1      ┆ null   ┆ 1      ┆ 1     │
+│ S2      ┆ Nausea ┆ 2      ┆ 1     │
+│ S1      ┆ null   ┆ 3      ┆ 2     │
+│ S1      ┆ Nausea ┆ 1      ┆ 3     │
+│ S1      ┆ Nausea ┆ null   ┆ 4     │
+└─────────┴────────┴────────┴───────┘
+""")
+
+    out = adae.adam.flag(
+        "ANL01FL", criteria=criteria, order_by=["AESEVN", "AESEQ"], by=["USUBJID", "AETERM"]
+    ).to_frame()
+
+    assert out["ANL01FL"].to_list() == expected
+
+
 def test_flag_mask_grid_gives_one_flag_on_the_right_record() -> None:
     """Every eligibility mask over 2 dates x 2 records: SAS LAST./FIRST. after a WHERE."""
     dates = ["2014-01-01", "2014-01-01", "2014-01-02", "2014-01-02"]
