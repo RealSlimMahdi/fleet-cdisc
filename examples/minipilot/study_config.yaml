@@ -1,0 +1,15 @@
+study_id: MINIPILOT
+company: Fleet
+description: "Small synthetic study that fleet run builds end to end: raw CSV to SDTM to ADaM"
+
+paths:
+  metadata_sdtm: sdtm
+  metadata_adam: adam
+
+sdtm:
+  ig_version: "3-4"
+  domains: [DM, AE, VS, EX]
+
+adam:
+  ig_version: "1-1"
+  datasets: [ADSL, ADVS, ADAE, ADEX]

@@ -504,6 +504,11 @@
           "description": "Whether the variable is required in every record.",
           "default": false
         },
+        "optional": {
+          "type": "boolean",
+          "description": "For a variable with no derivation: fleet run may write the dataset without it when no input has it (RFXSTDTC in a study that does not collect it). Default false: fleet run stops, so a population flag such as SAFFL is never lost with exit code 0.",
+          "default": false
+        },
         "core": {
           "type": "string",
           "description": "CDISC core designation for the variable. When present, the checker uses this for graduated severity (Req \u2192 error, Exp \u2192 warning, Perm \u2192 info). Users may override the IG value to downgrade Req variables.",
@@ -1362,6 +1367,19 @@
           "description": "Baseline value column.",
           "title": "Base",
           "type": "string"
+        },
+        "post_baseline": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Condition that marks the post-baseline records, as an expression or a string parsed as ``where=`` is.",
+          "title": "Post Baseline"
         }
       },
       "required": [
@@ -2325,6 +2343,19 @@
           "description": "Baseline value column.",
           "title": "Base",
           "type": "string"
+        },
+        "post_baseline": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Condition that marks the post-baseline records, as an expression or a string parsed as ``where=`` is.",
+          "title": "Post Baseline"
         }
       },
       "required": [

@@ -1151,6 +1151,8 @@ def _run_run(args: argparse.Namespace) -> None:
     for i, planned in enumerate(plan.steps, start=1):
         try:
             built = next(builds)
+        except StudyRunError as exc:
+            raise StudyRunError(f"{exc} The old file is kept.") from exc
         except pl.exceptions.PolarsError as exc:
             # A corrupt input or a failing expression: name the dataset, not the plan text.
             if _debug():
@@ -3016,7 +3018,10 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
         "--strict",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="Raise on unknown spec algorithms (default). --no-strict warns and skips.",
+        help=(
+            "Raise on unknown spec algorithms and on a declared variable with no "
+            "derivation that no input has (default). --no-strict warns and skips both."
+        ),
     )
     run.add_argument(
         "--overwrite",

@@ -4,6 +4,33 @@ All notable changes to Fleet are documented here.
 
 ## [Unreleased]
 
+### Study run
+
+#### Added
+
+- `examples/minipilot`: a small study with raw CSV files and two define
+  files that `fleet run` and `build_dag` run end to end, DM, AE, VS and EX to
+  ADSL, ADVS, ADAE and ADEX (c1-347). ADVS takes AVAL from VSSTRESN, and ABLFL
+  flags the last record with a non-missing AVAL on or before TRTSDT, and CHG
+  and PCHG are only on post-baseline records. The page *Study run end to end
+  (MINIPILOT)* says why the study exists and how to use it.
+- `chg(post_baseline=)` and `pchg(post_baseline=)`: a condition that marks the
+  post-baseline records; the other records get null (ADaMIG 1.3, section
+  3.3.4). The default (`None`) keeps a value on every record. A define takes
+  it as `post_baseline:`.
+- `optional: true` on a define variable with no derivation: `fleet run` may
+  write the dataset without it (ADR 0053).
+
+#### Changed
+
+- `fleet run` and `run_study` stop when a declared variable with no
+  derivation is in no input; before, the dataset was written without it and
+  the run exited 0. `--no-strict` (`strict=False`) turns the stop into a
+  warning (ADR 0053).
+- The CDISCPILOT01 ADaM define derives SAFFL and ITTFL (`algorithm: flag`),
+  and the spec-driven example no longer derives them inline. The SDTM define
+  marks RFXSTDTC and RFXENDTC `optional: true`.
+
 ### Alpha audit: medium and low findings
 
 The medium and low findings of the alpha audit (`ML-REMAINING.md`, rechecked on 5 November 2026), fixed where no clinical decision was needed. Engineering choices follow the recommendation of each finding. ADR-0047 to ADR-0052 record the changed defaults.

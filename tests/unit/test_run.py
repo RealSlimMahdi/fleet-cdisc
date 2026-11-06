@@ -666,6 +666,50 @@ class TestInputSearch:
         assert adsl.frame["AGE"].to_list() == [45, 60]
 
 
+class TestAbsentVariable:
+    """A declared variable with no derivation that no input has stops the run."""
+
+    _RACE = """\
+      - name: RACE
+        type: text
+"""
+
+    def test_the_run_stops_and_names_the_variable_and_the_inputs(self, tmp_path: Path) -> None:
+        ctx = _write_study(tmp_path, sdtm=_DM + self._RACE, adam=None)
+
+        with pytest.raises(
+            StudyRunError, match=r"DM: no input \(dm_raw\) has RACE.*optional: true"
+        ):
+            list(run_study(plan_study(ctx), inputs={"dm_raw": DM_RAW}))
+
+    def test_strict_false_warns_and_builds_the_dataset_without_it(self, tmp_path: Path) -> None:
+        ctx = _write_study(tmp_path, sdtm=_DM + self._RACE, adam=None)
+
+        with pytest.warns(UserWarning, match="no input .* has RACE"):
+            dm = next(run_study(plan_study(ctx), inputs={"dm_raw": DM_RAW}, strict=False))
+
+        assert dm.frame.columns == ["STUDYID", "USUBJID", "AGE"]
+
+    def test_an_optional_variable_may_be_absent(self, tmp_path: Path) -> None:
+        optional = self._RACE + "        optional: true\n"
+        ctx = _write_study(tmp_path, sdtm=_DM + optional, adam=None)
+
+        dm = next(run_study(plan_study(ctx), inputs={"dm_raw": DM_RAW}))
+
+        assert dm.frame.columns == ["STUDYID", "USUBJID", "AGE"]
+
+    def test_an_optional_variable_is_still_carried_when_an_input_has_it(
+        self, tmp_path: Path
+    ) -> None:
+        optional = self._RACE + "        optional: true\n"
+        ctx = _write_study(tmp_path, sdtm=_DM + optional, adam=None)
+        raw = DM_RAW.with_columns(pl.lit("ASIAN").alias("RACE"))
+
+        dm = next(run_study(plan_study(ctx), inputs={"dm_raw": raw}))
+
+        assert dm.frame["RACE"].to_list() == ["ASIAN", "ASIAN"]
+
+
 class TestPilotStudy:
     """The CDISCPILOT01 define files run from the raw inputs to ADSL."""
 
@@ -729,6 +773,7 @@ class TestPilotStudy:
         ]
         assert built["ADSL"]["STUDYID"].to_list() == ["CDISCPILOT01", "CDISCPILOT01"]
         assert built["ADSL"]["TRTSDT"].cast(pl.String).to_list() == ["2014-01-02", "2014-01-03"]
+        assert built["ADSL"]["SAFFL"].to_list() == ["Y", "Y"]
 
     @pytest.mark.skipif(not _PILOT.exists(), reason="examples/ is not shipped here")
     def test_fleet_run_reads_the_shipped_raw_files(self, tmp_path, monkeypatch) -> None:

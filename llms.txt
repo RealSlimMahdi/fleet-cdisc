@@ -1228,9 +1228,9 @@ print(f"SDTM AE  : {ae.shape[0]} records  ·  {ae.shape[1]} columns")
 # ════════════════════════════════════════════════════════════════════════════
 # 5. ADaM ADSL — spec-driven
 #    Simple derivations (source/rename/assigned) live in the spec, and so do
-#    TRTSDT/TRTEDT (first_date/last_date on the pinned EX).
-#    Join-based pre-computations (AGEGR1, SAFFL, ITTFL, TRT01P/TRT01A)
-#    are added to the DM frame before from_spec() runs.
+#    TRTSDT/TRTEDT (first_date/last_date on the pinned EX) and the population
+#    flags SAFFL/ITTFL (flag on the pinned EX, admiral derive_var_merged_exist_flag).
+#    AGEGR1 and TRT01P/TRT01A are added to the DM frame before from_spec() runs.
 # ════════════════════════════════════════════════════════════════════════════
 print("\n── ADaM ADSL (spec-driven) ──────────────────────────────────────────────")
 
@@ -1248,25 +1248,13 @@ dm_enriched = (
         ],
         else_="Missing",
     )
-    # Population flags (admiral: derive_var_merged_exist_flag). This is the admiral
-    # template condition; the SAP decides. A population flag is never blank: N.
-    .flag_exists(
-        "SAFFL",
-        from_dataset=ex,
-        on=["USUBJID"],
-        source_filter=(pl.col("EXDOSE") > 0)
-        | ((pl.col("EXDOSE") == 0) & pl.col("EXTRT").str.to_uppercase().str.contains("PLACEBO")),
-        false_value="N",
-    )
-    .flag("ITTFL", criteria='pl.col("ARMCD") != "SCRNFAIL"', false_value="N")
     .to_frame()
 )
-assert (dm_enriched["SAFFL"] == "Y").sum() == dm_enriched.height, "every pilot subject took a dose"
 
 # The columns below are derived inline above (or upstream in DM) with a
 # *different* method than the spec documents, so they are omitted from the
 # spec pass — from_spec()'s overwrite guard would (rightly) raise otherwise.
-# TRTSDT and TRTEDT run from the spec on the pinned EX.
+# TRTSDT, TRTEDT, SAFFL and ITTFL run from the spec on the pinned EX.
 adsl = (
     dm_enriched.adam.pin("EX", ex)
     .from_spec(
@@ -1277,6 +1265,7 @@ adsl = (
     .select(spec=ADAM_SPEC, dataset="ADSL")
     .write_parquet(OUT / "adsl.parquet")
 )
+assert (adsl["SAFFL"] == "Y").sum() == adsl.height, "every pilot subject took a dose"
 print(f"   {adsl.shape[0]} subjects × {adsl.shape[1]} variables")
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -1862,8 +1851,8 @@ Available on `df.adam` (BDS base namespace). Shared verbs (source, assign, case_
 
 - `flag(target: str, *, criteria: str | pl.Expr, by: list[str] | None = None, order_by: str | list[str] | None = None, value_col: str | None = None, where: str | pl.Expr | None = None, from_dataset: pl.DataFrame | list[pl.DataFrame] | None = None, on: list[str] | None = None, source_filter: str | pl.Expr | None = None, condition: str | pl.Expr | None = None, inclusive: bool = True, flag_no_ref_groups: bool = True, flag_all: bool = False, flag_value: str = 'Y', false_value: str | None = None) -> Self` — Set *target* to *flag_value* for records matching *criteria*.
 - `baseline(target: str, *, aval: str = 'AVAL', baseline_flag: str = 'ABLFL', by: str | list[str] | None = None, strict: bool = True) -> Self` — Derive BASE as the AVAL where the baseline flag equals ``"Y"``.
-- `chg(target: str, *, aval: str = 'AVAL', base: str = 'BASE') -> Self` — Compute change from baseline: ``CHG = AVAL - BASE``.
-- `pchg(target: str, *, aval: str = 'AVAL', base: str = 'BASE') -> Self` — Compute percent change from baseline.
+- `chg(target: str, *, aval: str = 'AVAL', base: str = 'BASE', post_baseline: str | pl.Expr | None = None) -> Self` — Compute change from baseline: ``CHG = AVAL - BASE``.
+- `pchg(target: str, *, aval: str = 'AVAL', base: str = 'BASE', post_baseline: str | pl.Expr | None = None) -> Self` — Compute percent change from baseline.
 - `bmi(target: str, *, weight: str, height: str, round_digits: int | None = None) -> Self` — Derive Body Mass Index: ``weight_kg / (height_cm / 100) ** 2``.
 - `bsa(target: str, *, weight: str, height: str, method: str = 'Mosteller', round_digits: int | None = None) -> Self` — Derive Body Surface Area in m², at full precision.
 - `map(target: str = 'MAP', *, systolic: str = 'SYSBP', diastolic: str = 'DIABP', round_digits: int | None = None) -> Self` — Derive Mean Arterial Pressure: ``DBP + (SBP - DBP) / 3``, at full precision.

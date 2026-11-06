@@ -443,6 +443,12 @@ The spec keys below apply to every generation:
   sponsor-specific role by hand (ADR 0042). It is apart from `role:
   qualifier`, which marks a Non-Standard Variable for `SUPP<domain>` (see
   *Supplemental qualifiers* below).
+- **`optional:`** — per-variable, for a variable with no derivation.
+  `optional: true` lets `fleet run` write the dataset without it when no
+  input has it (RFXSTDTC in a study that does not collect it). Without it,
+  the run stops, so a population flag such as SAFFL is never lost with
+  exit 0. `fleet run --no-strict` turns the stop into a warning for one run
+  (ADR 0053).
 - **`value_level:`** — value-level metadata entries emitted as Define-XML
   `<ValueListDef>` / where-clause elements. `where:` is one condition or a
   list of conditions that all apply, each with an optional `comparator:`

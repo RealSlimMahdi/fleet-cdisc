@@ -1,0 +1,4 @@
+subject,term,decoded_term,severity,serious,start_date,end_date
+001,HEADACHE,Headache,MILD,N,2024-01-12,2024-01-13
+001,NAUSEA,Nausea,MODERATE,N,2024-01-08,2024-01-09
+002,DIZZINESS,Dizziness,SEVERE,Y,2024-01-20,

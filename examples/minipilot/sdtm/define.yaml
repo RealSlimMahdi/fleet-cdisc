@@ -1,0 +1,505 @@
+# yaml-language-server: $schema=../../../src/fleet/define_xml/schemas/define_spec_schema.json
+# SDTM define of MINIPILOT: a small synthetic study that `fleet run` builds
+# from the CSV files under raw/. Every variable reads the raw columns of its
+# dataset's own input, so no step depends on code outside this folder.
+
+fleet_spec_version: 2
+study:
+  id: MINIPILOT
+  name: MINIPILOT
+  description: Small synthetic study for fleet run, raw CSV to SDTM to ADaM.
+  protocol_name: MINIPILOT
+  originator: Fleet Team
+  source_system: Fleet
+  standard: SDTMIG
+  standard_version: "3.4"
+
+datasets:
+  # ─────────────────────────────────────────────────────────────── DM ─── #
+  - name: DM
+    label: Demographics
+    structure: One record per subject
+    class: SPECIAL PURPOSE
+    keys: [STUDYID, USUBJID]
+    inputs:
+      - name: dm_raw
+        type: raw
+        path: raw/dm_raw.csv
+    variables:
+      - name: STUDYID
+        label: Study Identifier
+        type: text
+        length: 9
+        mandatory: true
+        origin: Assigned
+        derivation:
+          algorithm: assign
+          value: "MINIPILOT"
+
+      - name: DOMAIN
+        label: Domain Abbreviation
+        type: text
+        length: 2
+        mandatory: true
+        origin: Assigned
+        derivation:
+          algorithm: assign
+          value: "DM"
+
+      - name: USUBJID
+        label: Unique Subject Identifier
+        type: text
+        length: 13
+        mandatory: true
+        origin: Derived
+        comment: STUDYID and the raw subject number, joined by a hyphen.
+        derivation:
+          algorithm: derivation
+          expression: "pl.concat_str([pl.lit('MINIPILOT'), pl.col('subject')], separator='-')"
+
+      - name: SUBJID
+        label: Subject Identifier for the Study
+        type: text
+        length: 3
+        mandatory: true
+        origin: Collected
+        derivation:
+          algorithm: assign
+          source: subject
+
+      - name: SITEID
+        label: Study Site Identifier
+        type: text
+        length: 3
+        mandatory: true
+        origin: Collected
+        derivation:
+          algorithm: assign
+          source: site
+
+      - name: AGE
+        label: Age
+        type: integer
+        length: 3
+        mandatory: false
+        origin: Collected
+        derivation:
+          algorithm: assign
+          source: age
+
+      - name: AGEU
+        label: Age Units
+        type: text
+        length: 5
+        mandatory: false
+        origin: Assigned
+        derivation:
+          algorithm: assign
+          value: "YEARS"
+
+      - name: SEX
+        label: Sex
+        type: text
+        length: 1
+        mandatory: true
+        origin: Collected
+        derivation:
+          algorithm: assign
+          source: sex
+
+      - name: ARMCD
+        label: Planned Arm Code
+        type: text
+        length: 8
+        mandatory: true
+        origin: Assigned
+        derivation:
+          algorithm: assign
+          source: arm_code
+
+      - name: ARM
+        label: Description of Planned Arm
+        type: text
+        length: 40
+        mandatory: true
+        origin: Assigned
+        derivation:
+          algorithm: assign
+          source: arm
+
+      - name: ACTARMCD
+        label: Actual Arm Code
+        type: text
+        length: 8
+        mandatory: true
+        origin: Assigned
+        derivation:
+          algorithm: assign
+          source: actual_arm_code
+
+      - name: ACTARM
+        label: Description of Actual Arm
+        type: text
+        length: 40
+        mandatory: true
+        origin: Assigned
+        derivation:
+          algorithm: assign
+          source: actual_arm
+
+      - name: RFSTDTC
+        label: Subject Reference Start Date/Time
+        type: date
+        mandatory: false
+        origin: Derived
+        comment: Date of the first dose, from the CRF.
+        derivation:
+          algorithm: date
+          source: first_dose_date
+
+  # ─────────────────────────────────────────────────────────────── AE ─── #
+  - name: AE
+    label: Adverse Events
+    structure: One record per adverse event per subject
+    class: EVENTS
+    keys: [STUDYID, USUBJID, AESEQ]
+    inputs:
+      - name: ae_raw
+        type: raw
+        path: raw/ae_raw.csv
+    variables:
+      - name: STUDYID
+        label: Study Identifier
+        type: text
+        length: 9
+        mandatory: true
+        origin: Assigned
+        derivation:
+          algorithm: assign
+          value: "MINIPILOT"
+
+      - name: DOMAIN
+        label: Domain Abbreviation
+        type: text
+        length: 2
+        mandatory: true
+        origin: Assigned
+        derivation:
+          algorithm: assign
+          value: "AE"
+
+      - name: USUBJID
+        label: Unique Subject Identifier
+        type: text
+        length: 13
+        mandatory: true
+        origin: Derived
+        comment: STUDYID and the raw subject number, joined by a hyphen.
+        derivation:
+          algorithm: derivation
+          expression: "pl.concat_str([pl.lit('MINIPILOT'), pl.col('subject')], separator='-')"
+
+      - name: AESEQ
+        label: Sequence Number
+        type: integer
+        length: 2
+        mandatory: true
+        origin: Derived
+        derivation:
+          algorithm: seq
+          by: [USUBJID]
+          order_by: [start_date, term]
+
+      - name: AETERM
+        label: Reported Term for the Adverse Event
+        type: text
+        length: 40
+        mandatory: true
+        origin: Collected
+        derivation:
+          algorithm: assign
+          source: term
+
+      - name: AEDECOD
+        label: Dictionary-Derived Term
+        type: text
+        length: 40
+        mandatory: true
+        origin: Derived
+        derivation:
+          algorithm: assign
+          source: decoded_term
+
+      - name: AESEV
+        label: Severity/Intensity
+        type: text
+        length: 8
+        mandatory: false
+        origin: Collected
+        derivation:
+          algorithm: assign
+          source: severity
+
+      - name: AESER
+        label: Serious Event
+        type: text
+        length: 1
+        mandatory: false
+        origin: Collected
+        derivation:
+          algorithm: assign
+          source: serious
+
+      - name: AESTDTC
+        label: Start Date/Time of Adverse Event
+        type: date
+        mandatory: false
+        origin: Collected
+        derivation:
+          algorithm: date
+          source: start_date
+
+      - name: AEENDTC
+        label: End Date/Time of Adverse Event
+        type: date
+        mandatory: false
+        origin: Collected
+        derivation:
+          algorithm: date
+          source: end_date
+
+  # ─────────────────────────────────────────────────────────────── VS ─── #
+  - name: VS
+    label: Vital Signs
+    structure: One record per vital sign measurement per visit per subject
+    class: FINDINGS
+    keys: [STUDYID, USUBJID, VSTESTCD, VISITNUM]
+    inputs:
+      - name: vs_raw
+        type: raw
+        path: raw/vs_raw.csv
+    variables:
+      - name: STUDYID
+        label: Study Identifier
+        type: text
+        length: 9
+        mandatory: true
+        origin: Assigned
+        derivation:
+          algorithm: assign
+          value: "MINIPILOT"
+
+      - name: DOMAIN
+        label: Domain Abbreviation
+        type: text
+        length: 2
+        mandatory: true
+        origin: Assigned
+        derivation:
+          algorithm: assign
+          value: "VS"
+
+      - name: USUBJID
+        label: Unique Subject Identifier
+        type: text
+        length: 13
+        mandatory: true
+        origin: Derived
+        comment: STUDYID and the raw subject number, joined by a hyphen.
+        derivation:
+          algorithm: derivation
+          expression: "pl.concat_str([pl.lit('MINIPILOT'), pl.col('subject')], separator='-')"
+
+      - name: VSTESTCD
+        label: Vital Signs Test Short Name
+        type: text
+        length: 8
+        mandatory: true
+        origin: Collected
+        derivation:
+          algorithm: assign
+          source: test_code
+
+      - name: VSTEST
+        label: Vital Signs Test Name
+        type: text
+        length: 40
+        mandatory: true
+        origin: Collected
+        derivation:
+          algorithm: assign
+          source: test_name
+
+      - name: VSORRES
+        label: Result or Finding in Original Units
+        type: text
+        length: 8
+        mandatory: false
+        origin: Collected
+        derivation:
+          algorithm: assign
+          source: result
+
+      - name: VSORRESU
+        label: Original Units
+        type: text
+        length: 8
+        mandatory: false
+        origin: Collected
+        derivation:
+          algorithm: assign
+          source: unit
+
+      - name: VSSTRESN
+        label: Numeric Result/Finding in Standard Units
+        type: float
+        length: 5
+        significant_digits: 1
+        mandatory: false
+        origin: Derived
+        comment: VSORRES as a number; the collected unit is the standard unit.
+        derivation:
+          algorithm: derivation
+          expression: "pl.col('result').cast(pl.Float64, strict=False)"
+
+      - name: VSSTRESU
+        label: Standard Units
+        type: text
+        length: 8
+        mandatory: false
+        origin: Derived
+        derivation:
+          algorithm: assign
+          source: unit
+
+      - name: VISITNUM
+        label: Visit Number
+        type: float
+        length: 3
+        significant_digits: 0
+        mandatory: false
+        origin: Assigned
+        derivation:
+          algorithm: derivation
+          expression: "pl.col('visitnum').cast(pl.Float64)"
+
+      - name: VISIT
+        label: Visit Name
+        type: text
+        length: 20
+        mandatory: false
+        origin: Assigned
+        derivation:
+          algorithm: assign
+          source: visit
+
+      - name: VSDTC
+        label: Date/Time of Measurements
+        type: date
+        mandatory: false
+        origin: Collected
+        derivation:
+          algorithm: date
+          source: date
+
+  # ─────────────────────────────────────────────────────────────── EX ─── #
+  - name: EX
+    label: Exposure
+    structure: One record per constant-dosing interval per subject
+    class: INTERVENTIONS
+    keys: [STUDYID, USUBJID, EXSEQ]
+    inputs:
+      - name: ex_raw
+        type: raw
+        path: raw/ex_raw.csv
+    variables:
+      - name: STUDYID
+        label: Study Identifier
+        type: text
+        length: 9
+        mandatory: true
+        origin: Assigned
+        derivation:
+          algorithm: assign
+          value: "MINIPILOT"
+
+      - name: DOMAIN
+        label: Domain Abbreviation
+        type: text
+        length: 2
+        mandatory: true
+        origin: Assigned
+        derivation:
+          algorithm: assign
+          value: "EX"
+
+      - name: USUBJID
+        label: Unique Subject Identifier
+        type: text
+        length: 13
+        mandatory: true
+        origin: Derived
+        comment: STUDYID and the raw subject number, joined by a hyphen.
+        derivation:
+          algorithm: derivation
+          expression: "pl.concat_str([pl.lit('MINIPILOT'), pl.col('subject')], separator='-')"
+
+      - name: EXSEQ
+        label: Sequence Number
+        type: integer
+        length: 2
+        mandatory: true
+        origin: Derived
+        derivation:
+          algorithm: seq
+          by: [USUBJID]
+          order_by: [start_date]
+
+      - name: EXTRT
+        label: Name of Treatment
+        type: text
+        length: 20
+        mandatory: true
+        origin: Collected
+        derivation:
+          algorithm: assign
+          source: treatment
+
+      - name: EXDOSE
+        label: Dose
+        type: float
+        length: 3
+        significant_digits: 0
+        mandatory: false
+        origin: Collected
+        derivation:
+          algorithm: derivation
+          expression: "pl.col('dose').cast(pl.Float64)"
+
+      - name: EXDOSU
+        label: Dose Units
+        type: text
+        length: 4
+        mandatory: false
+        origin: Collected
+        derivation:
+          algorithm: assign
+          source: unit
+
+      - name: EXSTDTC
+        label: Start Date/Time of Treatment
+        type: date
+        mandatory: true
+        origin: Collected
+        derivation:
+          algorithm: date
+          source: start_date
+
+      - name: EXENDTC
+        label: End Date/Time of Treatment
+        type: date
+        mandatory: false
+        origin: Collected
+        derivation:
+          algorithm: date
+          source: end_date

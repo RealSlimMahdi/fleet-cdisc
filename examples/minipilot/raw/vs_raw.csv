@@ -1,0 +1,8 @@
+subject,test_code,test_name,result,unit,visitnum,visit,date
+001,SYSBP,Systolic Blood Pressure,120,mmHg,1,SCREENING,2024-01-03
+001,SYSBP,Systolic Blood Pressure,118,mmHg,2,DAY 1,2024-01-10
+001,SYSBP,Systolic Blood Pressure,125,mmHg,3,WEEK 2,2024-01-24
+002,SYSBP,Systolic Blood Pressure,130,mmHg,1,SCREENING,2024-01-04
+002,SYSBP,Systolic Blood Pressure,,mmHg,2,DAY 1,2024-01-11
+002,SYSBP,Systolic Blood Pressure,128,mmHg,3,WEEK 2,2024-01-25
+003,SYSBP,Systolic Blood Pressure,140,mmHg,1,SCREENING,2024-01-05
