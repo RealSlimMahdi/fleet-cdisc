@@ -4,6 +4,12 @@ updates:
     directory: "/"
     schedule:
       interval: "monthly"
+    # Never edit the ranges in pyproject.toml; users install with those ranges.
+    versioning-strategy: lockfile-only
+    ignore:
+      # The Polars 2 move is planned work (.github/prompts/plan-polars2Migration.prompt.md).
+      - dependency-name: "polars"
+        update-types: ["version-update:semver-major"]
     groups:
       uv:
         patterns: ["*"]
