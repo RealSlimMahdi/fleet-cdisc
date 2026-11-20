@@ -320,7 +320,7 @@ detailed section, unlike every other therapeutic-area namespace.
 | `outputs/cdiscpilot01/*.xml`, `.pdf`, `.xsl` | **4 files tracked** | **Intentional** — `test_define_semantics.py` asserts these match generated output, per [DEFINE-METHODS-PLAN.md](DEFINE-METHODS-PLAN.md#L5-L12). Keep, but the `outputs/` name implies scratch space. Move to `tests/golden/` |
 | `benchmark/data/*.csv` (3 files) | **tracked** | Timestamped filenames (`ae_raw_20260418_214047.csv`) suggest a one-off dump, not a fixture. Confirm intent or generate them |
 | `tmp_lineage_probe.py` | **tracked** | Scratch file at repo root. Delete or move to `scripts/` |
-| `.env`, `dist/`, `site/`, `tmp-clones/`, `my_rules/`, `papers/`, `.claude/` | not tracked | Correct |
+| `.env`, `dist/`, `site/`, `tmp-clones/`, `my_rules/`, `.claude/` | not tracked | Correct (`papers/` was here too; it moved to the fleet-talks repository on 2026-11-09) |
 
 447 tracked files, 30 MB `.git`. Healthy.
 
@@ -338,7 +338,7 @@ substantive content under an `Unreleased` heading. That is fine — just add the
 `Changelog` project URL (§2.3) and cut a `## 0.2.0a1` section at release.
 
 `CITATION.cff` matters more than usual here: the target audience is pharma
-biometrics, and `papers/` exists at root, so academic citation is clearly in scope.
+biometrics, and the PHUSE paper OS12 (in the sibling repository fleet-talks) shows that academic citation is clearly in scope.
 
 ### 4.3 No coverage floor
 
